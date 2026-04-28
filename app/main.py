@@ -34,7 +34,8 @@ def _create_default_admin():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: crear tablas y usuario admin inicial
+    import pathlib
+    pathlib.Path("/app/data").mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
     _create_default_admin()
     yield
