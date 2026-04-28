@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.database import SessionLocal, engine
-from app.models import Base
+from app.models import Base, User
 from app.routes import auth, dashboard, posts, settings
 
 
@@ -63,3 +63,19 @@ app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(settings.router)
 app.include_router(posts.router)
+
+
+@app.get("/health")
+def health():
+    db = SessionLocal()
+    try:
+        users = db.query(User).count()
+        admin = db.query(User).filter(User.username == "admin").first()
+        return {
+            "status": "ok",
+            "users_total": users,
+            "admin_exists": admin is not None,
+            "admin_active": admin.is_active if admin else None,
+        }
+    finally:
+        db.close()
