@@ -47,6 +47,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.get("/")
+def root():
+    return {"status": "AutoNews funcionando"}
+
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=os.getenv("SECRET_KEY", "dev-secret-key-change-in-production"),
@@ -62,8 +68,3 @@ app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(settings.router)
 app.include_router(posts.router)
-
-
-@app.get("/")
-def root():
-    return {"status": "AutoNews funcionando"}
