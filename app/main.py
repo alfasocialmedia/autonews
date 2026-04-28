@@ -13,7 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.database import SessionLocal, engine
 from app.models import Base, User
-from app.routes import auth, dashboard, posts, settings
+from app.routes import auth, dashboard, posts, settings, users
 
 
 def _create_default_admin():
@@ -63,6 +63,7 @@ app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(settings.router)
 app.include_router(posts.router)
+app.include_router(users.router)
 
 
 @app.get("/health")

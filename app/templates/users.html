@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Usuarios — AutoNews{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between">
+  <div>
+    <h2 class="page-title"><i class="bi bi-people me-2"></i>Usuarios</h2>
+    <span class="text-muted small">Gestión de acceso al panel</span>
+  </div>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCrear">
+    <i class="bi bi-person-plus me-1"></i>Nuevo usuario
+  </button>
+</div>
+
+{% if error %}
+<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>{{ error }}</div>
+{% endif %}
+{% if request.query_params.get('ok') %}
+<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>
+  {% if request.query_params.get('ok') == 'creado' %}Usuario creado correctamente.
+  {% elif request.query_params.get('ok') == 'editado' %}Usuario actualizado correctamente.
+  {% elif request.query_params.get('ok') == 'eliminado' %}Usuario eliminado.
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="card border-0 shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>#</th>
+          <th>Usuario</th>
+          <th>Email</th>
+          <th>Estado</th>
+          <th>Creado</th>
+          <th>Último acceso</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td class="text-muted small">{{ u.id }}</td>
+          <td class="fw-semibold">
+            {{ u.username }}
+            {% if u.id == user.id %}<span class="badge bg-primary-subtle text-primary ms-1">Yo</span>{% endif %}
+          </td>
+          <td class="text-muted small">{{ u.email or '—' }}</td>
+          <td>
+            {% if u.is_active %}<span class="badge bg-success">Activo</span>
+            {% else %}<span class="badge bg-secondary">Inactivo</span>{% endif %}
+          </td>
+          <td class="text-muted small">{{ u.created_at.strftime('%d/%m/%Y') if u.created_at else '—' }}</td>
+          <td class="text-muted small">{{ u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else '—' }}</td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-outline-secondary"
+                    onclick="abrirEditar({{ u.id }}, '{{ u.username }}', '{{ u.email or '' }}')">
+              <i class="bi bi-pencil"></i>
+            </button>
+            {% if u.id != user.id %}
+            <button class="btn btn-sm btn-outline-danger ms-1"
+                    onclick="confirmarEliminar({{ u.id }}, '{{ u.username }}')">
+              <i class="bi bi-trash"></i>
+            </button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Crear -->
+<div class="modal fade" id="modalCrear" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="/usuarios/crear">
+        <div class="modal-header border-0">
+          <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Nuevo usuario</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Usuario <span class="text-danger">*</span></label>
+            <input type="text" name="username" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Email</label>
+            <input type="email" name="email" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Contraseña <span class="text-danger">*</span></label>
+            <input type="password" name="password" class="form-control" minlength="8" required>
+            <div class="form-text">Mínimo 8 caracteres</div>
+          </div>
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Crear</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Editar -->
+<div class="modal fade" id="modalEditar" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" id="formEditar">
+        <div class="modal-header border-0">
+          <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Editar usuario</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Usuario <span class="text-danger">*</span></label>
+            <input type="text" name="username" id="editUsername" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Email</label>
+            <input type="email" name="email" id="editEmail" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nueva contraseña</label>
+            <input type="password" name="password" class="form-control" minlength="8">
+            <div class="form-text">Dejá en blanco para no cambiarla</div>
+          </div>
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Eliminar -->
+<div class="modal fade" id="modalEliminar" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" id="formEliminar">
+        <div class="modal-header border-0">
+          <h5 class="modal-title text-danger"><i class="bi bi-trash me-2"></i>Eliminar usuario</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          ¿Eliminar al usuario <strong id="eliminarNombre"></strong>? Esta acción no se puede deshacer.
+        </div>
+        <div class="modal-footer border-0">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Eliminar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function abrirEditar(id, username, email) {
+  document.getElementById('editUsername').value = username;
+  document.getElementById('editEmail').value = email;
+  document.getElementById('formEditar').action = '/usuarios/' + id + '/editar';
+  new bootstrap.Modal(document.getElementById('modalEditar')).show();
+}
+function confirmarEliminar(id, username) {
+  document.getElementById('eliminarNombre').textContent = username;
+  document.getElementById('formEliminar').action = '/usuarios/' + id + '/eliminar';
+  new bootstrap.Modal(document.getElementById('modalEliminar')).show();
+}
+</script>
+{% endblock %}
