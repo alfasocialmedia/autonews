@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -47,11 +46,6 @@ app = FastAPI(
     redoc_url=None,
     lifespan=lifespan,
 )
-
-
-@app.get("/")
-def root():
-    return RedirectResponse(url="/login")
 
 
 app.add_middleware(
