@@ -11,13 +11,17 @@ def _headers(api_user: str, app_password: str) -> dict:
 
 
 def test_wordpress_connection(site_url: str, api_user: str, app_password: str) -> tuple[bool, str]:
-    url = site_url.rstrip("/") + "/wp-json/wp/v2/users/me"
+    url = site_url.rstrip("/") + "/wp-json/wp/v2/posts?per_page=1&status=draft"
     try:
         with httpx.Client(timeout=15, verify=False) as client:
             resp = client.get(url, headers=_headers(api_user, app_password))
         if resp.status_code == 200:
-            name = resp.json().get("name", api_user)
-            return True, f"Conectado como: {name}"
+            return True, f"Conectado correctamente como: {api_user}"
+        # Credenciales válidas pero sin permiso para listar usuarios (plugin de seguridad)
+        if resp.status_code == 401:
+            data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+            if data.get("code") == "rest_user_cannot_view":
+                return True, f"Conectado correctamente como: {api_user}"
         return False, f"HTTP {resp.status_code}: {resp.text[:300]}"
     except Exception as exc:
         return False, str(exc)
