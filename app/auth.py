@@ -9,11 +9,12 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return pwd_context.verify(plain[:72], hashed)
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    # bcrypt tiene un límite de 72 bytes; truncamos para evitar el ValueError
+    return pwd_context.hash(password[:72])
 
 
 def authenticate_user(db: Session, username: str, password: str):
