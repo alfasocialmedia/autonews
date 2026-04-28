@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -50,7 +51,7 @@ app = FastAPI(
 
 @app.get("/")
 def root():
-    return {"status": "AutoNews funcionando"}
+    return RedirectResponse(url="/login")
 
 
 app.add_middleware(
