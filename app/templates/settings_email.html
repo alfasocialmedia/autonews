@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}Correo IMAP — AutoNews{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <div>
+    <h2 class="page-title"><i class="bi bi-envelope-at me-2"></i>Cuentas de Correo IMAP</h2>
+    <span class="text-muted small">Configura las cuentas de correo que el sistema monitoreará</span>
+  </div>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+    <i class="bi bi-plus-lg me-1"></i>Agregar cuenta
+  </button>
+</div>
+
+{% with messages = request.query_params %}
+{% if messages.get('msg') %}
+<div class="alert alert-success alert-dismissible fade show d-flex align-items-center">
+  <i class="bi bi-check-circle-fill me-2"></i>{{ messages.get('msg') | replace('+', ' ') }}
+  <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+</div>
+{% elif messages.get('err') %}
+<div class="alert alert-danger alert-dismissible fade show d-flex align-items-center">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ messages.get('err') | replace('+', ' ') }}
+  <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+{% endwith %}
+
+{% if accounts %}
+<div class="row g-3">
+  {% for acc in accounts %}
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-transparent border-0 d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+          <div class="avatar-icon bg-primary-subtle text-primary rounded-circle">
+            <i class="bi bi-envelope-fill"></i>
+          </div>
+          <div>
+            <div class="fw-semibold">{{ acc.name }}</div>
+            <div class="text-muted small">{{ acc.email }}</div>
+          </div>
+        </div>
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input toggle-account" type="checkbox" role="switch"
+                 data-id="{{ acc.id }}" {% if acc.is_active %}checked{% endif %}>
+        </div>
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted">Servidor IMAP</dt>
+          <dd class="col-7">{{ acc.imap_server }}:{{ acc.imap_port }}</dd>
+          <dt class="col-5 text-muted">Usuario</dt>
+          <dd class="col-7">{{ acc.username }}</dd>
+          <dt class="col-5 text-muted">Contraseña</dt>
+          <dd class="col-7 font-monospace">{{ mask(acc.encrypted_password) if mask else '••••••••' }}</dd>
+          <dt class="col-5 text-muted">Estado</dt>
+          <dd class="col-7">
+            {% if acc.is_active %}
+            <span class="badge bg-success">Activa</span>
+            {% else %}
+            <span class="badge bg-secondary">Inactiva</span>
+            {% endif %}
+          </dd>
+        </dl>
+      </div>
+      <div class="card-footer bg-transparent border-0 d-flex gap-2">
+        <button class="btn btn-sm btn-outline-info test-imap" data-id="{{ acc.id }}">
+          <i class="bi bi-plug me-1"></i>Probar
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                data-bs-target="#editModal{{ acc.id }}">
+          <i class="bi bi-pencil me-1"></i>Editar
+        </button>
+        <button class="btn btn-sm btn-outline-danger ms-auto"
+                onclick="confirmDelete('/settings/email/{{ acc.id }}/delete', 'la cuenta {{ acc.name }}')">
+          <i class="bi bi-trash me-1"></i>Eliminar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div class="modal fade" id="editModal{{ acc.id }}" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Editar cuenta</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <form method="post" action="/settings/email/{{ acc.id }}/edit">
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Nombre descriptivo</label>
+              <input type="text" name="name" class="form-control" value="{{ acc.name }}" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Email</label>
+              <input type="email" name="email" class="form-control" value="{{ acc.email }}" required>
+            </div>
+            <div class="row g-2 mb-3">
+              <div class="col-8">
+                <label class="form-label fw-semibold">Servidor IMAP</label>
+                <input type="text" name="imap_server" class="form-control" value="{{ acc.imap_server }}" required>
+              </div>
+              <div class="col-4">
+                <label class="form-label fw-semibold">Puerto</label>
+                <input type="number" name="imap_port" class="form-control" value="{{ acc.imap_port }}" required>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Usuario IMAP</label>
+              <input type="text" name="username" class="form-control" value="{{ acc.username }}" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Contraseña</label>
+              <input type="password" name="password" class="form-control"
+                     placeholder="Dejar vacío para no cambiar">
+              <div class="form-text">Solo rellena si quieres cambiar la contraseña actual.</div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar cambios</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state card border-0 shadow-sm">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-envelope-x display-4 text-muted d-block mb-3"></i>
+    <h5>No hay cuentas configuradas</h5>
+    <p class="text-muted">Agrega tu primera cuenta de correo IMAP para que el sistema empiece a monitorear.</p>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+      <i class="bi bi-plus-lg me-1"></i>Agregar cuenta
+    </button>
+  </div>
+</div>
+{% endif %}
+
+<!-- Add Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Agregar cuenta de correo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/settings/email/add">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nombre descriptivo</label>
+            <input type="text" name="name" class="form-control" placeholder="Ej: Cuenta principal" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Email</label>
+            <input type="email" name="email" class="form-control" placeholder="news@ejemplo.com" required>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-8">
+              <label class="form-label fw-semibold">Servidor IMAP</label>
+              <input type="text" name="imap_server" class="form-control" placeholder="imap.gmail.com" required>
+            </div>
+            <div class="col-4">
+              <label class="form-label fw-semibold">Puerto</label>
+              <input type="number" name="imap_port" class="form-control" value="993" required>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Usuario IMAP</label>
+            <input type="text" name="username" class="form-control" placeholder="news@ejemplo.com" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Contraseña</label>
+            <input type="password" name="password" class="form-control" placeholder="Contraseña de aplicación" required>
+            <div class="form-text">Para Gmail usa una contraseña de aplicación (App Password).</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Toggle account active/inactive
+document.querySelectorAll('.toggle-account').forEach(toggle => {
+  toggle.addEventListener('change', async function () {
+    const id = this.dataset.id;
+    const resp = await fetch(`/settings/email/${id}/toggle`, { method: 'POST' });
+    const data = await resp.json();
+    showToast(data.active ? 'Cuenta activada' : 'Cuenta desactivada', data.active ? 'success' : 'secondary');
+  });
+});
+
+// Test IMAP connection
+document.querySelectorAll('.test-imap').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const id = this.dataset.id;
+    const orig = this.innerHTML;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Probando...';
+    this.disabled = true;
+    const resp = await fetch(`/settings/email/${id}/test`, { method: 'POST' });
+    const data = await resp.json();
+    showToast(data.message, data.success ? 'success' : 'danger');
+    this.innerHTML = orig;
+    this.disabled = false;
+  });
+});
+</script>
+{% endblock %}

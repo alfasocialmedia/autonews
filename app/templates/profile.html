@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Perfil — AutoNews{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2 class="page-title"><i class="bi bi-person-circle me-2"></i>Mi perfil</h2>
+  <span class="text-muted small">Gestión de cuenta</span>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 pt-3">
+        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Información de la cuenta</h6>
+      </div>
+      <div class="card-body">
+        <dl class="row">
+          <dt class="col-4 text-muted">Usuario</dt>
+          <dd class="col-8 fw-semibold">{{ user.username }}</dd>
+          <dt class="col-4 text-muted">Email</dt>
+          <dd class="col-8">{{ user.email or '—' }}</dd>
+          <dt class="col-4 text-muted">Activo</dt>
+          <dd class="col-8">
+            {% if user.is_active %}<span class="badge bg-success">Sí</span>
+            {% else %}<span class="badge bg-secondary">No</span>{% endif %}
+          </dd>
+          <dt class="col-4 text-muted">Creado</dt>
+          <dd class="col-8 small">{{ user.created_at.strftime('%d/%m/%Y') if user.created_at else '—' }}</dd>
+          <dt class="col-4 text-muted">Último acceso</dt>
+          <dd class="col-8 small">{{ user.last_login.strftime('%d/%m/%Y %H:%M') if user.last_login else '—' }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 pt-3">
+        <h6 class="mb-0"><i class="bi bi-key me-2"></i>Cambiar contraseña</h6>
+      </div>
+      <div class="card-body">
+        {% if success %}
+        <div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>{{ success }}</div>
+        {% elif error %}
+        <div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>{{ error }}</div>
+        {% endif %}
+
+        <form method="post" action="/perfil/password">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Contraseña actual</label>
+            <input type="password" name="current_password" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nueva contraseña</label>
+            <input type="password" name="new_password" class="form-control"
+                   minlength="8" required>
+            <div class="form-text">Mínimo 8 caracteres</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Confirmar nueva contraseña</label>
+            <input type="password" name="confirm_password" class="form-control" required>
+          </div>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save me-1"></i>Actualizar contraseña
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

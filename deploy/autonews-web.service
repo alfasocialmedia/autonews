@@ -1,0 +1,22 @@
+[Unit]
+Description=AutoNews — Panel Web (FastAPI)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/autonews
+EnvironmentFile=/opt/autonews/.env
+ExecStart=/opt/autonews/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autonews-web
+
+# Seguridad
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

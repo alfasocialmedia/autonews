@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Detalle — AutoNews{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center gap-2">
+  <a href="/posts/" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <div>
+    <h2 class="page-title mb-0">Detalle del correo</h2>
+    <span class="text-muted small">ID #{{ email.id }}</span>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Correo original -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-transparent border-0 pt-3">
+        <h6 class="mb-0"><i class="bi bi-envelope me-2"></i>Correo original</h6>
+      </div>
+      <div class="card-body">
+        <dl class="row small">
+          <dt class="col-4 text-muted">De</dt>
+          <dd class="col-8 text-truncate" title="{{ email.sender }}">{{ email.sender or '—' }}</dd>
+          <dt class="col-4 text-muted">Asunto</dt>
+          <dd class="col-8 fw-semibold">{{ email.subject or '(sin asunto)' }}</dd>
+          <dt class="col-4 text-muted">Recibido</dt>
+          <dd class="col-8">{{ email.received_at.strftime('%d/%m/%Y %H:%M') if email.received_at else '—' }}</dd>
+          <dt class="col-4 text-muted">Estado</dt>
+          <dd class="col-8">
+            {% if email.status == 'published' %}
+              <span class="badge bg-success">Publicado</span>
+            {% elif email.status == 'processed' %}
+              <span class="badge bg-info text-dark">Procesado</span>
+            {% elif email.status == 'error' %}
+              <span class="badge bg-danger">Error</span>
+            {% else %}
+              <span class="badge bg-secondary">Recibido</span>
+            {% endif %}
+          </dd>
+        </dl>
+
+        {% if email.error_message %}
+        <div class="alert alert-danger small mb-2">
+          <strong>Error:</strong> {{ email.error_message }}
+        </div>
+        {% endif %}
+
+        <div class="mt-2">
+          <label class="form-label text-muted small fw-semibold">CUERPO DEL CORREO</label>
+          <div class="bg-light rounded p-3 small" style="max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;">{{ email.body or '(sin contenido)' }}</div>
+        </div>
+      </div>
+      {% if email.status in ['error', 'received'] %}
+      <div class="card-footer bg-transparent border-0">
+        <button class="btn btn-sm btn-warning btn-retry" data-id="{{ email.id }}">
+          <i class="bi bi-arrow-clockwise me-1"></i>Reintentar procesamiento
+        </button>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Respuesta IA -->
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-transparent border-0 pt-3">
+        <h6 class="mb-0"><i class="bi bi-cpu me-2"></i>Respuesta de la IA</h6>
+      </div>
+      <div class="card-body">
+        {% if ai_data %}
+          {% if ai_data.get('title') %}
+          <div class="mb-2">
+            <span class="text-muted small fw-semibold">TÍTULO</span>
+            <div class="fw-bold">{{ ai_data.title }}</div>
+          </div>
+          {% endif %}
+          {% if ai_data.get('category') %}
+          <div class="mb-2">
+            <span class="text-muted small fw-semibold">CATEGORÍA</span>
+            <div><span class="badge bg-primary">{{ ai_data.category }}</span></div>
+          </div>
+          {% endif %}
+          {% if ai_data.get('summary') %}
+          <div class="mb-2">
+            <span class="text-muted small fw-semibold">RESUMEN</span>
+            <div class="small">{{ ai_data.summary }}</div>
+          </div>
+          {% endif %}
+          {% if ai_data.get('content') %}
+          <div>
+            <span class="text-muted small fw-semibold">CONTENIDO HTML</span>
+            <div class="bg-light rounded p-3 small mt-1" style="max-height:200px;overflow-y:auto;">
+              <pre class="mb-0" style="white-space:pre-wrap;font-size:.75rem">{{ ai_data.content }}</pre>
+            </div>
+          </div>
+          {% endif %}
+        {% else %}
+        <p class="text-muted small mb-0">Sin respuesta de IA todavía.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Posts generados -->
+    {% if posts %}
+    {% for p in posts %}
+    <div class="card border-0 shadow-sm mb-2">
+      <div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-wordpress me-2 text-primary"></i>Post en WordPress</h6>
+        {% if p.wp_link %}
+        <a href="{{ p.wp_link }}" target="_blank" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Ver post
+        </a>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <dl class="row small mb-0">
+          <dt class="col-5 text-muted">Título</dt>
+          <dd class="col-7 fw-semibold">{{ p.title or '—' }}</dd>
+          <dt class="col-5 text-muted">Categoría</dt>
+          <dd class="col-7">{{ p.category or '—' }}</dd>
+          <dt class="col-5 text-muted">Estado WP</dt>
+          <dd class="col-7">
+            <span class="badge {% if p.status == 'publish' %}bg-success{% else %}bg-warning text-dark{% endif %}">
+              {{ p.status }}
+            </span>
+          </dd>
+          <dt class="col-5 text-muted">ID WordPress</dt>
+          <dd class="col-7">{{ p.wordpress_post_id or '—' }}</dd>
+          <dt class="col-5 text-muted">Creado</dt>
+          <dd class="col-7">{{ p.created_at.strftime('%d/%m/%Y %H:%M') if p.created_at else '—' }}</dd>
+        </dl>
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.btn-retry').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const id = this.dataset.id;
+    const resp = await fetch(`/posts/${id}/retry`, { method: 'POST' });
+    const data = await resp.json();
+    showToast(data.message, data.success ? 'success' : 'danger');
+    if (data.success) setTimeout(() => location.reload(), 1500);
+  });
+});
+</script>
+{% endblock %}

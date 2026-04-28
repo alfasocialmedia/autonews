@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem \"e:\\\\PROYECTOS\\\\botnews\\\\\" -Recurse -File | Select-Object @{N='Ruta';E={$_.FullName.Replace\\('e:\\\\PROYECTOS\\\\botnews\\\\',''\\)}} , @{N='KB';E={[math]::Round\\($_.Length/1KB,1\\)}} | Format-Table -AutoSize)"
+    ]
+  }
+}

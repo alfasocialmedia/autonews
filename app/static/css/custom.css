@@ -1,0 +1,261 @@
+/* ──────────────────────────────────────────────────────────────────────
+   AutoNews — Estilos personalizados
+   ────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --sidebar-width: 240px;
+  --sidebar-bg: #1a1d23;
+  --sidebar-text: #b0b8c4;
+  --sidebar-active: #ffffff;
+  --sidebar-active-bg: rgba(255,255,255,.08);
+  --sidebar-accent: #4f8ef7;
+  --topbar-height: 56px;
+}
+
+/* ── Layout ── */
+body {
+  display: flex;
+  min-height: 100vh;
+  background: #f3f5f9;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 200;
+  transition: transform .25s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-brand {
+  height: var(--topbar-height);
+  display: flex;
+  align-items: center;
+  padding: 0 1.25rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #fff;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  letter-spacing: .5px;
+}
+
+.sidebar-brand i { color: var(--sidebar-accent); font-size: 1.3rem; }
+
+.sidebar-nav {
+  padding: .75rem .5rem;
+  overflow-y: auto;
+}
+
+.sidebar-nav .nav-link {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  padding: .5rem .75rem;
+  border-radius: 8px;
+  color: var(--sidebar-text);
+  font-size: .875rem;
+  font-weight: 500;
+  transition: background .15s, color .15s;
+  text-decoration: none;
+  margin-bottom: 2px;
+}
+
+.sidebar-nav .nav-link i { font-size: 1rem; width: 1.25rem; text-align: center; }
+
+.sidebar-nav .nav-link:hover {
+  background: rgba(255,255,255,.07);
+  color: #fff;
+}
+
+.sidebar-nav .nav-link.active {
+  background: var(--sidebar-active-bg);
+  color: var(--sidebar-active);
+  box-shadow: inset 3px 0 0 var(--sidebar-accent);
+}
+
+.nav-section {
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255,255,255,.25);
+  padding: .75rem .75rem .25rem;
+  margin-top: .25rem;
+}
+
+.sidebar-footer {
+  padding: .5rem .5rem 1rem;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+
+.sidebar-footer .nav-link { color: var(--sidebar-text); }
+.sidebar-footer .nav-link:hover { color: #fff; }
+.sidebar-footer .nav-link.text-danger { color: #f77 !important; }
+
+/* ── Main content ── */
+.main-content {
+  margin-left: var(--sidebar-width);
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  height: var(--topbar-height);
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  padding: 0 1.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.page-content {
+  padding: 1.5rem;
+  flex: 1;
+}
+
+/* ── Page header ── */
+.page-header {
+  margin-bottom: 1.5rem;
+}
+
+.page-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #1a1d23;
+  margin-bottom: .15rem;
+}
+
+/* ── Stat cards ── */
+.stat-card .card-body {
+  padding: 1.1rem 1.25rem;
+}
+
+.stat-icon {
+  width: 42px; height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  margin-bottom: .75rem;
+}
+
+.stat-value {
+  font-size: 1.9rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #1a1d23;
+}
+
+.stat-label {
+  font-size: .8rem;
+  color: #6b7280;
+  margin-top: .25rem;
+}
+
+/* ── Avatar icon ── */
+.avatar-icon {
+  width: 40px; height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+/* ── Log viewer ── */
+.log-container {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: .78rem;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #0f1117;
+  color: #c8d3e0;
+  border-radius: 0 0 8px 8px;
+}
+
+.log-entry {
+  display: flex;
+  align-items: baseline;
+  gap: .6rem;
+  padding: .3rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  flex-wrap: wrap;
+}
+
+.log-entry:hover { background: rgba(255,255,255,.03); }
+
+.log-time { color: #5a6a7e; flex-shrink: 0; }
+.log-level { font-size: .65rem; flex-shrink: 0; }
+.log-source { flex-shrink: 0; }
+.log-message { flex: 1; word-break: break-word; }
+
+.log-entry.log-error .log-message   { color: #f87171; }
+.log-entry.log-warning .log-message,
+.log-entry.log-warn .log-message    { color: #fbbf24; }
+.log-entry.log-info .log-message    { color: #93c5fd; }
+
+/* ── Login page ── */
+.login-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a1d23 0%, #2d3748 100%);
+}
+
+.login-wrapper {
+  width: 100%;
+  max-width: 440px;
+  padding: 1rem;
+}
+
+.login-card { border-radius: 16px; }
+
+.login-icon {
+  width: 72px; height: 72px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #4f8ef7, #7b5ea7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: #fff;
+  margin: 0 auto;
+}
+
+/* ── Empty state ── */
+.empty-state { border-radius: 12px; }
+
+/* ── Responsive ── */
+@media (max-width: 991px) {
+  .sidebar {
+    transform: translateX(-100%);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .main-content {
+    margin-left: 0;
+  }
+}
+
+/* ── Table tweaks ── */
+.table > tbody > tr > td { vertical-align: middle; }
+
+/* ── Smooth transitions ── */
+.card { border-radius: 12px; transition: box-shadow .2s; }
+.card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.08) !important; }
+
+.btn { border-radius: 8px; }
+.badge { border-radius: 6px; }
+.form-control, .form-select { border-radius: 8px; }

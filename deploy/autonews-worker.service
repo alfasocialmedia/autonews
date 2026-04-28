@@ -1,0 +1,21 @@
+[Unit]
+Description=AutoNews — Worker automático de correos
+After=network.target autonews-web.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/autonews
+EnvironmentFile=/opt/autonews/.env
+ExecStart=/opt/autonews/venv/bin/python -m app.worker
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=autonews-worker
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

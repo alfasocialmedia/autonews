@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}WordPress — AutoNews{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2 class="page-title"><i class="bi bi-wordpress me-2"></i>Configuración de WordPress</h2>
+  <span class="text-muted small">Conexión y mapeo de categorías</span>
+</div>
+
+{% with messages = request.query_params %}
+{% if messages.get('msg') %}
+<div class="alert alert-success alert-dismissible fade show">
+  <i class="bi bi-check-circle-fill me-2"></i>{{ messages.get('msg') | replace('+', ' ') }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% elif messages.get('err') %}
+<div class="alert alert-danger alert-dismissible fade show">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ messages.get('err') | replace('+', ' ') }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+{% endwith %}
+
+<div class="row g-4">
+  <!-- Configuración principal -->
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 pt-3">
+        <h6 class="mb-0"><i class="bi bi-gear me-2"></i>Conexión WordPress</h6>
+      </div>
+      <div class="card-body">
+        <form method="post" action="/settings/wordpress/save">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nombre</label>
+            <input type="text" name="name" class="form-control"
+                   value="{{ wp.name if wp else 'Principal' }}" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">URL del sitio</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-globe"></i></span>
+              <input type="url" name="site_url" class="form-control"
+                     value="{{ wp.site_url if wp else '' }}"
+                     placeholder="https://tusitio.com" required>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Usuario de la API</label>
+            <input type="text" name="api_user" class="form-control"
+                   value="{{ wp.api_user if wp else '' }}" placeholder="admin" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Application Password</label>
+            <input type="password" name="app_password" class="form-control"
+                   placeholder="{% if wp %}Dejar vacío para no cambiar{% else %}xxxx xxxx xxxx xxxx xxxx xxxx{% endif %}">
+            {% if wp %}
+            <div class="form-text">Contraseña actual: <code>{{ mask(wp.encrypted_app_password) if mask else '••••••' }}</code> — Deja vacío para conservarla.</div>
+            {% else %}
+            <div class="form-text">Genera una en: WordPress → Usuarios → Tu perfil → Application Passwords</div>
+            {% endif %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Estado por defecto</label>
+            <select name="default_status" class="form-select">
+              <option value="draft" {% if not wp or wp.default_status == 'draft' %}selected{% endif %}>Borrador (draft)</option>
+              <option value="publish" {% if wp and wp.default_status == 'publish' %}selected{% endif %}>Publicado (publish)</option>
+              <option value="pending" {% if wp and wp.default_status == 'pending' %}selected{% endif %}>Pendiente de revisión</option>
+            </select>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-save me-1"></i>Guardar configuración
+            </button>
+            {% if wp %}
+            <button type="button" class="btn btn-outline-info" id="testWP">
+              <i class="bi bi-plug me-1"></i>Probar conexión
+            </button>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Info + Mapeo de categorías -->
+  <div class="col-lg-5">
+    {% if wp %}
+    <!-- Info estado -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-3">
+          <div class="avatar-icon bg-success-subtle text-success rounded-circle">
+            <i class="bi bi-wordpress"></i>
+          </div>
+          <div>
+            <div class="fw-semibold">{{ wp.name }}</div>
+            <a href="{{ wp.site_url }}" target="_blank" class="text-muted small text-decoration-none">
+              {{ wp.site_url }} <i class="bi bi-box-arrow-up-right ms-1"></i>
+            </a>
+          </div>
+        </div>
+        <hr class="my-2">
+        <dl class="row mb-0 small">
+          <dt class="col-6 text-muted">Usuario API</dt>
+          <dd class="col-6">{{ wp.api_user }}</dd>
+          <dt class="col-6 text-muted">Estado por defecto</dt>
+          <dd class="col-6"><span class="badge bg-primary">{{ wp.default_status }}</span></dd>
+        </dl>
+      </div>
+    </div>
+
+    <!-- Mapeo de categorías -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-tags me-2"></i>Mapeo de categorías</h6>
+        <button class="btn btn-sm btn-outline-secondary" id="fetchCats">
+          <i class="bi bi-cloud-download me-1"></i>Cargar de WP
+        </button>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small">
+          Asocia palabras clave a categorías WordPress. El sistema las usa para clasificar artículos automáticamente.
+        </p>
+
+        {% if mappings %}
+        <ul class="list-group list-group-flush mb-3">
+          {% for m in mappings %}
+          <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+            <div>
+              <span class="badge bg-secondary me-2">{{ m.keyword }}</span>
+              → <span class="text-success fw-semibold">{{ m.category_name }}</span>
+              <span class="text-muted small">(ID: {{ m.category_id }})</span>
+            </div>
+            <form method="post" action="/settings/wordpress/categories/{{ m.id }}/delete"
+                  onsubmit="return confirm('¿Eliminar este mapeo?')">
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-x"></i>
+              </button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        <form method="post" action="/settings/wordpress/categories/add" class="mt-2">
+          <div class="row g-2">
+            <div class="col-12">
+              <input type="text" name="keyword" class="form-control form-control-sm"
+                     placeholder="Palabra clave (ej: tecnología)" required>
+            </div>
+            <div class="col-8">
+              <select name="category_name" id="catSelect" class="form-select form-select-sm" required>
+                <option value="">— selecciona categoría —</option>
+              </select>
+            </div>
+            <input type="hidden" name="category_id" id="catId">
+            <div class="col-4">
+              <button type="submit" class="btn btn-sm btn-primary w-100">
+                <i class="bi bi-plus-lg"></i> Añadir
+              </button>
+            </div>
+          </div>
+          <div class="form-text">Carga las categorías de WordPress primero con el botón de arriba.</div>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div class="card border-0 shadow-sm">
+      <div class="card-body text-center py-4 text-muted">
+        <i class="bi bi-wordpress display-4 d-block mb-2"></i>
+        Guarda la configuración primero para gestionar los mapeos de categorías.
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% if wp %}
+document.getElementById('testWP')?.addEventListener('click', async function () {
+  const orig = this.innerHTML;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Probando...';
+  this.disabled = true;
+  const resp = await fetch('/settings/wordpress/test', { method: 'POST' });
+  const data = await resp.json();
+  showToast(data.message, data.success ? 'success' : 'danger');
+  this.innerHTML = orig;
+  this.disabled = false;
+});
+
+document.getElementById('fetchCats')?.addEventListener('click', async function () {
+  const orig = this.innerHTML;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Cargando...';
+  this.disabled = true;
+  const resp = await fetch('/settings/wordpress/categories/fetch', { method: 'POST' });
+  const data = await resp.json();
+  const sel = document.getElementById('catSelect');
+  const hiddenId = document.getElementById('catId');
+  sel.innerHTML = '<option value="">— selecciona categoría —</option>';
+  (data.categories || []).forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.name;
+    opt.dataset.id = c.id;
+    opt.textContent = c.name;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', function () {
+    const opt = this.options[this.selectedIndex];
+    hiddenId.value = opt.dataset.id || '';
+  });
+  showToast(`${(data.categories||[]).length} categorías cargadas`, 'info');
+  this.innerHTML = orig;
+  this.disabled = false;
+});
+{% endif %}
+</script>
+{% endblock %}
