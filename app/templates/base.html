@@ -24,6 +24,7 @@
       <i class="bi bi-inbox-fill"></i> Bandeja
     </a>
 
+    {% if user and user.role == 'admin' %}
     <div class="nav-section">Configuración</div>
     <a href="/settings/email" class="nav-link {% if '/settings/email' in request.url.path %}active{% endif %}">
       <i class="bi bi-envelope-at"></i> Correo IMAP
@@ -34,14 +35,17 @@
     <a href="/settings/groq" class="nav-link {% if '/settings/groq' in request.url.path %}active{% endif %}">
       <i class="bi bi-cpu"></i> Groq IA
     </a>
+    {% endif %}
 
     <div class="nav-section">Sistema</div>
     <a href="/logs" class="nav-link {% if '/logs' in request.url.path %}active{% endif %}">
       <i class="bi bi-journal-text"></i> Logs
     </a>
+    {% if user and user.role == 'admin' %}
     <a href="/usuarios/" class="nav-link {% if '/usuarios' in request.url.path %}active{% endif %}">
       <i class="bi bi-people"></i> Usuarios
     </a>
+    {% endif %}
   </nav>
   <div class="sidebar-footer">
     <a href="/perfil" class="nav-link {% if '/perfil' in request.url.path %}active{% endif %}">

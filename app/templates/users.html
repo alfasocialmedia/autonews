@@ -32,8 +32,8 @@
           <th>#</th>
           <th>Usuario</th>
           <th>Email</th>
+          <th>Rol</th>
           <th>Estado</th>
-          <th>Creado</th>
           <th>Último acceso</th>
           <th></th>
         </tr>
@@ -48,14 +48,20 @@
           </td>
           <td class="text-muted small">{{ u.email or '—' }}</td>
           <td>
+            {% if u.role == 'admin' %}
+              <span class="badge bg-danger">Admin</span>
+            {% else %}
+              <span class="badge bg-secondary">Editor</span>
+            {% endif %}
+          </td>
+          <td>
             {% if u.is_active %}<span class="badge bg-success">Activo</span>
             {% else %}<span class="badge bg-secondary">Inactivo</span>{% endif %}
           </td>
-          <td class="text-muted small">{{ u.created_at.strftime('%d/%m/%Y') if u.created_at else '—' }}</td>
           <td class="text-muted small">{{ u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else '—' }}</td>
           <td class="text-end">
             <button class="btn btn-sm btn-outline-secondary"
-                    onclick="abrirEditar({{ u.id }}, '{{ u.username }}', '{{ u.email or '' }}')">
+                    onclick="abrirEditar({{ u.id }}, '{{ u.username }}', '{{ u.email or '' }}', '{{ u.role or 'editor' }}')">
               <i class="bi bi-pencil"></i>
             </button>
             {% if u.id != user.id %}
@@ -95,6 +101,13 @@
             <input type="password" name="password" class="form-control" minlength="8" required>
             <div class="form-text">Mínimo 8 caracteres</div>
           </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Rol <span class="text-danger">*</span></label>
+            <select name="role" class="form-select">
+              <option value="editor" selected>Editor — solo bandeja y posts</option>
+              <option value="admin">Admin — acceso completo</option>
+            </select>
+          </div>
         </div>
         <div class="modal-footer border-0">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -127,6 +140,13 @@
             <label class="form-label fw-semibold">Nueva contraseña</label>
             <input type="password" name="password" class="form-control" minlength="8">
             <div class="form-text">Dejá en blanco para no cambiarla</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Rol</label>
+            <select name="role" id="editRole" class="form-select">
+              <option value="editor">Editor — solo bandeja y posts</option>
+              <option value="admin">Admin — acceso completo</option>
+            </select>
           </div>
         </div>
         <div class="modal-footer border-0">
@@ -162,9 +182,10 @@
 
 {% block scripts %}
 <script>
-function abrirEditar(id, username, email) {
+function abrirEditar(id, username, email, role) {
   document.getElementById('editUsername').value = username;
   document.getElementById('editEmail').value = email;
+  document.getElementById('editRole').value = role;
   document.getElementById('formEditar').action = '/usuarios/' + id + '/editar';
   new bootstrap.Modal(document.getElementById('modalEditar')).show();
 }

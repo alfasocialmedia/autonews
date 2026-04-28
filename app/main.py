@@ -24,7 +24,9 @@ def _create_default_admin():
 
         if db.query(User).count() == 0:
             admin_pwd = os.getenv("ADMIN_PASSWORD", "admin123")
-            create_user(db, "admin", admin_pwd, "admin@localhost")
+            u = create_user(db, "admin", admin_pwd, "admin@localhost")
+            u.role = "admin"
+            db.commit()
             print("[AutoNews] Usuario 'admin' creado. ¡Cambia la contraseña en el panel!")
     finally:
         db.close()

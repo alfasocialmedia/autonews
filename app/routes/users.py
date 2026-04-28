@@ -15,6 +15,8 @@ def _require_admin(request: Request, db: Session):
     user = get_current_user(request, db)
     if not user:
         return None, RedirectResponse("/login", status_code=302)
+    if user.role != "admin":
+        return None, RedirectResponse("/", status_code=302)
     return user, None
 
 
@@ -35,11 +37,15 @@ async def user_create(
     username: str = Form(...),
     email: str = Form(""),
     password: str = Form(...),
+    role: str = Form("editor"),
     db: Session = Depends(get_db),
 ):
     user, redirect = _require_admin(request, db)
     if redirect:
         return redirect
+
+    if role not in ("admin", "editor"):
+        role = "editor"
 
     exists = db.query(User).filter(User.username == username).first()
     users = db.query(User).order_by(User.id).all()
@@ -50,7 +56,9 @@ async def user_create(
              "error": f"El usuario '{username}' ya existe."},
             status_code=400,
         )
-    create_user(db, username, password, email or None)
+    new_user = create_user(db, username, password, email or None)
+    new_user.role = role
+    db.commit()
     return RedirectResponse("/usuarios/?ok=creado", status_code=303)
 
 
@@ -61,11 +69,15 @@ async def user_edit(
     username: str = Form(...),
     email: str = Form(""),
     password: str = Form(""),
+    role: str = Form("editor"),
     db: Session = Depends(get_db),
 ):
     current, redirect = _require_admin(request, db)
     if redirect:
         return redirect
+
+    if role not in ("admin", "editor"):
+        role = "editor"
 
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
@@ -83,6 +95,7 @@ async def user_edit(
 
     target.username = username
     target.email = email or None
+    target.role = role
     if password:
         target.hashed_password = hash_password(password)
     db.commit()
