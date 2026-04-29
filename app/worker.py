@@ -359,28 +359,66 @@ def _download_image(url: str) -> tuple[bytes, str, str] | None:
         return None
 
 
+def _gdrive_list_images(folder_id: str, api_key: str, client) -> list[dict]:
+    """Lista imágenes directamente dentro de una carpeta de Drive."""
+    resp = client.get(
+        "https://www.googleapis.com/drive/v3/files",
+        params={
+            "q": f"'{folder_id}' in parents and mimeType contains 'image/' and trashed = false",
+            "key": api_key,
+            "fields": "files(id,name,mimeType)",
+            "pageSize": 5,
+            "orderBy": "name",
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json().get("files", [])
+
+
+def _gdrive_list_subfolders(folder_id: str, api_key: str, client) -> list[dict]:
+    """Lista subcarpetas directamente dentro de una carpeta de Drive."""
+    resp = client.get(
+        "https://www.googleapis.com/drive/v3/files",
+        params={
+            "q": f"'{folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+            "key": api_key,
+            "fields": "files(id,name)",
+            "pageSize": 10,
+            "orderBy": "name",
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json().get("files", [])
+
+
 def _resolve_gdrive_folder(folder_id: str, api_key: str) -> str | None:
-    """Busca la primera imagen en una carpeta pública de Google Drive y devuelve su URL de descarga."""
+    """Busca la primera imagen en una carpeta pública de Drive (incluyendo subcarpetas)."""
     import httpx
     try:
-        resp = httpx.get(
-            "https://www.googleapis.com/drive/v3/files",
-            params={
-                "q": f"'{folder_id}' in parents and mimeType contains 'image/' and trashed = false",
-                "key": api_key,
-                "fields": "files(id,name,mimeType)",
-                "pageSize": 5,
-                "orderBy": "name",
-            },
-            timeout=10,
-        )
-        resp.raise_for_status()
-        files = resp.json().get("files", [])
-        if files:
-            file_id = files[0]["id"]
-            log.info("  📁 Drive folder: primera imagen encontrada → %s (%s)", files[0]["name"], file_id)
-            return f"https://drive.google.com/uc?export=download&id={file_id}"
-        log.warning("  📁 Drive folder %s: sin imágenes públicas", folder_id)
+        with httpx.Client(timeout=10, follow_redirects=True) as client:
+            # 1. Buscar imágenes directamente en la carpeta raíz
+            images = _gdrive_list_images(folder_id, api_key, client)
+
+            # 2. Si no hay imágenes directas, buscar en subcarpetas (un nivel)
+            if not images:
+                subfolders = _gdrive_list_subfolders(folder_id, api_key, client)
+                for sub in subfolders:
+                    images = _gdrive_list_images(sub["id"], api_key, client)
+                    if images:
+                        log.info("  📁 Imágenes encontradas en subcarpeta: %s", sub["name"])
+                        break
+
+            if not images:
+                log.warning("  📁 Drive folder %s: sin imágenes (ni en subcarpetas)", folder_id)
+                return None
+
+            file_id = images[0]["id"]
+            log.info("  📁 Drive: primera imagen → %s (%s)", images[0]["name"], file_id)
+            # Usar el endpoint de la API con key en vez de uc?export=download (más confiable)
+            return f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media&key={api_key}"
+
     except Exception as exc:
         log.warning("  📁 No se pudo listar carpeta Drive %s: %s", folder_id, exc)
     return None
