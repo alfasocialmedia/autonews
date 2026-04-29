@@ -9,6 +9,15 @@
   </div>
 </div>
 
+<!-- Barra de acciones masivas (oculta por defecto) -->
+<div id="bulkBar" class="alert alert-warning d-none d-flex align-items-center gap-3 mb-3 py-2">
+  <span class="fw-semibold"><span id="bulkCount">0</span> seleccionado(s)</span>
+  <button class="btn btn-sm btn-danger ms-auto" id="bulkDelete">
+    <i class="bi bi-trash me-1"></i>Eliminar seleccionados
+  </button>
+  <button class="btn btn-sm btn-outline-secondary" id="bulkCancel">Cancelar</button>
+</div>
+
 <!-- Filtros -->
 <div class="card border-0 shadow-sm mb-3">
   <div class="card-body py-2">
@@ -42,7 +51,10 @@
     <table class="table table-hover align-middle mb-0">
       <thead class="table-light">
         <tr>
-          <th class="ps-3">#</th>
+          <th class="ps-3" style="width:40px">
+            <input type="checkbox" class="form-check-input" id="selectAll">
+          </th>
+          <th>#</th>
           <th>Remitente</th>
           <th>Asunto</th>
           <th>Recibido</th>
@@ -54,7 +66,10 @@
         {% if emails %}
           {% for e in emails %}
           <tr>
-            <td class="ps-3 text-muted small">{{ e.id }}</td>
+            <td class="ps-3">
+              <input type="checkbox" class="form-check-input row-check" value="{{ e.id }}">
+            </td>
+            <td class="text-muted small">{{ e.id }}</td>
             <td>
               <div class="small fw-semibold text-truncate" style="max-width:160px" title="{{ e.sender }}">
                 {{ e.sender or '—' }}
@@ -109,7 +124,7 @@
           {% endfor %}
         {% else %}
         <tr>
-          <td colspan="6" class="text-center py-5 text-muted">
+          <td colspan="7" class="text-center py-5 text-muted">
             <i class="bi bi-inbox display-4 d-block mb-2"></i>
             No hay correos que coincidan con el filtro
           </td>
@@ -156,6 +171,56 @@
 
 {% block scripts %}
 <script>
+// Selección masiva
+const selectAll = document.getElementById('selectAll');
+const bulkBar   = document.getElementById('bulkBar');
+const bulkCount = document.getElementById('bulkCount');
+
+function updateBulkBar() {
+  const checked = document.querySelectorAll('.row-check:checked');
+  if (checked.length > 0) {
+    bulkBar.classList.remove('d-none');
+    bulkCount.textContent = checked.length;
+  } else {
+    bulkBar.classList.add('d-none');
+  }
+}
+
+selectAll?.addEventListener('change', function () {
+  document.querySelectorAll('.row-check').forEach(c => c.checked = this.checked);
+  updateBulkBar();
+});
+
+document.querySelectorAll('.row-check').forEach(c => {
+  c.addEventListener('change', () => {
+    selectAll.checked = document.querySelectorAll('.row-check:not(:checked)').length === 0;
+    updateBulkBar();
+  });
+});
+
+document.getElementById('bulkCancel')?.addEventListener('click', () => {
+  document.querySelectorAll('.row-check, #selectAll').forEach(c => c.checked = false);
+  bulkBar.classList.add('d-none');
+});
+
+document.getElementById('bulkDelete')?.addEventListener('click', async function () {
+  const ids = [...document.querySelectorAll('.row-check:checked')].map(c => parseInt(c.value));
+  if (!ids.length) return;
+  if (!confirm(`¿Eliminar ${ids.length} registro(s) seleccionado(s)?`)) return;
+  const resp = await fetch('/posts/bulk-delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  const data = await resp.json();
+  if (data.success) {
+    showToast(`${data.deleted} registro(s) eliminado(s)`, 'success');
+    setTimeout(() => location.reload(), 1200);
+  } else {
+    showToast('Error al eliminar', 'danger');
+  }
+});
+
 document.querySelectorAll('.btn-retry').forEach(btn => {
   btn.addEventListener('click', async function () {
     const id = this.dataset.id;

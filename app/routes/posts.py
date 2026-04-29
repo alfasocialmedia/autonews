@@ -109,3 +109,22 @@ async def delete_email(request: Request, email_id: int, db: Session = Depends(ge
         db.commit()
         return JSONResponse({"success": True})
     return JSONResponse({"success": False, "message": "No encontrado"})
+
+
+@router.post("/bulk-delete")
+async def bulk_delete(request: Request, db: Session = Depends(get_db)):
+    if not get_current_user(request, db):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    body = await request.json()
+    ids = body.get("ids", [])
+    if not ids:
+        return JSONResponse({"success": False, "message": "Sin IDs"})
+    deleted = (
+        db.query(ProcessedEmail)
+        .filter(ProcessedEmail.id.in_(ids))
+        .all()
+    )
+    for item in deleted:
+        db.delete(item)
+    db.commit()
+    return JSONResponse({"success": True, "deleted": len(deleted)})
