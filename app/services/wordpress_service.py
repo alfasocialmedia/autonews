@@ -73,6 +73,24 @@ def find_category_by_name(
     return None
 
 
+def get_or_create_category(
+    site_url: str, api_user: str, app_password: str, category_name: str
+) -> int | None:
+    """Busca la categoría en WP; si no existe la crea y devuelve el ID."""
+    cat_id = find_category_by_name(site_url, api_user, app_password, category_name)
+    if cat_id:
+        return cat_id
+    base = site_url.rstrip("/") + "/wp-json/wp/v2/categories"
+    try:
+        with httpx.Client(timeout=15, verify=False) as client:
+            resp = client.post(base, json={"name": category_name}, headers=_headers(api_user, app_password))
+        if resp.status_code in (200, 201):
+            return resp.json().get("id")
+    except Exception as exc:
+        log.warning("No se pudo crear categoría '%s': %s", category_name, exc)
+    return None
+
+
 def create_post(
     site_url: str,
     api_user: str,

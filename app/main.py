@@ -47,6 +47,10 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE rss_feeds ADD COLUMN wp_category_id INTEGER"))
             if "wp_category_name" not in cols:
                 conn.execute(text("ALTER TABLE rss_feeds ADD COLUMN wp_category_name VARCHAR(100)"))
+        if "posts" in tables:
+            cols = [c["name"] for c in inspector.get_columns("posts")]
+            if "source_name" not in cols:
+                conn.execute(text("ALTER TABLE posts ADD COLUMN source_name VARCHAR(200)"))
 
 
 @asynccontextmanager

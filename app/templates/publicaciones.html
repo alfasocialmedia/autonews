@@ -50,8 +50,8 @@
       <div class="card-body">
         <div class="d-flex align-items-start gap-3">
 
-          <!-- Badges fuente + categoría -->
-          <div class="d-flex flex-column gap-1 align-items-center" style="min-width:56px">
+          <!-- Badges fuente + estado -->
+          <div class="d-flex flex-column gap-1 align-items-center" style="min-width:64px">
             {% if post.processed_email_id %}
             <span class="badge bg-secondary" title="Generado desde email">
               <i class="bi bi-envelope-fill"></i>
@@ -81,10 +81,15 @@
             <p class="text-muted small mb-2" style="line-height:1.4">
               {{ post._preview[:200] }}{% if post._preview|length > 200 %}…{% endif %}
             </p>
-            <div class="d-flex align-items-center gap-3 small text-muted">
+            <div class="d-flex align-items-center gap-3 small text-muted flex-wrap">
               <span><i class="bi bi-clock me-1"></i>
                 {{ post.created_at.strftime('%d/%m/%Y %H:%M') if post.created_at else '—' }}
               </span>
+              {% if post.source_name %}
+              <span class="text-warning fw-semibold">
+                <i class="bi bi-rss me-1"></i>{{ post.source_name }}
+              </span>
+              {% endif %}
               {% if post.wordpress_post_id %}
               <span><i class="bi bi-wordpress me-1"></i>ID {{ post.wordpress_post_id }}</span>
               {% endif %}

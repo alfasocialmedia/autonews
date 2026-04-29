@@ -113,6 +113,7 @@ class Post(Base):
     category = Column(String(100), nullable=True)
     status = Column(String(50), default="draft")
     wp_link = Column(String(600), nullable=True)
+    source_name = Column(String(200), nullable=True)  # nombre del feed RSS o cuenta email
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

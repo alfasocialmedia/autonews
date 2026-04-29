@@ -30,7 +30,7 @@ from app.models import (
 from app.services.email_service import fetch_unread_emails
 from app.services.groq_service import process_email_with_groq, process_rss_with_groq
 from app.services.rss_service import fetch_rss_items, scrape_full_article
-from app.services.wordpress_service import create_post, find_category_by_name, get_or_create_tags, upload_media
+from app.services.wordpress_service import create_post, find_category_by_name, get_or_create_category, get_or_create_tags, upload_media
 
 logging.basicConfig(
     level=logging.INFO,
@@ -86,10 +86,10 @@ def _resolve_categories(db, wp_cfg, category_name: str) -> list[int]:
         if normalize(m.keyword) in norm_cat or norm_cat in normalize(m.category_name):
             return [m.category_id]
 
-    # 2. Buscar directamente en WP por nombre de categoría
+    # 2. Buscar en WP por nombre; si no existe, crearla automáticamente
     try:
         wp_pwd = decrypt_value(wp_cfg.encrypted_app_password)
-        cat_id = find_category_by_name(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, category_name)
+        cat_id = get_or_create_category(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, category_name)
         if cat_id:
             return [cat_id]
     except Exception:
@@ -313,7 +313,7 @@ def _download_image(url: str) -> tuple[bytes, str, str] | None:
         return None
 
 
-def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = None):
+def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = None, source_name: str | None = None):
     """Publica un resultado de Groq en todos los sitios WP activos. Devuelve cantidad publicada."""
     published_count = 0
 
@@ -375,6 +375,7 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
                     category=ai_result.get("category", ""),
                     status=wp_cfg.default_status,
                     wp_link=wp_post.get("link", ""),
+                    source_name=source_name,
                 )
             )
             db.commit()
@@ -513,7 +514,7 @@ def process_rss_feeds():
                         rss_item.status = "processed"
                         db.commit()
 
-                        count = _publish_ai_result(db, ai_result, wp_sites, image_url=image_url)
+                        count = _publish_ai_result(db, ai_result, wp_sites, image_url=image_url, source_name=feed.name)
                         rss_item.status = "published" if count > 0 else "error"
                         db.commit()
 
