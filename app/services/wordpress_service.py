@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import base64
+import logging
 
 import httpx
+
+log = logging.getLogger("wordpress_service")
 
 
 def _headers(api_user: str, app_password: str) -> dict:
@@ -100,10 +103,43 @@ def create_post(
         if excerpt:
             payload["meta"]["_yoast_wpseo_metadesc"] = excerpt
 
+    hdrs = _headers(api_user, app_password)
     with httpx.Client(timeout=30, verify=False) as client:
-        resp = client.post(url, json=payload, headers=_headers(api_user, app_password))
-    resp.raise_for_status()
-    return resp.json()
+        resp = client.post(url, json=payload, headers=hdrs)
+        resp.raise_for_status()
+        post = resp.json()
+
+        # Actualizar Yoast SEO vía PATCH por si el meta no quedó guardado en el POST inicial
+        post_id = post.get("id")
+        if post_id and (keyphrase or excerpt):
+            yoast_meta: dict = {}
+            if keyphrase:
+                yoast_meta["_yoast_wpseo_focuskw"] = keyphrase
+            if excerpt:
+                yoast_meta["_yoast_wpseo_metadesc"] = excerpt
+            try:
+                patch_resp = client.patch(
+                    f"{url}/{post_id}",
+                    json={"meta": yoast_meta},
+                    headers=hdrs,
+                )
+                if patch_resp.status_code not in (200, 201):
+                    log.warning(
+                        "Yoast PATCH HTTP %s: %s",
+                        patch_resp.status_code,
+                        patch_resp.text[:300],
+                    )
+                else:
+                    saved_meta = patch_resp.json().get("meta", {})
+                    log.info(
+                        "Yoast meta guardado — focuskw=%r metadesc=%r",
+                        saved_meta.get("_yoast_wpseo_focuskw"),
+                        saved_meta.get("_yoast_wpseo_metadesc"),
+                    )
+            except Exception as exc:
+                log.warning("Yoast PATCH error: %s", exc)
+
+    return post
 
 
 def get_or_create_tags(

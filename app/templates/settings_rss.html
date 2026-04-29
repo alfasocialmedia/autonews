@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block title %}Feeds RSS — AutoNews{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <div>
+    <h2 class="page-title"><i class="bi bi-rss-fill me-2 text-warning"></i>Feeds RSS</h2>
+    <span class="text-muted small">Monitorea diarios online y publica automáticamente artículos reescritos</span>
+  </div>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+    <i class="bi bi-plus-lg me-1"></i>Agregar feed
+  </button>
+</div>
+
+{% with messages = request.query_params %}
+{% if messages.get('msg') %}
+<div class="alert alert-success alert-dismissible fade show d-flex align-items-center">
+  <i class="bi bi-check-circle-fill me-2"></i>{{ messages.get('msg') | replace('+', ' ') }}
+  <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+</div>
+{% elif messages.get('err') %}
+<div class="alert alert-danger alert-dismissible fade show d-flex align-items-center">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ messages.get('err') | replace('+', ' ') }}
+  <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+{% endwith %}
+
+<!-- Feeds rápidos conocidos -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-transparent border-0 pb-0">
+    <span class="fw-semibold small text-muted"><i class="bi bi-lightning-fill me-1 text-warning"></i>Feeds populares — clic para copiar la URL</span>
+  </div>
+  <div class="card-body pt-2">
+    <div class="d-flex flex-wrap gap-2">
+      {% set quick_feeds = [
+        ("Clarín", "https://www.clarin.com/rss/lo-ultimo/"),
+        ("Infobae", "https://www.infobae.com/feeds/rss/"),
+        ("TN", "https://tn.com.ar/rss/"),
+        ("RT en Español", "https://actualidad.rt.com/rss"),
+        ("Crónica", "https://www.cronica.com.ar/rss/portada.xml"),
+        ("La Nación", "https://www.lanacion.com.ar/arc/outboundfeeds/rss/"),
+        ("Página 12", "https://www.pagina12.com.ar/rss/portada"),
+        ("Ámbito", "https://www.ambito.com/rss/pages/home.xml"),
+      ] %}
+      {% for nombre, rss_url in quick_feeds %}
+      <button class="btn btn-sm btn-outline-secondary quick-feed"
+              data-name="{{ nombre }}" data-url="{{ rss_url }}">
+        <i class="bi bi-rss me-1"></i>{{ nombre }}
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% if feeds %}
+<div class="row g-3">
+  {% for feed in feeds %}
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-transparent border-0 d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+          <div class="avatar-icon bg-warning-subtle text-warning rounded-circle">
+            <i class="bi bi-rss-fill"></i>
+          </div>
+          <div>
+            <div class="fw-semibold">{{ feed.name }}</div>
+            <div class="text-muted small text-truncate" style="max-width:240px">{{ feed.url }}</div>
+          </div>
+        </div>
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input toggle-feed" type="checkbox" role="switch"
+                 data-id="{{ feed.id }}" {% if feed.is_active %}checked{% endif %}>
+        </div>
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-6 text-muted">Revisar cada</dt>
+          <dd class="col-6">
+            {% if feed.check_interval_minutes < 60 %}
+              {{ feed.check_interval_minutes }} minutos
+            {% elif feed.check_interval_minutes == 60 %}
+              1 hora
+            {% else %}
+              {{ (feed.check_interval_minutes / 60) | int }} horas
+            {% endif %}
+          </dd>
+          <dt class="col-6 text-muted">Máx. por día</dt>
+          <dd class="col-6">{{ feed.max_articles_per_day }} artículos</dd>
+          <dt class="col-6 text-muted">Publicados total</dt>
+          <dd class="col-6">{{ feed._published_count }}</dd>
+          <dt class="col-6 text-muted">Última revisión</dt>
+          <dd class="col-6">
+            {% if feed.last_checked_at %}
+              {{ feed.last_checked_at.strftime('%d/%m %H:%M') }}
+            {% else %}
+              <span class="text-muted">Nunca</span>
+            {% endif %}
+          </dd>
+          <dt class="col-6 text-muted">Estado</dt>
+          <dd class="col-6">
+            {% if feed.is_active %}
+            <span class="badge bg-success">Activo</span>
+            {% else %}
+            <span class="badge bg-secondary">Inactivo</span>
+            {% endif %}
+          </dd>
+        </dl>
+      </div>
+      <div class="card-footer bg-transparent border-0 d-flex gap-2">
+        <button class="btn btn-sm btn-outline-info test-feed" data-id="{{ feed.id }}">
+          <i class="bi bi-plug me-1"></i>Probar
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                data-bs-target="#editModal{{ feed.id }}">
+          <i class="bi bi-pencil me-1"></i>Editar
+        </button>
+        <button class="btn btn-sm btn-outline-danger ms-auto"
+                onclick="confirmDelete('/settings/rss/{{ feed.id }}/delete', 'el feed {{ feed.name }}')">
+          <i class="bi bi-trash me-1"></i>Eliminar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div class="modal fade" id="editModal{{ feed.id }}" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Editar feed</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <form method="post" action="/settings/rss/{{ feed.id }}/edit">
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Nombre</label>
+              <input type="text" name="name" class="form-control" value="{{ feed.name }}" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">URL del feed RSS</label>
+              <input type="url" name="url" class="form-control" value="{{ feed.url }}" required>
+            </div>
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label fw-semibold">Revisar cada</label>
+                <select name="check_interval_minutes" class="form-select">
+                  {% for val, label in [(15,"15 minutos"),(30,"30 minutos"),(60,"1 hora"),(120,"2 horas"),(180,"3 horas"),(240,"4 horas"),(480,"8 horas"),(720,"12 horas"),(1440,"24 horas")] %}
+                  <option value="{{ val }}" {% if feed.check_interval_minutes == val %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-semibold">Máx. artículos / día</label>
+                <input type="number" name="max_articles_per_day" class="form-control"
+                       value="{{ feed.max_articles_per_day }}" min="1" max="100">
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar cambios</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state card border-0 shadow-sm">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-rss display-4 text-muted d-block mb-3"></i>
+    <h5>No hay feeds configurados</h5>
+    <p class="text-muted">Agrega feeds RSS de diarios online para que el sistema los monitoree y publique artículos reescritos automáticamente.</p>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+      <i class="bi bi-plus-lg me-1"></i>Agregar feed
+    </button>
+  </div>
+</div>
+{% endif %}
+
+<!-- Add Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Agregar feed RSS</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/settings/rss/add">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nombre del medio</label>
+            <input type="text" name="name" id="addName" class="form-control" placeholder="Ej: Clarín" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">URL del feed RSS</label>
+            <input type="url" name="url" id="addUrl" class="form-control"
+                   placeholder="https://www.clarin.com/rss/lo-ultimo/" required>
+          </div>
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Revisar cada</label>
+              <select name="check_interval_minutes" class="form-select">
+                <option value="15">15 minutos</option>
+                <option value="30">30 minutos</option>
+                <option value="60" selected>1 hora</option>
+                <option value="120">2 horas</option>
+                <option value="180">3 horas</option>
+                <option value="240">4 horas</option>
+                <option value="480">8 horas</option>
+                <option value="720">12 horas</option>
+                <option value="1440">24 horas</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Máx. artículos / día</label>
+              <input type="number" name="max_articles_per_day" class="form-control"
+                     value="5" min="1" max="100">
+              <div class="form-text">Límite diario de publicaciones desde este feed.</div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i>Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Toggle feed activo/inactivo
+document.querySelectorAll('.toggle-feed').forEach(toggle => {
+  toggle.addEventListener('change', async function () {
+    const resp = await fetch(`/settings/rss/${this.dataset.id}/toggle`, { method: 'POST' });
+    const data = await resp.json();
+    showToast(data.active ? 'Feed activado' : 'Feed desactivado', data.active ? 'success' : 'secondary');
+  });
+});
+
+// Probar feed
+document.querySelectorAll('.test-feed').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const orig = this.innerHTML;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Probando...';
+    this.disabled = true;
+    const resp = await fetch(`/settings/rss/${this.dataset.id}/test`, { method: 'POST' });
+    const data = await resp.json();
+    showToast(data.message, data.success ? 'success' : 'danger');
+    this.innerHTML = orig;
+    this.disabled = false;
+  });
+});
+
+// Feeds rápidos — rellenar el formulario de agregar
+document.querySelectorAll('.quick-feed').forEach(btn => {
+  btn.addEventListener('click', function () {
+    document.getElementById('addName').value = this.dataset.name;
+    document.getElementById('addUrl').value = this.dataset.url;
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('addModal'));
+    modal.show();
+  });
+});
+</script>
+{% endblock %}

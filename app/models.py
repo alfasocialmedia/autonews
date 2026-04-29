@@ -127,3 +127,35 @@ class Log(Base):
     message = Column(Text, nullable=False)
     source = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class RssFeed(Base):
+    __tablename__ = "rss_feeds"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    url = Column(String(500), nullable=False)
+    is_active = Column(Boolean, default=True)
+    check_interval_minutes = Column(Integer, default=60)
+    max_articles_per_day = Column(Integer, default=5)
+    last_checked_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    items = relationship("ProcessedRssItem", back_populates="rss_feed", cascade="all, delete-orphan")
+
+
+class ProcessedRssItem(Base):
+    __tablename__ = "processed_rss_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    rss_feed_id = Column(Integer, ForeignKey("rss_feeds.id"), nullable=False)
+    guid = Column(String(500), unique=True, index=True)
+    title = Column(String(500), nullable=True)
+    link = Column(String(500), nullable=True)
+    published_at = Column(DateTime(timezone=True), nullable=True)
+    processed_at = Column(DateTime(timezone=True), server_default=func.now())
+    status = Column(String(20), default="received", index=True)
+    error_message = Column(Text, nullable=True)
+
+    rss_feed = relationship("RssFeed", back_populates="items")

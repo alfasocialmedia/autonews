@@ -23,10 +23,13 @@ from app.models import (
     Log,
     Post,
     ProcessedEmail,
+    ProcessedRssItem,
+    RssFeed,
     WordPressSettings,
 )
 from app.services.email_service import fetch_unread_emails
 from app.services.groq_service import process_email_with_groq
+from app.services.rss_service import fetch_rss_items
 from app.services.wordpress_service import create_post, find_category_by_name, get_or_create_tags, upload_media
 
 logging.basicConfig(
@@ -279,15 +282,165 @@ def process_emails():
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+def _publish_ai_result(db, ai_result: dict, wp_sites, groq_cfg=None):
+    """Publica un resultado de Groq en todos los sitios WP activos. Devuelve cantidad publicada."""
+    published_count = 0
+    for wp_cfg in wp_sites:
+        try:
+            wp_pwd = decrypt_value(wp_cfg.encrypted_app_password)
+            category_ids = _resolve_categories(db, wp_cfg, ai_result.get("category", ""))
+
+            tag_ids = []
+            raw_tags = ai_result.get("tags", [])
+            if isinstance(raw_tags, list) and raw_tags:
+                try:
+                    tag_ids = get_or_create_tags(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, raw_tags)
+                except Exception:
+                    pass
+
+            create_post(
+                wp_cfg.site_url,
+                wp_cfg.api_user,
+                wp_pwd,
+                ai_result.get("title", ""),
+                ai_result.get("content", ""),
+                wp_cfg.default_status,
+                category_ids,
+                None,
+                excerpt=ai_result.get("summary", ""),
+                tag_ids=tag_ids,
+                keyphrase=ai_result.get("keyphrase", ""),
+            )
+            published_count += 1
+        except Exception as exc:
+            log.error("Error publicando RSS en %s: %s", wp_cfg.name, exc)
+    return published_count
+
+
+def process_rss_feeds():
+    """Revisa los feeds RSS activos y publica artículos nuevos según su configuración."""
+    from datetime import timedelta, timezone as tz
+
+    log.info("▶ Revisando feeds RSS")
+    db = SessionLocal()
+    try:
+        groq_cfg = db.query(GroqSettings).filter(GroqSettings.is_active == True).first()
+        wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).all()
+
+        if not groq_cfg or not wp_sites:
+            return
+
+        feeds = db.query(RssFeed).filter(RssFeed.is_active == True).all()
+        if not feeds:
+            return
+
+        groq_key = decrypt_value(groq_cfg.encrypted_api_key)
+        now = datetime.now(tz.utc)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        for feed in feeds:
+            try:
+                # Verificar si corresponde revisar este feed según su intervalo
+                if feed.last_checked_at:
+                    next_check = feed.last_checked_at + timedelta(minutes=feed.check_interval_minutes)
+                    if now < next_check:
+                        continue
+
+                # Contar publicaciones de hoy para este feed
+                published_today = db.query(ProcessedRssItem).filter(
+                    ProcessedRssItem.rss_feed_id == feed.id,
+                    ProcessedRssItem.status == "published",
+                    ProcessedRssItem.processed_at >= today_start,
+                ).count()
+
+                feed.last_checked_at = now
+                db.commit()
+
+                if published_today >= feed.max_articles_per_day:
+                    log.info("Feed '%s': límite diario alcanzado (%d/%d)", feed.name, published_today, feed.max_articles_per_day)
+                    continue
+
+                log.info("📡 Revisando feed: %s", feed.name)
+                items = fetch_rss_items(feed.url)
+
+                for item in items:
+                    if published_today >= feed.max_articles_per_day:
+                        break
+
+                    # Saltar si ya fue procesado
+                    if db.query(ProcessedRssItem).filter(ProcessedRssItem.guid == item["guid"]).first():
+                        continue
+
+                    rss_item = ProcessedRssItem(
+                        rss_feed_id=feed.id,
+                        guid=item["guid"],
+                        title=item["title"],
+                        link=item["link"],
+                        published_at=item["published_at"],
+                        status="received",
+                    )
+                    db.add(rss_item)
+                    db.commit()
+                    db.refresh(rss_item)
+
+                    log.info("  📰 Nuevo ítem RSS: %s", item["title"][:80])
+                    _log_db(db, "INFO", f"[RSS] {feed.name}: {item['title'][:200]}", source="rss")
+
+                    try:
+                        body = item["body"]
+                        if item["link"]:
+                            body = f"Fuente original: {item['link']}\n\n{body}"
+
+                        ai_result = process_email_with_groq(
+                            groq_key,
+                            groq_cfg.model,
+                            groq_cfg.base_prompt,
+                            item["title"],
+                            body,
+                        )
+                        rss_item.status = "processed"
+                        db.commit()
+
+                        count = _publish_ai_result(db, ai_result, wp_sites)
+                        rss_item.status = "published" if count > 0 else "error"
+                        db.commit()
+
+                        if count > 0:
+                            published_today += 1
+                            msg = f"[RSS] Publicado desde {feed.name}: {ai_result.get('title', '')[:120]}"
+                            log.info("  ✅ %s", msg)
+                            _log_db(db, "INFO", msg, source="rss")
+
+                    except Exception as exc:
+                        rss_item.status = "error"
+                        rss_item.error_message = str(exc)
+                        db.commit()
+                        log.error("  ❌ Error procesando '%s': %s", item["title"][:80], exc)
+                        _log_db(db, "ERROR", f"[RSS] Error en {feed.name}: {exc}", source="rss")
+
+            except Exception as exc:
+                log.error("Error con feed '%s': %s", feed.name, exc)
+                _log_db(db, "ERROR", f"[RSS] Error con feed {feed.name}: {exc}", source="rss")
+
+    except Exception as exc:
+        log.error("Error crítico en process_rss_feeds: %s", exc)
+    finally:
+        db.close()
+
+    log.info("⏹ Feeds RSS procesados")
+
+
 def main():
     log.info("=" * 60)
     log.info("  AutoNews Worker — iniciado")
-    log.info("  Intervalo: cada 60 segundos")
+    log.info("  Emails: cada 60 s  |  RSS: cada 5 min")
     log.info("=" * 60)
 
     schedule.every(60).seconds.do(process_emails)
+    schedule.every(5).minutes.do(process_rss_feeds)
 
     process_emails()
+    process_rss_feeds()
 
     while True:
         schedule.run_pending()
