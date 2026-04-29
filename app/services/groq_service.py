@@ -99,15 +99,20 @@ def _clean_content(content: str) -> str:
     return content
 
 
+_DEFAULT_CATEGORIES = "Policiales, Política, Economía, Tecnología, Deportes, Cultura, Sociedad, Internacional, General"
+
+
 def process_rss_with_groq(
     api_key: str,
     model: str,
     base_prompt: str,
     title: str,
     article_text: str,
+    available_categories: list[str] | None = None,
 ) -> dict:
     """Procesa un artículo de RSS: reescribe sin plagio, sin mencionar fuente, para publicar en WP."""
     client = Groq(api_key=api_key)
+    cat_list = ", ".join(available_categories) if available_categories else _DEFAULT_CATEGORIES
 
     prompt = f"""{base_prompt}
 
@@ -142,7 +147,7 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título SEO clickeable, máximo 65 caracteres, con dato concreto o pregunta, NO copiar el original",
   "content": "HTML periodístico con <p> bien separados y ocasionalmente <h2> solo si hay múltiples temas. Mínimo 400 palabras. Sin listas, sin secciones forzadas.",
-  "category": "Una de: Policiales, Política, Economía, Tecnología, Deportes, Cultura, Sociedad, Internacional, General",
+  "category": "Una de: {cat_list}",
   "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder. Genera curiosidad e incluye la palabra clave.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
@@ -188,9 +193,11 @@ def process_email_with_groq(
     base_prompt: str,
     subject: str,
     body: str,
+    available_categories: list[str] | None = None,
 ) -> dict:
     client = Groq(api_key=api_key)
     clean_subject = _clean_subject(subject)
+    cat_list = ", ".join(available_categories) if available_categories else _DEFAULT_CATEGORIES
 
     prompt = f"""{base_prompt}
 
@@ -223,7 +230,7 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título SEO clickeable, máximo 65 caracteres, con dato concreto o pregunta, NO copiar el original",
   "content": "HTML periodístico con <p> bien separados y ocasionalmente <h2> solo si hay múltiples temas. Mínimo 400 palabras. Sin listas, sin secciones forzadas.",
-  "category": "Una de: Policiales, Política, Economía, Tecnología, Deportes, Cultura, Sociedad, Internacional, General",
+  "category": "Una de: {cat_list}",
   "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder. Genera curiosidad e incluye la palabra clave.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]

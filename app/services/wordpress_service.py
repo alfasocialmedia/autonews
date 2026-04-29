@@ -59,17 +59,37 @@ def upload_media(
 def find_category_by_name(
     site_url: str, api_user: str, app_password: str, category_name: str
 ) -> int | None:
-    """Busca una categoría en WP por nombre (insensible a mayúsculas y acentos)."""
+    """Busca una categoría en WP por nombre, primero con search API luego listando todas."""
     import unicodedata
 
     def normalize(s: str) -> str:
         return unicodedata.normalize("NFD", s.lower()).encode("ascii", "ignore").decode()
 
-    categories = get_categories(site_url, api_user, app_password)
+    base = site_url.rstrip("/") + "/wp-json/wp/v2/categories"
+    hdrs = _headers(api_user, app_password)
     norm_target = normalize(category_name)
+
+    # 1. Búsqueda directa por nombre vía endpoint search (más rápido y confiable)
+    try:
+        with httpx.Client(timeout=15, verify=False) as client:
+            resp = client.get(
+                base,
+                params={"search": category_name, "per_page": 20},
+                headers=hdrs,
+            )
+        if resp.status_code == 200:
+            for cat in resp.json():
+                if normalize(cat.get("name", "")) == norm_target:
+                    return cat["id"]
+    except Exception as exc:
+        log.warning("Error buscando categoría '%s' por search: %s", category_name, exc)
+
+    # 2. Fallback: listar todas las categorías y comparar
+    categories = get_categories(site_url, api_user, app_password)
     for cat in categories:
         if normalize(cat.get("name", "")) == norm_target:
             return cat["id"]
+
     return None
 
 
@@ -86,6 +106,15 @@ def get_or_create_category(
             resp = client.post(base, json={"name": category_name}, headers=_headers(api_user, app_password))
         if resp.status_code in (200, 201):
             return resp.json().get("id")
+        if resp.status_code == 400:
+            # WP devuelve term_exists cuando la categoría ya existe con ese slug
+            error_data = resp.json()
+            if error_data.get("code") == "term_exists":
+                term_id = error_data.get("data", {}).get("term_id")
+                if term_id:
+                    log.info("Categoría '%s' ya existía (term_exists), usando ID %s", category_name, term_id)
+                    return term_id
+        log.warning("No se pudo crear categoría '%s': HTTP %s — %s", category_name, resp.status_code, resp.text[:200])
     except Exception as exc:
         log.warning("No se pudo crear categoría '%s': %s", category_name, exc)
     return None

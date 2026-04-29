@@ -24,7 +24,32 @@
       "PowerShell(git commit -m \"fix: move SQLite DB to /app/data for persistent volume mounting\")",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(pip show *)",
+      "Bash(pip install *)",
+      "Bash(ssh root@vmi3216375 \"ps aux | grep -E 'uvicorn|python|gunicorn' | grep -v grep\")",
+      "Bash(docker exec *)",
+      "Bash(ssh root@vmi3216375 \"docker logs autonews --tail 50\")",
+      "Bash(python -c ' *)",
+      "Bash(git commit -m 'fix: replace curly quotes with ASCII quotes in groq_service.py *)",
+      "PowerShell(pip install beautifulsoup4==4.12.3 --quiet 2>&1)",
+      "PowerShell(python -c \"from bs4 import BeautifulSoup; print\\('bs4 ok'\\)\")",
+      "PowerShell(python -c \"from app.services.rss_service import scrape_full_article, fetch_rss_items; from app.services.groq_service import process_rss_with_groq; print\\('imports ok'\\)\")",
+      "PowerShell(python -c \"from app.services.rss_service import scrape_full_article, fetch_rss_items; print\\('rss_service ok'\\)\")",
+      "WebFetch(domain:www.cronica.com.ar)",
+      "WebSearch",
+      "PowerShell(git add app/main.py app/models.py app/routes/rss.py app/services/groq_service.py app/services/rss_service.py app/templates/settings_rss.html app/worker.py requirements.txt)",
+      "PowerShell(git push origin main)",
+      "PowerShell(git add app/main.py app/templates/base.html app/routes/publicaciones.py app/templates/publicaciones.html)",
+      "PowerShell(git commit -m $msg)",
+      "PowerShell($msg = \"feat: add Publicaciones section with article preview and filters`n`nNew /publicaciones page shows all generated articles \\(RSS + email\\).`nCard list with preview modal, WP link, filters by source and category.`n`nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\")",
+      "PowerShell(git add app/services/groq_service.py)",
+      "PowerShell($msg = \"fix: humanize article writing style in Groq prompts`n`nReplace rigid H2/list structure with natural journalistic prose.`nBan subtitles, bullet lists, conclusion sections and AI-sounding`ntransition phrases. Only <p> and sparse <strong> allowed.`nRaise temperature to 0.85 for more varied output.`n`nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\")",
+      "PowerShell($msg = \"fix: add Policiales category, enforce 20-word summary, improve readability`n`n- Added Policiales to category list in both prompts \\(was missing, causing`n  crime articles to fall back to General\\)`n- Summary now requires EXACTLY 20 words in prompt + Python normalizer`n  that trims/extends to 18-22 words as safety net`n- Subtitles: h2 only when article covers 2+ distinct topics, forbidden`n  for short single-topic articles`n- Readability: target 95pct Flesch, max 20-word sentences, plain vocab`n- Banned: cabe destacar, por otro lado, a continuacion and similar AI tells`n`nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\")",
+      "PowerShell(git add app/worker.py)",
+      "PowerShell($msg = \"fix: normalize naive datetimes from SQLite before UTC comparison`n`nSQLite returns last_checked_at without tzinfo; comparing with`ndatetime.now\\(utc\\) raised offset-naive vs offset-aware TypeError.`nFix: attach UTC tzinfo when tzinfo is None before arithmetic.`n`nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\")",
+      "PowerShell(git add app/models.py app/main.py app/worker.py app/services/wordpress_service.py app/templates/publicaciones.html)",
+      "PowerShell($msg = \"fix: auto-create WP category if missing + show RSS source name in panel`n`n- get_or_create_category: if category not found in WP, create it via API`n  so articles never fall back to default Generales category`n- Post.source_name: new column stores feed name for RSS articles`n- publicaciones.html: shows feed name badge on each article card`n- Migration: auto-adds source_name column to posts table on startup`n`nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\")"
     ]
   }
 }
