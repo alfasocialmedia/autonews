@@ -88,6 +88,76 @@ def _clean_content(content: str) -> str:
     return content
 
 
+def process_rss_with_groq(
+    api_key: str,
+    model: str,
+    base_prompt: str,
+    title: str,
+    article_text: str,
+) -> dict:
+    """Procesa un artículo de RSS: reescribe sin plagio, sin mencionar fuente, para publicar en WP."""
+    client = Groq(api_key=api_key)
+
+    prompt = f"""{base_prompt}
+
+Título original de referencia: {title}
+
+Contenido del artículo:
+{article_text[:6000]}
+
+INSTRUCCIONES ESTRICTAS:
+- Reescribe el artículo COMPLETAMENTE con tus propias palabras, sin plagio.
+- NO menciones la fuente, el medio original, ni ningún sitio web externo.
+- NO incluyas links, URLs ni referencias a otras publicaciones.
+- NO incluyas publicidad, banners ni llamadas a la acción.
+- NO escribas "Fuente:", "Según...", "El medio X informó que...", ni nada similar.
+- El artículo debe leerse como propio, sin rastreo de origen.
+- Usa el contenido dado solo como base informativa para redactar la noticia.
+
+IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido. Usa comillas dobles estándar (sin «», sin "", sin markdown, sin texto adicional).
+Usa comillas SIMPLES dentro del HTML para atributos (href='url' no href="url").
+El JSON debe tener exactamente esta estructura:
+{{
+  "title": "Título SEO original y clickeable: incluye la palabra clave principal, usa números o datos concretos o una pregunta o genera urgencia/curiosidad, máximo 65 caracteres, NO copiar el titular original",
+  "content": "Artículo periodístico COMPLETO en HTML, mínimo 500 palabras. Usa <p> para párrafos, <h2> para subtítulos, <strong> para destacados, <ul><li> para listas. Desarrolla todos los puntos con contexto, antecedentes y detalles. SIN links externos, SIN mención a fuentes.",
+  "category": "Una de: Política, Economía, Tecnología, Deportes, Cultura, Sociedad, Internacional, General",
+  "summary": "Meta descripción SEO de MÁXIMO 20 palabras: describe el contenido, NO repetir el título, incluir la palabra clave de forma natural, generar curiosidad para el clic",
+  "keyphrase": "frase clave de 2 a 4 palabras que resume el tema principal del artículo",
+  "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
+}}"""
+
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=6000,
+        temperature=0.7,
+    )
+
+    raw = resp.choices[0].message.content.strip()
+    log.debug("Groq RSS raw response (500 chars): %s", raw[:500])
+
+    text = _normalize_quotes(raw)
+    result = _extract_first_json(text)
+
+    if result:
+        if "title" in result:
+            result["title"] = _clean_subject(result["title"])
+        if "content" in result:
+            result["content"] = _clean_content(result["content"])
+            if not result["content"]:
+                log.warning("Content RSS vacío tras limpieza")
+                result["content"] = f"<p>{article_text[:1000]}</p>"
+        return result
+
+    log.warning("No se pudo parsear JSON RSS de Groq. Raw (200): %s", raw[:200])
+    return {
+        "title": title,
+        "content": f"<p>{article_text[:1000]}</p>",
+        "category": "General",
+        "summary": article_text[:200],
+    }
+
+
 def process_email_with_groq(
     api_key: str,
     model: str,

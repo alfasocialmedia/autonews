@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from pydantic import BaseModel
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -33,13 +34,23 @@ async def rss_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
+def _parse_keyword_filter(raw: str) -> str | None:
+    """Normaliza el filtro de palabras clave: minúsculas, sin espacios extra."""
+    cleaned = ",".join(k.strip().lower() for k in raw.split(",") if k.strip())
+    return cleaned or None
+
+
 @router.post("/add")
 async def add_feed(
     request: Request,
     name: str = Form(...),
     url: str = Form(...),
     check_interval_minutes: int = Form(60),
+    articles_per_check: int = Form(1),
     max_articles_per_day: int = Form(5),
+    keyword_filter: str = Form(""),
+    wp_category_id: str = Form(""),
+    wp_category_name: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user = get_current_user(request, db)
@@ -50,7 +61,11 @@ async def add_feed(
         name=name.strip(),
         url=url.strip(),
         check_interval_minutes=check_interval_minutes,
+        articles_per_check=max(1, articles_per_check),
         max_articles_per_day=max_articles_per_day,
+        keyword_filter=_parse_keyword_filter(keyword_filter),
+        wp_category_id=int(wp_category_id) if wp_category_id.strip().isdigit() else None,
+        wp_category_name=wp_category_name.strip() or None,
     )
     db.add(feed)
     db.commit()
@@ -64,7 +79,11 @@ async def edit_feed(
     name: str = Form(...),
     url: str = Form(...),
     check_interval_minutes: int = Form(60),
+    articles_per_check: int = Form(1),
     max_articles_per_day: int = Form(5),
+    keyword_filter: str = Form(""),
+    wp_category_id: str = Form(""),
+    wp_category_name: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user = get_current_user(request, db)
@@ -76,7 +95,11 @@ async def edit_feed(
         feed.name = name.strip()
         feed.url = url.strip()
         feed.check_interval_minutes = check_interval_minutes
+        feed.articles_per_check = max(1, articles_per_check)
         feed.max_articles_per_day = max_articles_per_day
+        feed.keyword_filter = _parse_keyword_filter(keyword_filter)
+        feed.wp_category_id = int(wp_category_id) if wp_category_id.strip().isdigit() else None
+        feed.wp_category_name = wp_category_name.strip() or None
         db.commit()
     return RedirectResponse("/settings/rss?msg=Feed+actualizado", status_code=302)
 
@@ -107,6 +130,19 @@ async def delete_feed(feed_id: int, request: Request, db: Session = Depends(get_
         db.delete(feed)
         db.commit()
     return RedirectResponse("/settings/rss?msg=Feed+eliminado", status_code=302)
+
+
+class UrlTestRequest(BaseModel):
+    url: str
+
+
+@router.post("/test-url")
+async def test_url(payload: UrlTestRequest, request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    success, message = test_rss_feed(payload.url.strip())
+    return JSONResponse({"success": success, "message": message})
 
 
 @router.post("/{feed_id}/test")

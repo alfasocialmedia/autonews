@@ -28,8 +28,8 @@ from app.models import (
     WordPressSettings,
 )
 from app.services.email_service import fetch_unread_emails
-from app.services.groq_service import process_email_with_groq
-from app.services.rss_service import fetch_rss_items
+from app.services.groq_service import process_email_with_groq, process_rss_with_groq
+from app.services.rss_service import fetch_rss_items, scrape_full_article
 from app.services.wordpress_service import create_post, find_category_by_name, get_or_create_tags, upload_media
 
 logging.basicConfig(
@@ -43,6 +43,18 @@ log = logging.getLogger("worker")
 # ──────────────────────────────────────────────────────────────────────────────
 #  Helpers
 # ──────────────────────────────────────────────────────────────────────────────
+
+
+def _matches_keyword_filter(keyword_filter: str | None, title: str, body: str = "") -> bool:
+    """Devuelve True si el artículo pasa el filtro de palabras clave (o si no hay filtro)."""
+    if not keyword_filter:
+        return True
+    haystack = (title + " " + body).lower()
+    for kw in keyword_filter.split(","):
+        kw = kw.strip()
+        if kw and kw in haystack:
+            return True
+    return False
 
 
 def _log_db(db, level: str, message: str, source: str = "worker"):
@@ -282,13 +294,44 @@ def process_emails():
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _publish_ai_result(db, ai_result: dict, wp_sites, groq_cfg=None):
+def _download_image(url: str) -> tuple[bytes, str, str] | None:
+    """Descarga una imagen desde URL. Devuelve (bytes, filename, mimetype) o None."""
+    import httpx, mimetypes, re
+    try:
+        resp = httpx.get(url, timeout=15, follow_redirects=True,
+                         headers={"User-Agent": "Mozilla/5.0 (compatible; AutoNews/1.0)"})
+        resp.raise_for_status()
+        ctype = resp.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+        ext = mimetypes.guess_extension(ctype) or ".jpg"
+        ext = ext.replace(".jpe", ".jpg")
+        slug = re.sub(r"[^a-z0-9]", "-", url.split("/")[-1].split("?")[0].lower())[:40] or "portada"
+        if not slug.endswith(ext):
+            slug = slug.rstrip("-") + ext
+        return resp.content, slug, ctype
+    except Exception as exc:
+        log.warning("No se pudo descargar imagen %s: %s", url, exc)
+        return None
+
+
+def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = None):
     """Publica un resultado de Groq en todos los sitios WP activos. Devuelve cantidad publicada."""
     published_count = 0
+
+    # Descargar imagen una sola vez para todos los sitios
+    img_payload = None
+    if image_url:
+        img_payload = _download_image(image_url)
+
     for wp_cfg in wp_sites:
         try:
             wp_pwd = decrypt_value(wp_cfg.encrypted_app_password)
-            category_ids = _resolve_categories(db, wp_cfg, ai_result.get("category", ""))
+
+            # Categoría forzada por el feed tiene prioridad sobre la detectada por Groq
+            forced_id = ai_result.get("_forced_category_id")
+            if forced_id:
+                category_ids = [forced_id]
+            else:
+                category_ids = _resolve_categories(db, wp_cfg, ai_result.get("category", ""))
 
             tag_ids = []
             raw_tags = ai_result.get("tags", [])
@@ -298,7 +341,18 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, groq_cfg=None):
                 except Exception:
                     pass
 
-            create_post(
+            featured_media_id = None
+            if img_payload:
+                try:
+                    img_data, img_name, img_mime = img_payload
+                    featured_media_id = upload_media(
+                        wp_cfg.site_url, wp_cfg.api_user, wp_pwd,
+                        img_data, img_name, img_mime,
+                    )
+                except Exception as exc:
+                    log.warning("No se pudo subir imagen a %s: %s", wp_cfg.name, exc)
+
+            wp_post = create_post(
                 wp_cfg.site_url,
                 wp_cfg.api_user,
                 wp_pwd,
@@ -306,11 +360,24 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, groq_cfg=None):
                 ai_result.get("content", ""),
                 wp_cfg.default_status,
                 category_ids,
-                None,
+                featured_media_id,
                 excerpt=ai_result.get("summary", ""),
                 tag_ids=tag_ids,
                 keyphrase=ai_result.get("keyphrase", ""),
             )
+
+            db.add(
+                Post(
+                    processed_email_id=None,
+                    wordpress_post_id=wp_post.get("id"),
+                    title=ai_result.get("title", ""),
+                    content=ai_result.get("content", ""),
+                    category=ai_result.get("category", ""),
+                    status=wp_cfg.default_status,
+                    wp_link=wp_post.get("link", ""),
+                )
+            )
+            db.commit()
             published_count += 1
         except Exception as exc:
             log.error("Error publicando RSS en %s: %s", wp_cfg.name, exc)
@@ -363,12 +430,32 @@ def process_rss_feeds():
                 log.info("📡 Revisando feed: %s", feed.name)
                 items = fetch_rss_items(feed.url)
 
+                published_this_check = 0
+                articles_per_check = feed.articles_per_check or 1
+
                 for item in items:
                     if published_today >= feed.max_articles_per_day:
+                        break
+                    if published_this_check >= articles_per_check:
                         break
 
                     # Saltar si ya fue procesado
                     if db.query(ProcessedRssItem).filter(ProcessedRssItem.guid == item["guid"]).first():
+                        continue
+
+                    # Aplicar filtro de palabras clave sobre el título (rápido, sin scrapear aún)
+                    if not _matches_keyword_filter(feed.keyword_filter, item["title"], item["body"]):
+                        log.info("  ⏭ Descartado por filtro: %s", item["title"][:80])
+                        # Marcar como visto para no revisarlo de nuevo
+                        db.add(ProcessedRssItem(
+                            rss_feed_id=feed.id,
+                            guid=item["guid"],
+                            title=item["title"],
+                            link=item["link"],
+                            published_at=item["published_at"],
+                            status="skipped",
+                        ))
+                        db.commit()
                         continue
 
                     rss_item = ProcessedRssItem(
@@ -388,25 +475,48 @@ def process_rss_feeds():
 
                     try:
                         body = item["body"]
-                        if item["link"]:
-                            body = f"Fuente original: {item['link']}\n\n{body}"
+                        image_url = item.get("image_url")
 
-                        ai_result = process_email_with_groq(
+                        # Si el RSS solo trae un excerpt corto, scrapear el artículo completo
+                        if item.get("needs_scraping") and item["link"]:
+                            log.info("  🔍 Scrapeando artículo completo: %s", item["link"][:80])
+                            scraped_text, scraped_img = scrape_full_article(item["link"])
+                            if scraped_text:
+                                body = scraped_text
+                                # Re-verificar filtro con el texto completo del artículo
+                                if not _matches_keyword_filter(feed.keyword_filter, item["title"], body):
+                                    log.info("  ⏭ Descartado por filtro (cuerpo): %s", item["title"][:80])
+                                    rss_item.status = "skipped"
+                                    db.commit()
+                                    continue
+                            if not image_url and scraped_img:
+                                image_url = scraped_img
+
+                        ai_result = process_rss_with_groq(
                             groq_key,
                             groq_cfg.model,
                             groq_cfg.base_prompt,
                             item["title"],
                             body,
                         )
+
+                        # Categoría forzada por el feed (sobreescribe la de Groq)
+                        if feed.wp_category_id:
+                            ai_result["_forced_category_id"] = feed.wp_category_id
+                            ai_result["_forced_category_name"] = feed.wp_category_name or ""
+                        elif feed.wp_category_name and not feed.wp_category_id:
+                            ai_result["category"] = feed.wp_category_name
+
                         rss_item.status = "processed"
                         db.commit()
 
-                        count = _publish_ai_result(db, ai_result, wp_sites)
+                        count = _publish_ai_result(db, ai_result, wp_sites, image_url=image_url)
                         rss_item.status = "published" if count > 0 else "error"
                         db.commit()
 
                         if count > 0:
                             published_today += 1
+                            published_this_check += 1
                             msg = f"[RSS] Publicado desde {feed.name}: {ai_result.get('title', '')[:120]}"
                             log.info("  ✅ %s", msg)
                             _log_db(db, "INFO", msg, source="rss")

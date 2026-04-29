@@ -137,7 +137,13 @@ class RssFeed(Base):
     url = Column(String(500), nullable=False)
     is_active = Column(Boolean, default=True)
     check_interval_minutes = Column(Integer, default=60)
+    articles_per_check = Column(Integer, default=1)
     max_articles_per_day = Column(Integer, default=5)
+    # Filtro: solo procesa artículos cuyo título/body contenga alguna de estas palabras (CSV)
+    keyword_filter = Column(Text, nullable=True)
+    # Categoría WP forzada: si se define, ignora la categoría que detecta Groq
+    wp_category_id = Column(Integer, nullable=True)
+    wp_category_name = Column(String(100), nullable=True)
     last_checked_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

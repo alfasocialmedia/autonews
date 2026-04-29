@@ -38,7 +38,7 @@
         ("Infobae", "https://www.infobae.com/feeds/rss/"),
         ("TN", "https://tn.com.ar/rss/"),
         ("RT en Español", "https://actualidad.rt.com/rss"),
-        ("Crónica", "https://www.cronica.com.ar/rss/portada.xml"),
+        ("Crónica", "https://www.cronica.com.ar/feed/"),
         ("La Nación", "https://www.lanacion.com.ar/arc/outboundfeeds/rss/"),
         ("Página 12", "https://www.pagina12.com.ar/rss/portada"),
         ("Ámbito", "https://www.ambito.com/rss/pages/home.xml"),
@@ -85,8 +85,20 @@
               {{ (feed.check_interval_minutes / 60) | int }} horas
             {% endif %}
           </dd>
+          <dt class="col-6 text-muted">Art. por revisión</dt>
+          <dd class="col-6">{{ feed.articles_per_check or 1 }}</dd>
           <dt class="col-6 text-muted">Máx. por día</dt>
-          <dd class="col-6">{{ feed.max_articles_per_day }} artículos</dd>
+          <dd class="col-6">{{ feed.max_articles_per_day }}</dd>
+          {% if feed.keyword_filter %}
+          <dt class="col-6 text-muted"><i class="bi bi-funnel me-1"></i>Filtro</dt>
+          <dd class="col-6 text-truncate" style="max-width:140px" title="{{ feed.keyword_filter }}">
+            <span class="badge bg-primary-subtle text-primary">{{ feed.keyword_filter }}</span>
+          </dd>
+          {% endif %}
+          {% if feed.wp_category_name %}
+          <dt class="col-6 text-muted"><i class="bi bi-tag me-1"></i>Categoría WP</dt>
+          <dd class="col-6"><span class="badge bg-success-subtle text-success">{{ feed.wp_category_name }}</span></dd>
+          {% endif %}
           <dt class="col-6 text-muted">Publicados total</dt>
           <dd class="col-6">{{ feed._published_count }}</dd>
           <dt class="col-6 text-muted">Última revisión</dt>
@@ -141,19 +153,50 @@
               <label class="form-label fw-semibold">URL del feed RSS</label>
               <input type="url" name="url" class="form-control" value="{{ feed.url }}" required>
             </div>
-            <div class="row g-2">
-              <div class="col-6">
+            <div class="row g-2 mb-3">
+              <div class="col-4">
                 <label class="form-label fw-semibold">Revisar cada</label>
                 <select name="check_interval_minutes" class="form-select">
-                  {% for val, label in [(15,"15 minutos"),(30,"30 minutos"),(60,"1 hora"),(120,"2 horas"),(180,"3 horas"),(240,"4 horas"),(480,"8 horas"),(720,"12 horas"),(1440,"24 horas")] %}
+                  {% for val, label in [(15,"15 min"),(30,"30 min"),(60,"1 hora"),(120,"2 horas"),(180,"3 horas"),(240,"4 horas"),(480,"8 horas"),(720,"12 horas"),(1440,"24 horas")] %}
                   <option value="{{ val }}" {% if feed.check_interval_minutes == val %}selected{% endif %}>{{ label }}</option>
                   {% endfor %}
                 </select>
               </div>
-              <div class="col-6">
-                <label class="form-label fw-semibold">Máx. artículos / día</label>
+              <div class="col-4">
+                <label class="form-label fw-semibold">Art. por revisión</label>
+                <input type="number" name="articles_per_check" class="form-control"
+                       value="{{ feed.articles_per_check or 1 }}" min="1" max="20">
+              </div>
+              <div class="col-4">
+                <label class="form-label fw-semibold">Máx. / día</label>
                 <input type="number" name="max_articles_per_day" class="form-control"
                        value="{{ feed.max_articles_per_day }}" min="1" max="100">
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-funnel me-1 text-primary"></i>Filtrar por tema
+                <span class="text-muted fw-normal small">(opcional)</span>
+              </label>
+              <input type="text" name="keyword_filter" class="form-control"
+                     value="{{ feed.keyword_filter or '' }}"
+                     placeholder="policial, crimen, robo, detenido">
+              <div class="form-text">Palabras clave separadas por coma. Vacío = todos los artículos.</div>
+            </div>
+            <div class="mb-1">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-tag me-1 text-success"></i>Categoría WordPress forzada
+                <span class="text-muted fw-normal small">(opcional)</span>
+              </label>
+              <div class="row g-2">
+                <div class="col-4">
+                  <input type="number" name="wp_category_id" class="form-control"
+                         value="{{ feed.wp_category_id or '' }}" placeholder="ID" min="1">
+                </div>
+                <div class="col-8">
+                  <input type="text" name="wp_category_name" class="form-control"
+                         value="{{ feed.wp_category_name or '' }}" placeholder="Nombre categoría WP">
+                </div>
               </div>
             </div>
           </div>
@@ -196,11 +239,17 @@
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">URL del feed RSS</label>
-            <input type="url" name="url" id="addUrl" class="form-control"
-                   placeholder="https://www.clarin.com/rss/lo-ultimo/" required>
+            <div class="input-group">
+              <input type="url" name="url" id="addUrl" class="form-control"
+                     placeholder="https://www.clarin.com/rss/lo-ultimo/" required>
+              <button type="button" class="btn btn-outline-secondary" id="btnTestAddUrl">
+                <i class="bi bi-plug me-1"></i>Probar
+              </button>
+            </div>
+            <div id="addUrlFeedback" class="form-text"></div>
           </div>
-          <div class="row g-2">
-            <div class="col-6">
+          <div class="row g-2 mb-3">
+            <div class="col-4">
               <label class="form-label fw-semibold">Revisar cada</label>
               <select name="check_interval_minutes" class="form-select">
                 <option value="15">15 minutos</option>
@@ -214,12 +263,44 @@
                 <option value="1440">24 horas</option>
               </select>
             </div>
-            <div class="col-6">
-              <label class="form-label fw-semibold">Máx. artículos / día</label>
+            <div class="col-4">
+              <label class="form-label fw-semibold">Art. por revisión</label>
+              <input type="number" name="articles_per_check" class="form-control"
+                     value="1" min="1" max="20">
+              <div class="form-text">Cuántos extraer cada vez.</div>
+            </div>
+            <div class="col-4">
+              <label class="form-label fw-semibold">Máx. / día</label>
               <input type="number" name="max_articles_per_day" class="form-control"
                      value="5" min="1" max="100">
-              <div class="form-text">Límite diario de publicaciones desde este feed.</div>
+              <div class="form-text">Límite diario total.</div>
             </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-funnel me-1 text-primary"></i>Filtrar por tema
+              <span class="text-muted fw-normal small">(opcional)</span>
+            </label>
+            <input type="text" name="keyword_filter" class="form-control"
+                   placeholder="policial, crimen, robo, detenido, asesinato">
+            <div class="form-text">Palabras clave separadas por coma. Solo se procesan artículos que contengan alguna en el título. Vacío = todos los artículos.</div>
+          </div>
+          <div class="mb-1">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-tag me-1 text-success"></i>Categoría WordPress forzada
+              <span class="text-muted fw-normal small">(opcional)</span>
+            </label>
+            <div class="row g-2">
+              <div class="col-4">
+                <input type="number" name="wp_category_id" class="form-control"
+                       placeholder="ID (ej: 12)" min="1">
+              </div>
+              <div class="col-8">
+                <input type="text" name="wp_category_name" class="form-control"
+                       placeholder="Nombre (ej: Policiales)">
+              </div>
+            </div>
+            <div class="form-text">Si se define, todos los artículos de este feed se publicarán en esa categoría de WordPress. Ingresá el ID o el nombre exacto de la categoría.</div>
           </div>
         </div>
         <div class="modal-footer">
@@ -262,9 +343,45 @@ document.querySelectorAll('.quick-feed').forEach(btn => {
   btn.addEventListener('click', function () {
     document.getElementById('addName').value = this.dataset.name;
     document.getElementById('addUrl').value = this.dataset.url;
+    document.getElementById('addUrlFeedback').textContent = '';
+    document.getElementById('addUrl').className = 'form-control';
     const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('addModal'));
     modal.show();
   });
+});
+
+// Probar URL en el modal de agregar
+document.getElementById('btnTestAddUrl').addEventListener('click', async function () {
+  const urlInput = document.getElementById('addUrl');
+  const feedback = document.getElementById('addUrlFeedback');
+  const url = urlInput.value.trim();
+  if (!url) { feedback.textContent = 'Ingresá una URL primero.'; return; }
+
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Probando...';
+  this.disabled = true;
+  feedback.textContent = '';
+  urlInput.className = 'form-control';
+
+  try {
+    const resp = await fetch('/settings/rss/test-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      urlInput.className = 'form-control is-valid';
+      feedback.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>' + data.message + '</span>';
+    } else {
+      urlInput.className = 'form-control is-invalid';
+      feedback.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>' + data.message + '</span>';
+    }
+  } catch (e) {
+    feedback.innerHTML = '<span class="text-danger">Error al conectar con el servidor.</span>';
+  }
+
+  this.innerHTML = '<i class="bi bi-plug me-1"></i>Probar';
+  this.disabled = false;
 });
 </script>
 {% endblock %}

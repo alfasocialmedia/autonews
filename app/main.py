@@ -32,11 +32,29 @@ def _create_default_admin():
         db.close()
 
 
+def _migrate_columns():
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        tables = inspector.get_table_names()
+        if "rss_feeds" in tables:
+            cols = [c["name"] for c in inspector.get_columns("rss_feeds")]
+            if "articles_per_check" not in cols:
+                conn.execute(text("ALTER TABLE rss_feeds ADD COLUMN articles_per_check INTEGER DEFAULT 1"))
+            if "keyword_filter" not in cols:
+                conn.execute(text("ALTER TABLE rss_feeds ADD COLUMN keyword_filter TEXT"))
+            if "wp_category_id" not in cols:
+                conn.execute(text("ALTER TABLE rss_feeds ADD COLUMN wp_category_id INTEGER"))
+            if "wp_category_name" not in cols:
+                conn.execute(text("ALTER TABLE rss_feeds ADD COLUMN wp_category_name VARCHAR(100)"))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import pathlib
     pathlib.Path("/app/data").mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
+    _migrate_columns()
     _create_default_admin()
     from app.worker import start_background
     start_background()
