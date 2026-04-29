@@ -55,6 +55,17 @@ def _extract_first_json(text: str) -> dict | None:
     return None
 
 
+def _normalize_summary(summary: str, title: str = "") -> str:
+    """Recorta o extiende la summary para que tenga entre 18 y 22 palabras."""
+    words = summary.strip().split()
+    if len(words) >= 18:
+        return " ".join(words[:22])
+    # Demasiado corta: completar con fragmento del título
+    extra = [w for w in title.split() if w.lower() not in summary.lower()]
+    words = words + extra
+    return " ".join(words[:20])
+
+
 def _clean_content(content: str) -> str:
     """Elimina residuos de JSON que Groq a veces añade al contenido."""
     # Truncar en marcadores de campos JSON residuales
@@ -105,33 +116,34 @@ Título original de referencia: {title}
 Contenido del artículo:
 {article_text[:6000]}
 
-INSTRUCCIONES DE REDACCIÓN — léelas con atención:
+INSTRUCCIONES DE REDACCIÓN:
 
-Estilo: periodista humano experimentado de diario nacional. Prosa fluida, párrafos variados, voz activa. El lector no debe notar que lo escribió una IA.
+Sos un periodista argentino con 20 años de experiencia en diarios nacionales. Escribís con voz activa, frases directas y datos concretos. El texto debe pasar cualquier detector de IA como escrito por humano.
 
-PROHIBIDO en el contenido:
-- Subtítulos <h2> o <h3> de ningún tipo
-- Listas <ul> o <ol>
-- Frases de cierre como "En conclusión", "En resumen", "En definitiva", "Para finalizar"
-- Frases de apertura de sección como "En primer lugar", "Por otro lado", "A continuación"
-- Mencionar la fuente, el medio original, URLs ni ningún sitio externo
-- Publicidad, banners, llamadas a la acción
-- "Fuente:", "Según informó...", "El portal X señaló que..."
+LEGIBILIDAD: oraciones de entre 10 y 20 palabras. Vocabulario cotidiano, sin tecnicismos. Alternás oraciones cortas con algunas más largas para ritmo natural. Apuntás a 95% de legibilidad Flesch.
 
-ESTRUCTURA correcta:
-- Entre 4 y 7 párrafos <p> corridos, sin títulos intermedios
-- Primer párrafo: gancho fuerte con el dato o hecho más impactante
-- Párrafos del medio: contexto, antecedentes, detalles, citas directas con <strong> solo en la frase entrecomillada
-- Último párrafo: consecuencia, proyección o dato de cierre — sin decir que es el final
-- Usa <strong> solo para cifras clave o nombres propios relevantes, máximo 3 veces
+PÁRRAFOS: cada <p> con una idea concreta, bien separado del siguiente. Entre 4 y 6 párrafos.
+- Primer párrafo: quién, qué, cuándo, dónde en 2 oraciones directas y fuertes.
+- Párrafos del medio: contexto, antecedentes, declaraciones. Una cita textual clave va entre comillas con <strong> solo en la frase citada.
+- Último párrafo: consecuencia, dato de cierre o proyección. Sin anunciar que termina.
 
-IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido. Sin markdown, sin texto antes o después.
-Usa comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
+SUBTÍTULOS: Usá 1 o 2 <h2> SOLO si el artículo trata claramente 2 o más temas diferenciados y supera los 5 párrafos. Si es un solo hecho o nota corta, NO uses ningún subtítulo.
+
+PROHIBIDO:
+- <ul>, <ol> ni listas de ningún tipo
+- "En conclusión", "En resumen", "En definitiva", "Para finalizar"
+- "En primer lugar", "A continuación", "Por otro lado", "Cabe destacar"
+- Mencionar fuente, medio original, URLs ni sitios externos
+- "Fuente:", "Según informó...", "El portal X indicó que..."
+- Más de 2 usos de <strong>
+
+IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
+Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título SEO clickeable, máximo 65 caracteres, con dato concreto o pregunta, NO copiar el original",
-  "content": "HTML con solo etiquetas <p> y ocasionalmente <strong>. Mínimo 400 palabras. Redacción humana, fluida, sin estructura de secciones.",
-  "category": "Una de: Política, Economía, Tecnología, Deportes, Cultura, Sociedad, Internacional, General",
-  "summary": "Meta descripción de máximo 20 palabras, genera curiosidad, incluye palabra clave",
+  "content": "HTML periodístico con <p> bien separados y ocasionalmente <h2> solo si hay múltiples temas. Mínimo 400 palabras. Sin listas, sin secciones forzadas.",
+  "category": "Una de: Policiales, Política, Economía, Tecnología, Deportes, Cultura, Sociedad, Internacional, General",
+  "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder. Genera curiosidad e incluye la palabra clave.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
@@ -157,6 +169,8 @@ Usa comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
             if not result["content"]:
                 log.warning("Content RSS vacío tras limpieza")
                 result["content"] = f"<p>{article_text[:1000]}</p>"
+        if "summary" in result:
+            result["summary"] = _normalize_summary(result["summary"], result.get("title", title))
         return result
 
     log.warning("No se pudo parsear JSON RSS de Groq. Raw (200): %s", raw[:200])
@@ -185,30 +199,32 @@ Asunto del correo: {clean_subject}
 Contenido del correo:
 {body[:6000]}
 
-INSTRUCCIONES DE REDACCIÓN — léelas con atención:
+INSTRUCCIONES DE REDACCIÓN:
 
-Estilo: periodista humano experimentado de diario nacional. Prosa fluida, párrafos variados, voz activa. El lector no debe notar que lo escribió una IA.
+Sos un periodista argentino con 20 años de experiencia en diarios nacionales. Escribís con voz activa, frases directas y datos concretos. El texto debe pasar cualquier detector de IA como escrito por humano.
 
-PROHIBIDO en el contenido:
-- Subtítulos <h2> o <h3> de ningún tipo
-- Listas <ul> o <ol>
-- Frases de cierre como "En conclusión", "En resumen", "En definitiva", "Para finalizar"
-- Frases de apertura de sección como "En primer lugar", "Por otro lado", "A continuación"
+LEGIBILIDAD: oraciones de entre 10 y 20 palabras. Vocabulario cotidiano, sin tecnicismos. Alternás oraciones cortas con algunas más largas para ritmo natural. Apuntás a 95% de legibilidad Flesch.
 
-ESTRUCTURA correcta:
-- Entre 4 y 7 párrafos <p> corridos, sin títulos intermedios
-- Primer párrafo: gancho fuerte con el dato o hecho más impactante
-- Párrafos del medio: contexto, antecedentes, detalles, citas directas con <strong> solo en la frase entrecomillada
-- Último párrafo: consecuencia, proyección o dato de cierre — sin decir que es el final
-- Usa <strong> solo para cifras clave o nombres propios relevantes, máximo 3 veces
+PÁRRAFOS: cada <p> con una idea concreta, bien separado del siguiente. Entre 4 y 6 párrafos.
+- Primer párrafo: quién, qué, cuándo, dónde en 2 oraciones directas y fuertes.
+- Párrafos del medio: contexto, antecedentes, declaraciones. Una cita textual clave va entre comillas con <strong> solo en la frase citada.
+- Último párrafo: consecuencia, dato de cierre o proyección. Sin anunciar que termina.
 
-IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido. Sin markdown, sin texto antes o después.
-Usa comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
+SUBTÍTULOS: Usá 1 o 2 <h2> SOLO si el artículo trata claramente 2 o más temas diferenciados y supera los 5 párrafos. Si es un solo hecho o nota corta, NO uses ningún subtítulo.
+
+PROHIBIDO:
+- <ul>, <ol> ni listas de ningún tipo
+- "En conclusión", "En resumen", "En definitiva", "Para finalizar"
+- "En primer lugar", "A continuación", "Por otro lado", "Cabe destacar"
+- Más de 2 usos de <strong>
+
+IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
+Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título SEO clickeable, máximo 65 caracteres, con dato concreto o pregunta, NO copiar el original",
-  "content": "HTML con solo etiquetas <p> y ocasionalmente <strong>. Mínimo 400 palabras. Redacción humana, fluida, sin estructura de secciones.",
-  "category": "Una de: Política, Economía, Tecnología, Deportes, Cultura, Sociedad, Internacional, General",
-  "summary": "Meta descripción de máximo 20 palabras, genera curiosidad, incluye palabra clave",
+  "content": "HTML periodístico con <p> bien separados y ocasionalmente <h2> solo si hay múltiples temas. Mínimo 400 palabras. Sin listas, sin secciones forzadas.",
+  "category": "Una de: Policiales, Política, Economía, Tecnología, Deportes, Cultura, Sociedad, Internacional, General",
+  "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder. Genera curiosidad e incluye la palabra clave.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
@@ -235,6 +251,8 @@ Usa comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
             if not result["content"]:
                 log.warning("Content vacío tras limpieza, usando cuerpo original")
                 result["content"] = f"<p>{body[:1000]}</p>"
+        if "summary" in result:
+            result["summary"] = _normalize_summary(result["summary"], result.get("title", clean_subject))
         return result
 
     # Fallback: no se pudo parsear JSON
