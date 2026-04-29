@@ -51,6 +51,12 @@ def _migrate_columns():
             cols = [c["name"] for c in inspector.get_columns("posts")]
             if "source_name" not in cols:
                 conn.execute(text("ALTER TABLE posts ADD COLUMN source_name VARCHAR(200)"))
+        if "groq_settings" in tables:
+            cols = [c["name"] for c in inspector.get_columns("groq_settings")]
+            if "provider" not in cols:
+                conn.execute(text("ALTER TABLE groq_settings ADD COLUMN provider VARCHAR(50) DEFAULT 'groq'"))
+            if "api_base_url" not in cols:
+                conn.execute(text("ALTER TABLE groq_settings ADD COLUMN api_base_url VARCHAR(300)"))
 
 
 @asynccontextmanager

@@ -210,6 +210,8 @@ def process_emails():
                             mail_data["subject"],
                             mail_data["body"],
                             available_categories=wp_categories or None,
+                            provider=groq_cfg.provider or "groq",
+                            api_base_url=groq_cfg.api_base_url,
                         )
 
                         processed.ai_response = json.dumps(ai_result, ensure_ascii=False)
@@ -588,6 +590,8 @@ def process_rss_feeds():
                             item["title"],
                             body,
                             available_categories=wp_categories or None,
+                            provider=groq_cfg.provider or "groq",
+                            api_base_url=groq_cfg.api_base_url,
                         )
 
                         # Categoría forzada por el feed (sobreescribe la de Groq)

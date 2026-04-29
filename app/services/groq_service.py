@@ -4,14 +4,82 @@ import json
 import logging
 import re
 
-from groq import Groq
+from openai import OpenAI
 
 log = logging.getLogger("groq_service")
 
+PROVIDERS: dict[str, dict] = {
+    "groq": {
+        "label": "Groq",
+        "base_url": "https://api.groq.com/openai/v1",
+        "models": [
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
+            "gemma2-9b-it",
+            "mixtral-8x7b-32768",
+        ],
+    },
+    "google_gemini": {
+        "label": "Google Gemini",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "models": [
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+        ],
+    },
+    "deepseek": {
+        "label": "DeepSeek",
+        "base_url": "https://api.deepseek.com/v1",
+        "models": [
+            "deepseek-chat",
+            "deepseek-reasoner",
+        ],
+    },
+    "openrouter": {
+        "label": "OpenRouter",
+        "base_url": "https://openrouter.ai/api/v1",
+        "models": [
+            "deepseek/deepseek-chat-v3-0324:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "qwen/qwen-2.5-72b-instruct:free",
+            "google/gemini-2.0-flash-exp:free",
+            "deepseek/deepseek-chat-v3-0324",
+            "meta-llama/llama-3.3-70b-instruct",
+            "qwen/qwen-2.5-72b-instruct",
+        ],
+    },
+    "together": {
+        "label": "Together AI",
+        "base_url": "https://api.together.xyz/v1",
+        "models": [
+            "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+            "Qwen/Qwen2.5-72B-Instruct-Turbo",
+            "deepseek-ai/DeepSeek-V3",
+            "mistralai/Mixtral-8x7B-Instruct-v0.1",
+        ],
+    },
+    "custom": {
+        "label": "Personalizado",
+        "base_url": "",
+        "models": [],
+    },
+}
 
-def test_groq_connection(api_key: str, model: str) -> tuple[bool, str]:
+
+def _get_client(api_key: str, provider: str = "groq", api_base_url: str | None = None) -> OpenAI:
+    base_url = api_base_url or PROVIDERS.get(provider, PROVIDERS["groq"])["base_url"]
+    return OpenAI(api_key=api_key, base_url=base_url)
+
+
+def test_groq_connection(
+    api_key: str,
+    model: str,
+    provider: str = "groq",
+    api_base_url: str | None = None,
+) -> tuple[bool, str]:
     try:
-        client = Groq(api_key=api_key)
+        client = _get_client(api_key, provider, api_base_url)
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": "Responde únicamente con la palabra: ok"}],
@@ -37,12 +105,11 @@ def _normalize_quotes(text: str) -> str:
     return (
         text
         .replace("«", '"').replace("»", '"')
-        .replace(""", '"').replace(""", '"')
+        .replace("“", '"').replace("”", '"')
     )
 
 
 def _extract_first_json(text: str) -> dict | None:
-    """Extrae el primer objeto JSON válido del texto usando raw_decode."""
     decoder = json.JSONDecoder()
     for i, char in enumerate(text):
         if char == '{':
@@ -56,19 +123,15 @@ def _extract_first_json(text: str) -> dict | None:
 
 
 def _normalize_summary(summary: str, title: str = "") -> str:
-    """Recorta o extiende la summary para que tenga entre 18 y 22 palabras."""
     words = summary.strip().split()
     if len(words) >= 18:
         return " ".join(words[:22])
-    # Demasiado corta: completar con fragmento del título
     extra = [w for w in title.split() if w.lower() not in summary.lower()]
     words = words + extra
     return " ".join(words[:20])
 
 
 def _clean_content(content: str) -> str:
-    """Elimina residuos de JSON que Groq a veces añade al contenido."""
-    # Truncar en marcadores de campos JSON residuales
     markers = [
         '\n«,', '\n",',
         '\n"category"', '\n«category»',
@@ -84,12 +147,10 @@ def _clean_content(content: str) -> str:
 
     content = content.strip()
 
-    # Si contiene «» el contenido es JSON crudo no normalizado — truncar antes del «
     if '«' in content or '»' in content:
         idx = content.find('«')
         content = content[:idx].strip() if idx > 0 else ''
 
-    # Si empieza con { es un JSON embebido — intentar extraer el content real recursivamente
     if content.startswith('{'):
         inner = _extract_first_json(_normalize_quotes(content))
         if inner and 'content' in inner:
@@ -109,9 +170,10 @@ def process_rss_with_groq(
     title: str,
     article_text: str,
     available_categories: list[str] | None = None,
+    provider: str = "groq",
+    api_base_url: str | None = None,
 ) -> dict:
-    """Procesa un artículo de RSS: reescribe sin plagio, sin mencionar fuente, para publicar en WP."""
-    client = Groq(api_key=api_key)
+    client = _get_client(api_key, provider, api_base_url)
     cat_list = ", ".join(available_categories) if available_categories else _DEFAULT_CATEGORIES
 
     prompt = f"""{base_prompt}
@@ -161,7 +223,7 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
     )
 
     raw = resp.choices[0].message.content.strip()
-    log.debug("Groq RSS raw response (500 chars): %s", raw[:500])
+    log.debug("AI RSS raw response (500 chars): %s", raw[:500])
 
     text = _normalize_quotes(raw)
     result = _extract_first_json(text)
@@ -178,7 +240,7 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
             result["summary"] = _normalize_summary(result["summary"], result.get("title", title))
         return result
 
-    log.warning("No se pudo parsear JSON RSS de Groq. Raw (200): %s", raw[:200])
+    log.warning("No se pudo parsear JSON RSS. Raw (200): %s", raw[:200])
     return {
         "title": title,
         "content": f"<p>{article_text[:1000]}</p>",
@@ -194,8 +256,10 @@ def process_email_with_groq(
     subject: str,
     body: str,
     available_categories: list[str] | None = None,
+    provider: str = "groq",
+    api_base_url: str | None = None,
 ) -> dict:
-    client = Groq(api_key=api_key)
+    client = _get_client(api_key, provider, api_base_url)
     clean_subject = _clean_subject(subject)
     cat_list = ", ".join(available_categories) if available_categories else _DEFAULT_CATEGORIES
 
@@ -244,9 +308,8 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
     )
 
     raw = resp.choices[0].message.content.strip()
-    log.debug("Groq raw response (500 chars): %s", raw[:500])
+    log.debug("AI raw response (500 chars): %s", raw[:500])
 
-    # Normalizar comillas especiales y extraer el primer JSON válido
     text = _normalize_quotes(raw)
     result = _extract_first_json(text)
 
@@ -262,8 +325,7 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
             result["summary"] = _normalize_summary(result["summary"], result.get("title", clean_subject))
         return result
 
-    # Fallback: no se pudo parsear JSON
-    log.warning("No se pudo parsear JSON de Groq. Raw (200): %s", raw[:200])
+    log.warning("No se pudo parsear JSON de IA. Raw (200): %s", raw[:200])
     return {
         "title": clean_subject,
         "content": f"<p>{body[:1000]}</p>",

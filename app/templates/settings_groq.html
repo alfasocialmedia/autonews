@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Groq IA — AutoNews{% endblock %}
+{% block title %}IA — AutoNews{% endblock %}
 
 {% block content %}
 <div class="page-header">
-  <h2 class="page-title"><i class="bi bi-cpu me-2"></i>Configuración de Groq IA</h2>
-  <span class="text-muted small">Motor de inteligencia artificial para redacción de artículos</span>
+  <h2 class="page-title"><i class="bi bi-cpu me-2"></i>Configuración de IA</h2>
+  <span class="text-muted small">Proveedor de inteligencia artificial para redacción de artículos</span>
 </div>
 
 {% with messages = request.query_params %}
@@ -25,53 +25,67 @@
   <div class="col-lg-8">
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-transparent border-0 pt-3">
-        <h6 class="mb-0"><i class="bi bi-key me-2"></i>Credenciales y modelo</h6>
+        <h6 class="mb-0"><i class="bi bi-plug me-2"></i>Proveedor y credenciales</h6>
       </div>
       <div class="card-body">
         <form method="post" action="/settings/groq/save">
+
+          <!-- Selector de proveedor -->
           <div class="mb-3">
-            <label class="form-label fw-semibold">API Key de Groq</label>
+            <label class="form-label fw-semibold">Proveedor de IA</label>
+            <div class="row g-2" id="providerCards">
+              {% for key, info in providers.items() %}
+              <div class="col-6 col-md-4">
+                <input type="radio" class="btn-check" name="provider" id="prov_{{ key }}"
+                       value="{{ key }}"
+                       {% if (groq and groq.provider == key) or (not groq and key == 'groq') %}checked{% endif %}>
+                <label class="btn btn-outline-secondary w-100 text-start provider-card" for="prov_{{ key }}">
+                  <span class="fw-semibold">{{ info.label }}</span>
+                </label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- API Key -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">API Key</label>
             <div class="input-group">
               <span class="input-group-text"><i class="bi bi-key"></i></span>
-              <input type="password" name="api_key" class="form-control"
-                     placeholder="{% if groq %}Dejar vacío para no cambiar (actual: {{ mask(groq.encrypted_api_key) if mask else '••••' }}){% else %}gsk_xxxxxxxxxxxxxxxxxxxx{% endif %}">
+              <input type="password" name="api_key" class="form-control" id="apiKeyInput"
+                     placeholder="{% if groq %}Dejar vacío para no cambiar (actual: {{ mask(groq.encrypted_api_key) if mask else '••••' }}){% else %}Ingresá la API Key del proveedor seleccionado{% endif %}">
               <button class="btn btn-outline-secondary" type="button" id="toggleKey">
                 <i class="bi bi-eye"></i>
               </button>
             </div>
-            {% if not groq %}
-            <div class="form-text">
-              Obtén tu API Key en <a href="https://console.groq.com/" target="_blank">console.groq.com</a>
-            </div>
-            {% endif %}
+            <div class="form-text" id="apiKeyHint"></div>
           </div>
 
+          <!-- Modelo -->
           <div class="mb-3">
             <label class="form-label fw-semibold">Modelo</label>
-            <select name="model" class="form-select">
-              <option value="llama-3.3-70b-versatile"
-                {% if not groq or groq.model == 'llama-3.3-70b-versatile' %}selected{% endif %}>
-                llama-3.3-70b-versatile (recomendado)
-              </option>
-              <option value="llama-3.1-70b-versatile"
-                {% if groq and groq.model == 'llama-3.1-70b-versatile' %}selected{% endif %}>
-                llama-3.1-70b-versatile
-              </option>
-              <option value="llama-3.1-8b-instant"
-                {% if groq and groq.model == 'llama-3.1-8b-instant' %}selected{% endif %}>
-                llama-3.1-8b-instant (rápido, menor calidad)
-              </option>
-              <option value="mixtral-8x7b-32768"
-                {% if groq and groq.model == 'mixtral-8x7b-32768' %}selected{% endif %}>
-                mixtral-8x7b-32768
-              </option>
-              <option value="gemma2-9b-it"
-                {% if groq and groq.model == 'gemma2-9b-it' %}selected{% endif %}>
-                gemma2-9b-it
-              </option>
-            </select>
+            <div class="input-group">
+              <input type="text" name="model" id="modelInput" class="form-control"
+                     value="{{ groq.model if groq else 'llama-3.3-70b-versatile' }}"
+                     placeholder="Nombre del modelo" required>
+              <button class="btn btn-outline-secondary dropdown-toggle" type="button"
+                      data-bs-toggle="dropdown">Sugerencias</button>
+              <ul class="dropdown-menu dropdown-menu-end" id="modelDropdown"></ul>
+            </div>
           </div>
 
+          <!-- URL base personalizada -->
+          <div class="mb-3" id="customUrlRow" style="display:none">
+            <label class="form-label fw-semibold">URL base de la API</label>
+            <input type="text" name="api_base_url" id="apiBaseUrl" class="form-control font-monospace"
+                   value="{{ groq.api_base_url if groq and groq.api_base_url else '' }}"
+                   placeholder="https://tu-api.com/v1">
+            <div class="form-text">Solo necesario para proveedor "Personalizado".</div>
+          </div>
+          <input type="hidden" name="api_base_url" id="apiBaseUrlHidden"
+                 value="{{ groq.api_base_url if groq and groq.api_base_url else '' }}">
+
+          <!-- Prompt -->
           <div class="mb-4">
             <label class="form-label fw-semibold">Prompt base</label>
             <div class="d-flex justify-content-between mb-1">
@@ -82,9 +96,6 @@
             </div>
             <textarea name="base_prompt" id="basePrompt" class="form-control font-monospace"
                       rows="12" required>{{ groq.base_prompt if groq else default_prompt }}</textarea>
-            <div class="form-text">
-              El sistema añadirá automáticamente el asunto y cuerpo del correo al final del prompt.
-            </div>
           </div>
 
           <div class="d-flex gap-2">
@@ -93,7 +104,7 @@
             </button>
             {% if groq %}
             <button type="button" class="btn btn-outline-info" id="testGroq">
-              <i class="bi bi-lightning-charge me-1"></i>Probar IA
+              <i class="bi bi-lightning-charge me-1"></i>Probar conexión
             </button>
             {% endif %}
           </div>
@@ -103,7 +114,7 @@
   </div>
 
   <div class="col-lg-4">
-    <!-- Info del modelo -->
+    <!-- Estado actual -->
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-transparent border-0 pt-3">
         <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Estado actual</h6>
@@ -111,18 +122,12 @@
       <div class="card-body">
         {% if groq %}
         <dl class="row mb-0 small">
+          <dt class="col-5 text-muted">Proveedor</dt>
+          <dd class="col-7">{{ providers[groq.provider].label if groq.provider and groq.provider in providers else groq.provider or 'Groq' }}</dd>
           <dt class="col-5 text-muted">Modelo</dt>
           <dd class="col-7 font-monospace">{{ groq.model }}</dd>
           <dt class="col-5 text-muted">API Key</dt>
           <dd class="col-7 font-monospace">{{ mask(groq.encrypted_api_key) if mask else '••••' }}</dd>
-          <dt class="col-5 text-muted">Estado</dt>
-          <dd class="col-7">
-            {% if groq.is_active %}
-            <span class="badge bg-success">Activo</span>
-            {% else %}
-            <span class="badge bg-secondary">Inactivo</span>
-            {% endif %}
-          </dd>
         </dl>
         {% else %}
         <p class="text-muted small mb-0">Sin configuración todavía.</p>
@@ -130,16 +135,15 @@
       </div>
     </div>
 
-    <!-- Consejo -->
+    <!-- Límites por proveedor -->
     <div class="card border-0 bg-info-subtle">
       <div class="card-body">
-        <h6 class="fw-semibold"><i class="bi bi-lightbulb me-2 text-info"></i>Consejos del prompt</h6>
+        <h6 class="fw-semibold"><i class="bi bi-bar-chart me-2 text-info"></i>Límites gratuitos</h6>
         <ul class="small mb-0 ps-3">
-          <li>Especifica el idioma deseado</li>
-          <li>Define el tono (formal, periodístico, etc.)</li>
-          <li>Indica las categorías posibles</li>
-          <li>Pide HTML básico para el contenido</li>
-          <li>El JSON de salida es obligatorio para el sistema</li>
+          <li><strong>Groq</strong> — 100K tokens/día (llama-3.3-70b)</li>
+          <li><strong>Google Gemini Flash</strong> — 1M tokens/día gratis</li>
+          <li><strong>OpenRouter</strong> — Modelos :free disponibles</li>
+          <li><strong>DeepSeek</strong> — Pago, muy barato ($0.14/1M tokens)</li>
         </ul>
       </div>
     </div>
@@ -149,18 +153,68 @@
 
 {% block scripts %}
 <script>
-document.getElementById('toggleKey')?.addEventListener('click', function () {
-  const inp = this.previousElementSibling;
-  const icon = this.querySelector('i');
-  if (inp.type === 'password') {
-    inp.type = 'text';
-    icon.className = 'bi bi-eye-slash';
-  } else {
-    inp.type = 'password';
-    icon.className = 'bi bi-eye';
+const PROVIDERS = {{ providers | tojson }};
+const currentProvider = "{{ groq.provider if groq and groq.provider else 'groq' }}";
+
+function updateProvider(key) {
+  const info = PROVIDERS[key];
+  if (!info) return;
+
+  // Hint de API key
+  const hints = {
+    groq: 'Obtené tu key en <a href="https://console.groq.com/" target="_blank">console.groq.com</a>',
+    google_gemini: 'Obtené tu key en <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a> — gratis',
+    deepseek: 'Obtené tu key en <a href="https://platform.deepseek.com/" target="_blank">platform.deepseek.com</a>',
+    openrouter: 'Obtené tu key en <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a> — modelos :free disponibles',
+    together: 'Obtené tu key en <a href="https://api.together.xyz/" target="_blank">api.together.xyz</a>',
+    custom: 'Ingresá la URL base y la API key de tu proveedor personalizado',
+  };
+  document.getElementById('apiKeyHint').innerHTML = hints[key] || '';
+
+  // Modelos sugeridos en el dropdown
+  const ul = document.getElementById('modelDropdown');
+  ul.innerHTML = '';
+  (info.models || []).forEach(m => {
+    const li = document.createElement('li');
+    li.innerHTML = `<a class="dropdown-item font-monospace small" href="#">${m}</a>`;
+    li.querySelector('a').addEventListener('click', e => {
+      e.preventDefault();
+      document.getElementById('modelInput').value = m;
+    });
+    ul.appendChild(li);
+  });
+  if (!info.models.length) {
+    ul.innerHTML = '<li><span class="dropdown-item text-muted small">Ingresá el modelo manualmente</span></li>';
   }
+
+  // URL personalizada
+  const customRow = document.getElementById('customUrlRow');
+  const hiddenUrl = document.getElementById('apiBaseUrlHidden');
+  if (key === 'custom') {
+    customRow.style.display = '';
+    hiddenUrl.disabled = true;
+  } else {
+    customRow.style.display = 'none';
+    hiddenUrl.disabled = false;
+    hiddenUrl.value = info.base_url || '';
+  }
+}
+
+// Inicializar
+document.querySelectorAll('input[name="provider"]').forEach(radio => {
+  radio.addEventListener('change', () => updateProvider(radio.value));
+});
+updateProvider(currentProvider);
+
+// Toggle key
+document.getElementById('toggleKey')?.addEventListener('click', function () {
+  const inp = document.getElementById('apiKeyInput');
+  const icon = this.querySelector('i');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  icon.className = inp.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
 });
 
+// Reset prompt
 document.getElementById('resetPrompt')?.addEventListener('click', function () {
   if (confirm('¿Restaurar el prompt por defecto? Se perderán los cambios actuales.')) {
     document.getElementById('basePrompt').value = {{ default_prompt | tojson }};

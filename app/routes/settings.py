@@ -8,7 +8,7 @@ from app.crypto import decrypt_value, encrypt_value, mask_value
 from app.database import get_db
 from app.models import CategoryMapping, EmailAccount, GoogleDriveSettings, GroqSettings, WordPressSettings
 from app.services.email_service import test_imap_connection
-from app.services.groq_service import test_groq_connection
+from app.services.groq_service import PROVIDERS, test_groq_connection
 from app.services.wordpress_service import get_categories, test_wordpress_connection
 
 router = APIRouter(prefix="/settings")
@@ -333,6 +333,7 @@ async def groq_settings(request: Request, db: Session = Depends(get_db)):
             "groq": groq,
             "default_prompt": DEFAULT_PROMPT,
             "mask": mask_value,
+            "providers": PROVIDERS,
         },
     )
 
@@ -343,6 +344,8 @@ async def save_groq(
     api_key: str = Form(""),
     model: str = Form("llama-3.3-70b-versatile"),
     base_prompt: str = Form(...),
+    provider: str = Form("groq"),
+    api_base_url: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user = _require_auth(request, db)
@@ -355,6 +358,8 @@ async def save_groq(
             groq.encrypted_api_key = encrypt_value(api_key)
         groq.model = model
         groq.base_prompt = base_prompt
+        groq.provider = provider
+        groq.api_base_url = api_base_url.strip() or None
     else:
         if not api_key.strip():
             return RedirectResponse(
@@ -365,6 +370,8 @@ async def save_groq(
             encrypted_api_key=encrypt_value(api_key),
             model=model,
             base_prompt=base_prompt,
+            provider=provider,
+            api_base_url=api_base_url.strip() or None,
         )
         db.add(groq)
     db.commit()
@@ -380,7 +387,11 @@ async def test_groq_route(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"success": False, "message": "No hay configuración de Groq"})
     try:
         key = decrypt_value(groq.encrypted_api_key)
-        ok, msg = test_groq_connection(key, groq.model)
+        ok, msg = test_groq_connection(
+            key, groq.model,
+            provider=groq.provider or "groq",
+            api_base_url=groq.api_base_url,
+        )
         return JSONResponse({"success": ok, "message": msg})
     except Exception as exc:
         return JSONResponse({"success": False, "message": str(exc)})

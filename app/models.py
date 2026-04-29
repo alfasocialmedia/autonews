@@ -77,6 +77,8 @@ class GroqSettings(Base):
     model = Column(String(100), default="llama-3.3-70b-versatile")
     base_prompt = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
+    provider = Column(String(50), default="groq")
+    api_base_url = Column(String(300), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
