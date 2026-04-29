@@ -1,7 +1,27 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(Get-ChildItem \"e:\\\\PROYECTOS\\\\botnews\\\\\" -Recurse -File | Select-Object @{N='Ruta';E={$_.FullName.Replace\\('e:\\\\PROYECTOS\\\\botnews\\\\',''\\)}} , @{N='KB';E={[math]::Round\\($_.Length/1KB,1\\)}} | Format-Table -AutoSize)"
+      "PowerShell(Get-ChildItem \"e:\\\\PROYECTOS\\\\botnews\\\\\" -Recurse -File | Select-Object @{N='Ruta';E={$_.FullName.Replace\\('e:\\\\PROYECTOS\\\\botnews\\\\',''\\)}} , @{N='KB';E={[math]::Round\\($_.Length/1KB,1\\)}} | Format-Table -AutoSize)",
+      "PowerShell(git add app/main.py)",
+      "PowerShell(git commit -m \"feat: add root health check endpoint\")",
+      "PowerShell(git push)",
+      "PowerShell(git commit -m \"add root route\")",
+      "PowerShell(git add Dockerfile)",
+      "PowerShell(git commit -m \"add dockerfile\")",
+      "PowerShell(git commit -m \"fix: redirect root to login page\")",
+      "PowerShell(git commit -m \"fix: remove duplicate root route causing redirect loop\")",
+      "PowerShell(git add app/main.py requirements.txt)",
+      "PowerShell(git commit -m \"fix: downgrade bcrypt to 3.2.2 for passlib compatibility, add health endpoint\")",
+      "PowerShell(git add app/routes/users.py app/templates/users.html app/main.py app/templates/base.html)",
+      "PowerShell(git commit -m \"feat: add user management \\(create, edit, delete\\)\")",
+      "PowerShell(git add app/models.py app/main.py app/routes/users.py app/templates/users.html app/templates/base.html)",
+      "PowerShell(git commit -m \"feat: add role system \\(admin/editor\\) with permission-based sidebar\")",
+      "PowerShell(python -c \"from cryptography.fernet import Fernet; print\\(Fernet.generate_key\\(\\).decode\\(\\)\\)\")",
+      "PowerShell(python -c \"import base64, os; print\\(base64.urlsafe_b64encode\\(os.urandom\\(32\\)\\).decode\\(\\)\\)\")",
+      "PowerShell(git add app/services/wordpress_service.py)",
+      "PowerShell(git commit -m \"fix: use draft posts endpoint for WP connection test\")",
+      "PowerShell(git add app/database.py app/main.py)",
+      "PowerShell(git commit -m \"fix: move SQLite DB to /app/data for persistent volume mounting\")"
     ]
   }
 }

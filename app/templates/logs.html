@@ -8,6 +8,9 @@
     <span class="text-muted small">Últimas 200 entradas</span>
   </div>
   <div class="d-flex gap-2">
+    <button class="btn btn-sm btn-outline-primary" id="triggerWorker">
+      <i class="bi bi-play-fill me-1"></i>Forzar ciclo
+    </button>
     <button class="btn btn-sm btn-outline-secondary" id="filterAll">Todos</button>
     <button class="btn btn-sm btn-outline-info" id="filterInfo">INFO</button>
     <button class="btn btn-sm btn-outline-warning" id="filterWarn">WARN</button>
@@ -59,5 +62,21 @@ document.getElementById('filterAll')?.addEventListener('click',   () => filterLo
 document.getElementById('filterInfo')?.addEventListener('click',  () => filterLogs('INFO'));
 document.getElementById('filterWarn')?.addEventListener('click',  () => filterLogs('WARNING'));
 document.getElementById('filterError')?.addEventListener('click', () => filterLogs('ERROR'));
+
+document.getElementById('triggerWorker')?.addEventListener('click', async function () {
+  const orig = this.innerHTML;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Ejecutando...';
+  this.disabled = true;
+  try {
+    const resp = await fetch('/worker/trigger', { method: 'POST' });
+    const data = await resp.json();
+    showToast(data.message, data.success ? 'success' : 'danger');
+    if (data.success) setTimeout(() => location.reload(), 2000);
+  } catch (e) {
+    showToast('Error al ejecutar el ciclo', 'danger');
+  }
+  this.innerHTML = orig;
+  this.disabled = false;
+});
 </script>
 {% endblock %}

@@ -76,20 +76,29 @@ def process_emails():
         groq_cfg: GroqSettings | None = (
             db.query(GroqSettings).filter(GroqSettings.is_active == True).first()
         )
-        wp_cfg: WordPressSettings | None = (
-            db.query(WordPressSettings).filter(WordPressSettings.is_active == True).first()
+        wp_sites: list[WordPressSettings] = (
+            db.query(WordPressSettings).filter(WordPressSettings.is_active == True).all()
         )
 
-        if not groq_cfg or not wp_cfg:
-            log.warning("Falta configuración de Groq o WordPress. Saltando ciclo.")
+        if not groq_cfg:
+            msg = "Groq no configurado — ve a Configuración → Groq IA y guarda tu API Key."
+            log.warning(msg)
+            _log_db(db, "WARN", msg)
+            return
+
+        if not wp_sites:
+            msg = "No hay sitios WordPress activos — ve a Configuración → WordPress y agrega uno."
+            log.warning(msg)
+            _log_db(db, "WARN", msg)
             return
 
         groq_key = decrypt_value(groq_cfg.encrypted_api_key)
-        wp_pwd = decrypt_value(wp_cfg.encrypted_app_password)
 
         accounts = db.query(EmailAccount).filter(EmailAccount.is_active == True).all()
         if not accounts:
-            log.info("No hay cuentas de correo activas configuradas.")
+            msg = "No hay cuentas de correo activas configuradas."
+            log.info(msg)
+            _log_db(db, "INFO", msg)
             return
 
         for account in accounts:
@@ -106,6 +115,7 @@ def process_emails():
 
                 if not new_emails:
                     log.info(f"  Sin correos nuevos en {account.email}")
+                    _log_db(db, "INFO", f"Sin correos nuevos en {account.email}")
                     continue
 
                 for mail_data in new_emails:
@@ -135,7 +145,7 @@ def process_emails():
                     log.info(f"  📨 Nuevo correo: {mail_data['subject'][:80]}")
                     _log_db(db, "INFO", f"Correo recibido: {mail_data['subject'][:200]}")
 
-                    # Procesar con Groq
+                    # Procesar con Groq (una sola vez por correo)
                     try:
                         ai_result = process_email_with_groq(
                             groq_key,
@@ -149,38 +159,50 @@ def process_emails():
                         processed.status = "processed"
                         db.commit()
 
-                        # Publicar en WordPress
-                        category_ids = _resolve_categories(
-                            db, wp_cfg.id, ai_result.get("category", "")
-                        )
+                        # Publicar en cada sitio WordPress activo
+                        published_count = 0
+                        for wp_cfg in wp_sites:
+                            try:
+                                wp_pwd = decrypt_value(wp_cfg.encrypted_app_password)
+                                category_ids = _resolve_categories(
+                                    db, wp_cfg.id, ai_result.get("category", "")
+                                )
 
-                        wp_post = create_post(
-                            wp_cfg.site_url,
-                            wp_cfg.api_user,
-                            wp_pwd,
-                            ai_result.get("title", mail_data["subject"]),
-                            ai_result.get("content", mail_data["body"]),
-                            wp_cfg.default_status,
-                            category_ids,
-                        )
+                                wp_post = create_post(
+                                    wp_cfg.site_url,
+                                    wp_cfg.api_user,
+                                    wp_pwd,
+                                    ai_result.get("title", mail_data["subject"]),
+                                    ai_result.get("content", mail_data["body"]),
+                                    wp_cfg.default_status,
+                                    category_ids,
+                                )
 
-                        db.add(
-                            Post(
-                                processed_email_id=processed.id,
-                                wordpress_post_id=wp_post.get("id"),
-                                title=ai_result.get("title", ""),
-                                content=ai_result.get("content", ""),
-                                category=ai_result.get("category", ""),
-                                status=wp_cfg.default_status,
-                                wp_link=wp_post.get("link", ""),
-                            )
-                        )
-                        processed.status = "published"
+                                db.add(
+                                    Post(
+                                        processed_email_id=processed.id,
+                                        wordpress_post_id=wp_post.get("id"),
+                                        title=ai_result.get("title", ""),
+                                        content=ai_result.get("content", ""),
+                                        category=ai_result.get("category", ""),
+                                        status=wp_cfg.default_status,
+                                        wp_link=wp_post.get("link", ""),
+                                    )
+                                )
+                                db.commit()
+                                published_count += 1
+
+                                msg = f"Publicado en {wp_cfg.name}: {ai_result.get('title', '')[:120]}"
+                                log.info(f"  ✅ {msg}")
+                                _log_db(db, "INFO", msg)
+
+                            except Exception as exc:
+                                msg = f"Error publicando en {wp_cfg.name}: {exc}"
+                                log.error(f"  ❌ {msg}")
+                                _log_db(db, "ERROR", msg)
+
+                        processed.status = "published" if published_count > 0 else "error"
                         db.commit()
-
-                        msg = f"Publicado: {ai_result.get('title', '')[:150]}"
-                        log.info(f"  ✅ {msg}")
-                        _log_db(db, "INFO", msg)
 
                     except Exception as exc:
                         processed.status = "error"

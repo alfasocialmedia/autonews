@@ -161,25 +161,43 @@ async def wordpress_settings(request: Request, db: Session = Depends(get_db)):
     user = _require_auth(request, db)
     if not user:
         return RedirectResponse("/login", status_code=302)
-
-    wp = db.query(WordPressSettings).first()
-    mappings = (
-        db.query(CategoryMapping)
-        .filter(CategoryMapping.wordpress_settings_id == wp.id)
-        .all()
-        if wp
-        else []
-    )
+    sites = db.query(WordPressSettings).all()
     return templates.TemplateResponse(
         "settings_wordpress.html",
-        {"request": request, "user": user, "wp": wp, "mappings": mappings, "mask": mask_value},
+        {"request": request, "user": user, "sites": sites, "mask": mask_value},
     )
 
 
-@router.post("/wordpress/save")
-async def save_wordpress(
+@router.post("/wordpress/add")
+async def add_wordpress(
     request: Request,
     name: str = Form("Principal"),
+    site_url: str = Form(...),
+    api_user: str = Form(...),
+    app_password: str = Form(...),
+    default_status: str = Form("draft"),
+    db: Session = Depends(get_db),
+):
+    user = _require_auth(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    wp = WordPressSettings(
+        name=name,
+        site_url=site_url.rstrip("/"),
+        api_user=api_user,
+        encrypted_app_password=encrypt_value(app_password),
+        default_status=default_status,
+    )
+    db.add(wp)
+    db.commit()
+    return RedirectResponse("/settings/wordpress?msg=Sitio+añadido+correctamente", status_code=302)
+
+
+@router.post("/wordpress/{wp_id}/edit")
+async def edit_wordpress(
+    request: Request,
+    wp_id: int,
+    name: str = Form(...),
     site_url: str = Form(...),
     api_user: str = Form(...),
     app_password: str = Form(""),
@@ -189,40 +207,50 @@ async def save_wordpress(
     user = _require_auth(request, db)
     if not user:
         return RedirectResponse("/login", status_code=302)
-
-    wp = db.query(WordPressSettings).first()
-    if wp:
-        wp.name = name
-        wp.site_url = site_url.rstrip("/")
-        wp.api_user = api_user
-        if app_password.strip():
-            wp.encrypted_app_password = encrypt_value(app_password)
-        wp.default_status = default_status
-    else:
-        if not app_password.strip():
-            return RedirectResponse(
-                "/settings/wordpress?err=La+contraseña+de+aplicación+es+obligatoria",
-                status_code=302,
-            )
-        wp = WordPressSettings(
-            name=name,
-            site_url=site_url.rstrip("/"),
-            api_user=api_user,
-            encrypted_app_password=encrypt_value(app_password),
-            default_status=default_status,
-        )
-        db.add(wp)
+    wp = db.query(WordPressSettings).filter(WordPressSettings.id == wp_id).first()
+    if not wp:
+        return RedirectResponse("/settings/wordpress?err=Sitio+no+encontrado", status_code=302)
+    wp.name = name
+    wp.site_url = site_url.rstrip("/")
+    wp.api_user = api_user
+    if app_password.strip():
+        wp.encrypted_app_password = encrypt_value(app_password)
+    wp.default_status = default_status
     db.commit()
-    return RedirectResponse("/settings/wordpress?msg=Configuración+guardada", status_code=302)
+    return RedirectResponse("/settings/wordpress?msg=Sitio+actualizado", status_code=302)
 
 
-@router.post("/wordpress/test")
-async def test_wp(request: Request, db: Session = Depends(get_db)):
+@router.post("/wordpress/{wp_id}/delete")
+async def delete_wordpress(request: Request, wp_id: int, db: Session = Depends(get_db)):
+    user = _require_auth(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    wp = db.query(WordPressSettings).filter(WordPressSettings.id == wp_id).first()
+    if wp:
+        db.delete(wp)
+        db.commit()
+    return RedirectResponse("/settings/wordpress?msg=Sitio+eliminado", status_code=302)
+
+
+@router.post("/wordpress/{wp_id}/toggle")
+async def toggle_wordpress(request: Request, wp_id: int, db: Session = Depends(get_db)):
     if not _require_auth(request, db):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    wp = db.query(WordPressSettings).first()
+    wp = db.query(WordPressSettings).filter(WordPressSettings.id == wp_id).first()
     if not wp:
-        return JSONResponse({"success": False, "message": "No hay configuración de WordPress"})
+        return JSONResponse({"error": "not found"}, status_code=404)
+    wp.is_active = not wp.is_active
+    db.commit()
+    return JSONResponse({"active": wp.is_active})
+
+
+@router.post("/wordpress/{wp_id}/test")
+async def test_wp(request: Request, wp_id: int, db: Session = Depends(get_db)):
+    if not _require_auth(request, db):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    wp = db.query(WordPressSettings).filter(WordPressSettings.id == wp_id).first()
+    if not wp:
+        return JSONResponse({"success": False, "message": "Sitio no encontrado"})
     try:
         pwd = decrypt_value(wp.encrypted_app_password)
         ok, msg = test_wordpress_connection(wp.site_url, wp.api_user, pwd)
@@ -231,11 +259,11 @@ async def test_wp(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"success": False, "message": str(exc)})
 
 
-@router.post("/wordpress/categories/fetch")
-async def fetch_wp_categories(request: Request, db: Session = Depends(get_db)):
+@router.post("/wordpress/{wp_id}/categories/fetch")
+async def fetch_wp_categories(request: Request, wp_id: int, db: Session = Depends(get_db)):
     if not _require_auth(request, db):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    wp = db.query(WordPressSettings).first()
+    wp = db.query(WordPressSettings).filter(WordPressSettings.id == wp_id).first()
     if not wp:
         return JSONResponse({"categories": []})
     try:
@@ -246,9 +274,10 @@ async def fetch_wp_categories(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"categories": [], "error": str(exc)})
 
 
-@router.post("/wordpress/categories/add")
+@router.post("/wordpress/{wp_id}/categories/add")
 async def add_category_mapping(
     request: Request,
+    wp_id: int,
     keyword: str = Form(...),
     category_id: int = Form(...),
     category_name: str = Form(...),
@@ -257,11 +286,11 @@ async def add_category_mapping(
     user = _require_auth(request, db)
     if not user:
         return RedirectResponse("/login", status_code=302)
-    wp = db.query(WordPressSettings).first()
+    wp = db.query(WordPressSettings).filter(WordPressSettings.id == wp_id).first()
     if not wp:
-        return RedirectResponse("/settings/wordpress?err=Guarda+la+configuración+primero", status_code=302)
+        return RedirectResponse("/settings/wordpress?err=Sitio+no+encontrado", status_code=302)
     mapping = CategoryMapping(
-        wordpress_settings_id=wp.id,
+        wordpress_settings_id=wp_id,
         keyword=keyword,
         category_id=category_id,
         category_name=category_name,

@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -92,3 +92,16 @@ async def logs_page(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(
         "logs.html", {"request": request, "user": user, "logs": logs}
     )
+
+
+@router.post("/worker/trigger")
+async def trigger_worker(request: Request, db: Session = Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        from app.worker import process_emails
+        process_emails()
+        return JSONResponse({"success": True, "message": "Ciclo ejecutado. Revisá los Logs."})
+    except Exception as exc:
+        return JSONResponse({"success": False, "message": str(exc)})
