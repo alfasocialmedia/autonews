@@ -30,7 +30,7 @@ from app.models import (
 from app.services.email_service import fetch_unread_emails
 from app.services.groq_service import process_email_with_groq, process_rss_with_groq
 from app.services.rss_service import fetch_rss_items, scrape_full_article
-from app.services.wordpress_service import create_post, find_category_by_name, get_or_create_category, get_or_create_tags, upload_media
+from app.services.wordpress_service import create_post, find_category_by_name, get_categories, get_or_create_category, get_or_create_tags, upload_media
 
 logging.basicConfig(
     level=logging.INFO,
@@ -65,6 +65,21 @@ def _log_db(db, level: str, message: str, source: str = "worker"):
         db.rollback()
 
 
+def _fetch_wp_category_names(wp_sites: list) -> list[str]:
+    """Obtiene los nombres de las categorías reales de WordPress (usa el primer sitio activo)."""
+    for wp_cfg in wp_sites:
+        try:
+            wp_pwd = decrypt_value(wp_cfg.encrypted_app_password)
+            cats = get_categories(wp_cfg.site_url, wp_cfg.api_user, wp_pwd)
+            names = [c["name"] for c in cats if c.get("name")]
+            if names:
+                log.info("Categorías WP disponibles: %s", ", ".join(names))
+                return names
+        except Exception as exc:
+            log.warning("No se pudieron obtener categorías de WP '%s': %s", wp_cfg.name, exc)
+    return []
+
+
 def _resolve_categories(db, wp_cfg, category_name: str) -> list[int]:
     if not category_name:
         return []
@@ -91,9 +106,11 @@ def _resolve_categories(db, wp_cfg, category_name: str) -> list[int]:
         wp_pwd = decrypt_value(wp_cfg.encrypted_app_password)
         cat_id = get_or_create_category(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, category_name)
         if cat_id:
+            log.info("Categoría resuelta: '%s' → ID %s", category_name, cat_id)
             return [cat_id]
-    except Exception:
-        pass
+        log.warning("No se pudo resolver la categoría '%s' en WP — se usará la categoría por defecto", category_name)
+    except Exception as exc:
+        log.error("Error resolviendo categoría '%s': %s", category_name, exc)
 
     return []
 
@@ -127,6 +144,7 @@ def process_emails():
             return
 
         groq_key = decrypt_value(groq_cfg.encrypted_api_key)
+        wp_categories = _fetch_wp_category_names(wp_sites)
 
         accounts = db.query(EmailAccount).filter(EmailAccount.is_active == True).all()
         if not accounts:
@@ -187,6 +205,7 @@ def process_emails():
                             groq_cfg.base_prompt,
                             mail_data["subject"],
                             mail_data["body"],
+                            available_categories=wp_categories or None,
                         )
 
                         processed.ai_response = json.dumps(ai_result, ensure_ascii=False)
@@ -202,7 +221,7 @@ def process_emails():
                                     db, wp_cfg, ai_result.get("category", "")
                                 )
 
-                                # Subir imagen de portada si existe
+                                # Subir imagen de portada si existe (adjunto o URL en cuerpo)
                                 featured_media_id = None
                                 if mail_data.get("image_data"):
                                     try:
@@ -215,7 +234,29 @@ def process_emails():
                                             mail_data.get("image_mime") or "image/jpeg",
                                         )
                                     except Exception as img_exc:
-                                        log.warning(f"  No se pudo subir imagen: {img_exc}")
+                                        log.warning(f"  No se pudo subir imagen adjunta: {img_exc}")
+                                elif mail_data.get("image_url"):
+                                    import os
+                                    resolved = _resolve_image_url(
+                                        mail_data["image_url"],
+                                        os.getenv("GOOGLE_DRIVE_API_KEY"),
+                                    )
+                                    if resolved:
+                                        log.info(f"  🔗 Descargando imagen desde URL: {resolved[:80]}")
+                                        img_payload = _download_image(resolved)
+                                        if img_payload:
+                                            img_data, img_name, img_mime = img_payload
+                                            try:
+                                                featured_media_id = upload_media(
+                                                    wp_cfg.site_url,
+                                                    wp_cfg.api_user,
+                                                    wp_pwd,
+                                                    img_data,
+                                                    img_name,
+                                                    img_mime,
+                                                )
+                                            except Exception as img_exc:
+                                                log.warning(f"  No se pudo subir imagen URL: {img_exc}")
 
                                 # Crear etiquetas
                                 tag_ids = []
@@ -313,6 +354,46 @@ def _download_image(url: str) -> tuple[bytes, str, str] | None:
         return None
 
 
+def _resolve_gdrive_folder(folder_id: str, api_key: str) -> str | None:
+    """Busca la primera imagen en una carpeta pública de Google Drive y devuelve su URL de descarga."""
+    import httpx
+    try:
+        resp = httpx.get(
+            "https://www.googleapis.com/drive/v3/files",
+            params={
+                "q": f"'{folder_id}' in parents and mimeType contains 'image/' and trashed = false",
+                "key": api_key,
+                "fields": "files(id,name,mimeType)",
+                "pageSize": 5,
+                "orderBy": "name",
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        files = resp.json().get("files", [])
+        if files:
+            file_id = files[0]["id"]
+            log.info("  📁 Drive folder: primera imagen encontrada → %s (%s)", files[0]["name"], file_id)
+            return f"https://drive.google.com/uc?export=download&id={file_id}"
+        log.warning("  📁 Drive folder %s: sin imágenes públicas", folder_id)
+    except Exception as exc:
+        log.warning("  📁 No se pudo listar carpeta Drive %s: %s", folder_id, exc)
+    return None
+
+
+def _resolve_image_url(raw_url: str, gdrive_api_key: str | None) -> str | None:
+    """Convierte cualquier URL de imagen (incluyendo gdrive-folder:ID) en una URL descargable."""
+    if not raw_url:
+        return None
+    if raw_url.startswith("gdrive-folder:"):
+        folder_id = raw_url.split(":", 1)[1]
+        if not gdrive_api_key:
+            log.warning("  📁 Carpeta Drive detectada pero GOOGLE_DRIVE_API_KEY no está configurada")
+            return None
+        return _resolve_gdrive_folder(folder_id, gdrive_api_key)
+    return raw_url
+
+
 def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = None, source_name: str | None = None):
     """Publica un resultado de Groq en todos los sitios WP activos. Devuelve cantidad publicada."""
     published_count = 0
@@ -403,6 +484,7 @@ def process_rss_feeds():
             return
 
         groq_key = decrypt_value(groq_cfg.encrypted_api_key)
+        wp_categories = _fetch_wp_category_names(wp_sites)
         now = datetime.now(tz.utc)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -502,6 +584,7 @@ def process_rss_feeds():
                             groq_cfg.base_prompt,
                             item["title"],
                             body,
+                            available_categories=wp_categories or None,
                         )
 
                         # Categoría forzada por el feed (sobreescribe la de Groq)
