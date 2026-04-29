@@ -409,7 +409,10 @@ def process_rss_feeds():
             try:
                 # Verificar si corresponde revisar este feed según su intervalo
                 if feed.last_checked_at:
-                    next_check = feed.last_checked_at + timedelta(minutes=feed.check_interval_minutes)
+                    last = feed.last_checked_at
+                    if last.tzinfo is None:
+                        last = last.replace(tzinfo=tz.utc)
+                    next_check = last + timedelta(minutes=feed.check_interval_minutes)
                     if now < next_check:
                         continue
 
