@@ -19,6 +19,7 @@ from app.database import SessionLocal
 from app.models import (
     CategoryMapping,
     EmailAccount,
+    GoogleDriveSettings,
     GroqSettings,
     Log,
     Post,
@@ -146,6 +147,9 @@ def process_emails():
         groq_key = decrypt_value(groq_cfg.encrypted_api_key)
         wp_categories = _fetch_wp_category_names(wp_sites)
 
+        gdrive_cfg = db.query(GoogleDriveSettings).filter(GoogleDriveSettings.is_active == True).first()
+        gdrive_api_key = decrypt_value(gdrive_cfg.encrypted_api_key) if gdrive_cfg else None
+
         accounts = db.query(EmailAccount).filter(EmailAccount.is_active == True).all()
         if not accounts:
             msg = "No hay cuentas de correo activas configuradas."
@@ -236,10 +240,9 @@ def process_emails():
                                     except Exception as img_exc:
                                         log.warning(f"  No se pudo subir imagen adjunta: {img_exc}")
                                 elif mail_data.get("image_url"):
-                                    import os
                                     resolved = _resolve_image_url(
                                         mail_data["image_url"],
-                                        os.getenv("GOOGLE_DRIVE_API_KEY"),
+                                        gdrive_api_key,
                                     )
                                     if resolved:
                                         log.info(f"  🔗 Descargando imagen desde URL: {resolved[:80]}")

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.crypto import decrypt_value, encrypt_value, mask_value
 from app.database import get_db
-from app.models import CategoryMapping, EmailAccount, GroqSettings, WordPressSettings
+from app.models import CategoryMapping, EmailAccount, GoogleDriveSettings, GroqSettings, WordPressSettings
 from app.services.email_service import test_imap_connection
 from app.services.groq_service import test_groq_connection
 from app.services.wordpress_service import get_categories, test_wordpress_connection
@@ -382,5 +382,71 @@ async def test_groq_route(request: Request, db: Session = Depends(get_db)):
         key = decrypt_value(groq.encrypted_api_key)
         ok, msg = test_groq_connection(key, groq.model)
         return JSONResponse({"success": ok, "message": msg})
+    except Exception as exc:
+        return JSONResponse({"success": False, "message": str(exc)})
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  GOOGLE DRIVE
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/googledrive", response_class=HTMLResponse)
+async def googledrive_settings(request: Request, db: Session = Depends(get_db)):
+    user = _require_auth(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    cfg = db.query(GoogleDriveSettings).first()
+    return templates.TemplateResponse(
+        "settings_googledrive.html",
+        {"request": request, "user": user, "cfg": cfg, "mask": mask_value},
+    )
+
+
+@router.post("/googledrive/save")
+async def save_googledrive(
+    request: Request,
+    api_key: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = _require_auth(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    cfg = db.query(GoogleDriveSettings).first()
+    if cfg:
+        if api_key.strip():
+            cfg.encrypted_api_key = encrypt_value(api_key)
+    else:
+        if not api_key.strip():
+            return RedirectResponse(
+                "/settings/googledrive?err=La+API+Key+es+obligatoria+la+primera+vez",
+                status_code=302,
+            )
+        cfg = GoogleDriveSettings(encrypted_api_key=encrypt_value(api_key))
+        db.add(cfg)
+    db.commit()
+    return RedirectResponse("/settings/googledrive?msg=API+Key+guardada+correctamente", status_code=302)
+
+
+@router.post("/googledrive/test")
+async def test_googledrive(request: Request, db: Session = Depends(get_db)):
+    if not _require_auth(request, db):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    cfg = db.query(GoogleDriveSettings).first()
+    if not cfg:
+        return JSONResponse({"success": False, "message": "No hay API Key configurada"})
+    try:
+        import httpx
+        key = decrypt_value(cfg.encrypted_api_key)
+        resp = httpx.get(
+            "https://www.googleapis.com/drive/v3/files",
+            params={"key": key, "pageSize": 1, "fields": "files(id)"},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            return JSONResponse({"success": True, "message": "Conexión con Google Drive API exitosa"})
+        error = resp.json().get("error", {}).get("message", f"HTTP {resp.status_code}")
+        return JSONResponse({"success": False, "message": error})
     except Exception as exc:
         return JSONResponse({"success": False, "message": str(exc)})

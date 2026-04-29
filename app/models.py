@@ -120,6 +120,16 @@ class Post(Base):
     processed_email = relationship("ProcessedEmail", back_populates="posts")
 
 
+class GoogleDriveSettings(Base):
+    __tablename__ = "google_drive_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    encrypted_api_key = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
 class Log(Base):
     __tablename__ = "logs"
 

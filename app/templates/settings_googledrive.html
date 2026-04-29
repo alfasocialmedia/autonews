@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Google Drive — AutoNews{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2 class="page-title"><i class="bi bi-google me-2"></i>Configuración de Google Drive</h2>
+  <span class="text-muted small">Permite extraer imágenes de carpetas públicas de Drive en los correos</span>
+</div>
+
+{% with messages = request.query_params %}
+{% if messages.get('msg') %}
+<div class="alert alert-success alert-dismissible fade show">
+  <i class="bi bi-check-circle-fill me-2"></i>{{ messages.get('msg') | replace('+', ' ') }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% elif messages.get('err') %}
+<div class="alert alert-danger alert-dismissible fade show">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ messages.get('err') | replace('+', ' ') }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+{% endwith %}
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 pt-3">
+        <h6 class="mb-0"><i class="bi bi-key me-2"></i>API Key</h6>
+      </div>
+      <div class="card-body">
+        <form method="post" action="/settings/googledrive/save">
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Google Drive API Key</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-key"></i></span>
+              <input type="password" name="api_key" class="form-control" id="apiKeyInput"
+                     placeholder="{% if cfg %}Dejar vacío para no cambiar (actual: {{ mask(cfg.encrypted_api_key) if mask else '••••' }}){% else %}AIzaSy...{% endif %}">
+              <button class="btn btn-outline-secondary" type="button" id="toggleKey">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+            <div class="form-text">
+              Creá la key en
+              <a href="https://console.cloud.google.com/apis/credentials" target="_blank">
+                Google Cloud Console → Credenciales
+              </a>
+              con la API de Google Drive habilitada.
+            </div>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-save me-1"></i>Guardar
+            </button>
+            {% if cfg %}
+            <button type="button" class="btn btn-outline-info" id="testDrive">
+              <i class="bi bi-lightning-charge me-1"></i>Probar conexión
+            </button>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-transparent border-0 pt-3">
+        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Estado</h6>
+      </div>
+      <div class="card-body">
+        {% if cfg %}
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted">API Key</dt>
+          <dd class="col-7 font-monospace">{{ mask(cfg.encrypted_api_key) if mask else '••••' }}</dd>
+          <dt class="col-5 text-muted">Estado</dt>
+          <dd class="col-7"><span class="badge bg-success">Configurada</span></dd>
+        </dl>
+        {% else %}
+        <p class="text-muted small mb-0">Sin configuración todavía.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card border-0 bg-info-subtle">
+      <div class="card-body">
+        <h6 class="fw-semibold"><i class="bi bi-lightbulb me-2 text-info"></i>Cómo funciona</h6>
+        <ul class="small mb-0 ps-3">
+          <li>Cuando un correo contiene un link de carpeta de Google Drive, el sistema lista las imágenes y usa la primera como imagen destacada</li>
+          <li>La carpeta debe estar compartida como <strong>"Cualquiera con el enlace"</strong></li>
+          <li>También detecta links directos a archivos de Drive, imágenes en HTML y URLs directas de imagen</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('toggleKey')?.addEventListener('click', function () {
+  const inp = document.getElementById('apiKeyInput');
+  const icon = this.querySelector('i');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    icon.className = 'bi bi-eye-slash';
+  } else {
+    inp.type = 'password';
+    icon.className = 'bi bi-eye';
+  }
+});
+
+document.getElementById('testDrive')?.addEventListener('click', async function () {
+  const orig = this.innerHTML;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Probando...';
+  this.disabled = true;
+  const resp = await fetch('/settings/googledrive/test', { method: 'POST' });
+  const data = await resp.json();
+  showToast(data.message, data.success ? 'success' : 'danger', 6000);
+  this.innerHTML = orig;
+  this.disabled = false;
+});
+</script>
+{% endblock %}
