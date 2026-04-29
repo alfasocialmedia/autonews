@@ -27,7 +27,7 @@ from app.models import (
 )
 from app.services.email_service import fetch_unread_emails
 from app.services.groq_service import process_email_with_groq
-from app.services.wordpress_service import create_post
+from app.services.wordpress_service import create_post, find_category_by_name, upload_media
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,17 +50,36 @@ def _log_db(db, level: str, message: str, source: str = "worker"):
         db.rollback()
 
 
-def _resolve_categories(db, wp_id: int, category_name: str) -> list[int]:
+def _resolve_categories(db, wp_cfg, category_name: str) -> list[int]:
     if not category_name:
         return []
+
+    import unicodedata
+
+    def normalize(s: str) -> str:
+        return unicodedata.normalize("NFD", s.lower()).encode("ascii", "ignore").decode()
+
+    norm_cat = normalize(category_name)
+
+    # 1. Buscar por keyword en los mapeos manuales
     mappings = (
         db.query(CategoryMapping)
-        .filter(CategoryMapping.wordpress_settings_id == wp_id)
+        .filter(CategoryMapping.wordpress_settings_id == wp_cfg.id)
         .all()
     )
     for m in mappings:
-        if m.keyword.lower() in category_name.lower():
+        if normalize(m.keyword) in norm_cat or norm_cat in normalize(m.category_name):
             return [m.category_id]
+
+    # 2. Buscar directamente en WP por nombre de categoría
+    try:
+        wp_pwd = decrypt_value(wp_cfg.encrypted_app_password)
+        cat_id = find_category_by_name(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, category_name)
+        if cat_id:
+            return [cat_id]
+    except Exception:
+        pass
+
     return []
 
 
@@ -165,8 +184,23 @@ def process_emails():
                             try:
                                 wp_pwd = decrypt_value(wp_cfg.encrypted_app_password)
                                 category_ids = _resolve_categories(
-                                    db, wp_cfg.id, ai_result.get("category", "")
+                                    db, wp_cfg, ai_result.get("category", "")
                                 )
+
+                                # Subir imagen de portada si existe
+                                featured_media_id = None
+                                if mail_data.get("image_data"):
+                                    try:
+                                        featured_media_id = upload_media(
+                                            wp_cfg.site_url,
+                                            wp_cfg.api_user,
+                                            wp_pwd,
+                                            mail_data["image_data"],
+                                            mail_data.get("image_filename") or "portada.jpg",
+                                            mail_data.get("image_mime") or "image/jpeg",
+                                        )
+                                    except Exception as img_exc:
+                                        log.warning(f"  No se pudo subir imagen: {img_exc}")
 
                                 wp_post = create_post(
                                     wp_cfg.site_url,
@@ -176,6 +210,7 @@ def process_emails():
                                     ai_result.get("content", mail_data["body"]),
                                     wp_cfg.default_status,
                                     category_ids,
+                                    featured_media_id,
                                 )
 
                                 db.add(

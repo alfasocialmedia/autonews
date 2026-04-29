@@ -57,6 +57,21 @@ def test_imap_connection(server: str, port: int, username: str, password: str) -
         return False, str(exc)
 
 
+def _get_image_attachment(msg) -> tuple[bytes | None, str, str]:
+    """Extrae el primer adjunto de imagen del mensaje."""
+    for part in msg.walk():
+        ct = part.get_content_type()
+        if not ct.startswith("image/"):
+            continue
+        payload = part.get_payload(decode=True)
+        if not payload:
+            continue
+        raw_filename = part.get_filename() or f"image.{ct.split('/')[-1]}"
+        filename = _decode_str(raw_filename)
+        return payload, filename, ct
+    return None, "", ""
+
+
 def fetch_unread_emails(server: str, port: int, username: str, password: str) -> list[dict]:
     results = []
     mail = imaplib.IMAP4_SSL(server, int(port))
@@ -83,6 +98,7 @@ def fetch_unread_emails(server: str, port: int, username: str, password: str) ->
                 received_at = datetime.utcnow()
 
             body = _get_body(msg)
+            image_data, image_filename, image_mime = _get_image_attachment(msg)
 
             # Marcar como leído
             mail.store(eid, "+FLAGS", "\\Seen")
@@ -94,6 +110,9 @@ def fetch_unread_emails(server: str, port: int, username: str, password: str) ->
                     "subject": subject,
                     "body": body,
                     "received_at": received_at,
+                    "image_data": image_data,
+                    "image_filename": image_filename,
+                    "image_mime": image_mime,
                 }
             )
     finally:

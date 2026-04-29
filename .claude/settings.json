@@ -21,7 +21,10 @@
       "PowerShell(git add app/services/wordpress_service.py)",
       "PowerShell(git commit -m \"fix: use draft posts endpoint for WP connection test\")",
       "PowerShell(git add app/database.py app/main.py)",
-      "PowerShell(git commit -m \"fix: move SQLite DB to /app/data for persistent volume mounting\")"
+      "PowerShell(git commit -m \"fix: move SQLite DB to /app/data for persistent volume mounting\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }

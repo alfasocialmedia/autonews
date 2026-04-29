@@ -15,15 +15,17 @@ router = APIRouter(prefix="/settings")
 templates = Jinja2Templates(directory="app/templates")
 
 DEFAULT_PROMPT = """Eres un redactor periodístico profesional. Tu tarea es transformar el contenido \
-de un correo electrónico en un artículo de noticias completo y bien estructurado en español.
+de un correo electrónico en un artículo de noticias completo, detallado y bien estructurado en español.
 
 El artículo debe:
-1. Tener un título atractivo, claro y descriptivo
-2. Estar bien estructurado con párrafos claros y ordenados
-3. Ser objetivo, profesional y factual
-4. Usar HTML básico: <p>, <h2>, <strong>, <ul>, <li> según corresponda
-5. Incluir la información más relevante del correo sin inventar datos
-6. Tener entre 300 y 600 palabras
+1. Tener un título atractivo, claro y descriptivo (sin prefijos como Fwd, Re, FW)
+2. Comenzar con un párrafo de entradilla que resuma lo más importante
+3. Desarrollar la noticia en profundidad con subtítulos <h2> para cada sección
+4. Incluir contexto, antecedentes y posibles consecuencias del hecho
+5. Citar textualmente frases relevantes usando <blockquote> si las hay
+6. Usar HTML: <p>, <h2>, <h3>, <strong>, <em>, <ul>, <li>, <blockquote>
+7. Ser objetivo, profesional y factual — no inventar datos
+8. Tener entre 600 y 1200 palabras
 
 Categorías disponibles: Política, Economía, Tecnología, Deportes, Cultura, Sociedad, Internacional, General"""
 
