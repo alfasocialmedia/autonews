@@ -38,8 +38,9 @@ async def lifespan(app: FastAPI):
     pathlib.Path("/app/data").mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
     _create_default_admin()
+    from app.worker import start_background
+    start_background()
     yield
-    # Shutdown: nada que limpiar por ahora
 
 
 app = FastAPI(

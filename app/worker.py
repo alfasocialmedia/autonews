@@ -238,12 +238,19 @@ def main():
 
     schedule.every(60).seconds.do(process_emails)
 
-    # Ejecutar inmediatamente al arrancar
     process_emails()
 
     while True:
         schedule.run_pending()
         time.sleep(1)
+
+
+def start_background():
+    """Arranca el worker en un hilo daemon (usado desde main.py)."""
+    import threading
+    t = threading.Thread(target=main, daemon=True, name="autonews-worker")
+    t.start()
+    log.info("Worker iniciado en background thread")
 
 
 if __name__ == "__main__":
