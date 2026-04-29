@@ -105,24 +105,34 @@ Título original de referencia: {title}
 Contenido del artículo:
 {article_text[:6000]}
 
-INSTRUCCIONES ESTRICTAS:
-- Reescribe el artículo COMPLETAMENTE con tus propias palabras, sin plagio.
-- NO menciones la fuente, el medio original, ni ningún sitio web externo.
-- NO incluyas links, URLs ni referencias a otras publicaciones.
-- NO incluyas publicidad, banners ni llamadas a la acción.
-- NO escribas "Fuente:", "Según...", "El medio X informó que...", ni nada similar.
-- El artículo debe leerse como propio, sin rastreo de origen.
-- Usa el contenido dado solo como base informativa para redactar la noticia.
+INSTRUCCIONES DE REDACCIÓN — léelas con atención:
 
-IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido. Usa comillas dobles estándar (sin «», sin "", sin markdown, sin texto adicional).
-Usa comillas SIMPLES dentro del HTML para atributos (href='url' no href="url").
-El JSON debe tener exactamente esta estructura:
+Estilo: periodista humano experimentado de diario nacional. Prosa fluida, párrafos variados, voz activa. El lector no debe notar que lo escribió una IA.
+
+PROHIBIDO en el contenido:
+- Subtítulos <h2> o <h3> de ningún tipo
+- Listas <ul> o <ol>
+- Frases de cierre como "En conclusión", "En resumen", "En definitiva", "Para finalizar"
+- Frases de apertura de sección como "En primer lugar", "Por otro lado", "A continuación"
+- Mencionar la fuente, el medio original, URLs ni ningún sitio externo
+- Publicidad, banners, llamadas a la acción
+- "Fuente:", "Según informó...", "El portal X señaló que..."
+
+ESTRUCTURA correcta:
+- Entre 4 y 7 párrafos <p> corridos, sin títulos intermedios
+- Primer párrafo: gancho fuerte con el dato o hecho más impactante
+- Párrafos del medio: contexto, antecedentes, detalles, citas directas con <strong> solo en la frase entrecomillada
+- Último párrafo: consecuencia, proyección o dato de cierre — sin decir que es el final
+- Usa <strong> solo para cifras clave o nombres propios relevantes, máximo 3 veces
+
+IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido. Sin markdown, sin texto antes o después.
+Usa comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
-  "title": "Título SEO original y clickeable: incluye la palabra clave principal, usa números o datos concretos o una pregunta o genera urgencia/curiosidad, máximo 65 caracteres, NO copiar el titular original",
-  "content": "Artículo periodístico COMPLETO en HTML, mínimo 500 palabras. Usa <p> para párrafos, <h2> para subtítulos, <strong> para destacados, <ul><li> para listas. Desarrolla todos los puntos con contexto, antecedentes y detalles. SIN links externos, SIN mención a fuentes.",
+  "title": "Título SEO clickeable, máximo 65 caracteres, con dato concreto o pregunta, NO copiar el original",
+  "content": "HTML con solo etiquetas <p> y ocasionalmente <strong>. Mínimo 400 palabras. Redacción humana, fluida, sin estructura de secciones.",
   "category": "Una de: Política, Economía, Tecnología, Deportes, Cultura, Sociedad, Internacional, General",
-  "summary": "Meta descripción SEO de MÁXIMO 20 palabras: describe el contenido, NO repetir el título, incluir la palabra clave de forma natural, generar curiosidad para el clic",
-  "keyphrase": "frase clave de 2 a 4 palabras que resume el tema principal del artículo",
+  "summary": "Meta descripción de máximo 20 palabras, genera curiosidad, incluye palabra clave",
+  "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
 
@@ -130,7 +140,7 @@ El JSON debe tener exactamente esta estructura:
         model=model,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=6000,
-        temperature=0.7,
+        temperature=0.85,
     )
 
     raw = resp.choices[0].message.content.strip()
@@ -175,15 +185,31 @@ Asunto del correo: {clean_subject}
 Contenido del correo:
 {body[:6000]}
 
-IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido. Usa comillas dobles estándar (sin «», sin "", sin markdown, sin texto adicional).
-Usa comillas SIMPLES dentro del HTML para atributos (href='url' no href="url").
-El JSON debe tener exactamente esta estructura:
+INSTRUCCIONES DE REDACCIÓN — léelas con atención:
+
+Estilo: periodista humano experimentado de diario nacional. Prosa fluida, párrafos variados, voz activa. El lector no debe notar que lo escribió una IA.
+
+PROHIBIDO en el contenido:
+- Subtítulos <h2> o <h3> de ningún tipo
+- Listas <ul> o <ol>
+- Frases de cierre como "En conclusión", "En resumen", "En definitiva", "Para finalizar"
+- Frases de apertura de sección como "En primer lugar", "Por otro lado", "A continuación"
+
+ESTRUCTURA correcta:
+- Entre 4 y 7 párrafos <p> corridos, sin títulos intermedios
+- Primer párrafo: gancho fuerte con el dato o hecho más impactante
+- Párrafos del medio: contexto, antecedentes, detalles, citas directas con <strong> solo en la frase entrecomillada
+- Último párrafo: consecuencia, proyección o dato de cierre — sin decir que es el final
+- Usa <strong> solo para cifras clave o nombres propios relevantes, máximo 3 veces
+
+IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido. Sin markdown, sin texto antes o después.
+Usa comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
-  "title": "Título SEO original y clickeable: incluye la palabra clave principal, usa números o datos concretos o una pregunta o genera urgencia/curiosidad, máximo 65 caracteres, NO copiar el titular original",
-  "content": "Artículo periodístico COMPLETO en HTML, mínimo 500 palabras. Usa <p> para párrafos, <h2> para subtítulos, <strong> para destacados, <ul><li> para listas. Desarrolla todos los puntos con contexto, antecedentes y detalles.",
+  "title": "Título SEO clickeable, máximo 65 caracteres, con dato concreto o pregunta, NO copiar el original",
+  "content": "HTML con solo etiquetas <p> y ocasionalmente <strong>. Mínimo 400 palabras. Redacción humana, fluida, sin estructura de secciones.",
   "category": "Una de: Política, Economía, Tecnología, Deportes, Cultura, Sociedad, Internacional, General",
-  "summary": "Meta descripción SEO de MÁXIMO 20 palabras: describe el contenido, NO repetir el título, incluir la palabra clave de forma natural, generar curiosidad para el clic",
-  "keyphrase": "frase clave de 2 a 4 palabras que resume el tema principal del artículo",
+  "summary": "Meta descripción de máximo 20 palabras, genera curiosidad, incluye palabra clave",
+  "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
 
@@ -191,7 +217,7 @@ El JSON debe tener exactamente esta estructura:
         model=model,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=6000,
-        temperature=0.7,
+        temperature=0.85,
     )
 
     raw = resp.choices[0].message.content.strip()
