@@ -65,7 +65,9 @@ El JSON debe tener exactamente esta estructura:
   "title": "Título atractivo del artículo (sin prefijos como Fwd o Re)",
   "content": "Contenido completo en HTML (usa <p>, <h2>, <strong>, <ul>, <li>)",
   "category": "Una de: Política, Economía, Tecnología, Deportes, Cultura, Sociedad, Internacional, General",
-  "summary": "Resumen de 2-3 oraciones"
+  "summary": "Resumen en máximo 20 palabras para meta descripción SEO",
+  "keyphrase": "2 a 4 palabras clave principales del artículo para SEO",
+  "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
 
     resp = client.chat.completions.create(

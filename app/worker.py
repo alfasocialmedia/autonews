@@ -27,7 +27,7 @@ from app.models import (
 )
 from app.services.email_service import fetch_unread_emails
 from app.services.groq_service import process_email_with_groq
-from app.services.wordpress_service import create_post, find_category_by_name, upload_media
+from app.services.wordpress_service import create_post, find_category_by_name, get_or_create_tags, upload_media
 
 logging.basicConfig(
     level=logging.INFO,
@@ -202,6 +202,17 @@ def process_emails():
                                     except Exception as img_exc:
                                         log.warning(f"  No se pudo subir imagen: {img_exc}")
 
+                                # Crear etiquetas
+                                tag_ids = []
+                                raw_tags = ai_result.get("tags", [])
+                                if isinstance(raw_tags, list) and raw_tags:
+                                    try:
+                                        tag_ids = get_or_create_tags(
+                                            wp_cfg.site_url, wp_cfg.api_user, wp_pwd, raw_tags
+                                        )
+                                    except Exception:
+                                        pass
+
                                 wp_post = create_post(
                                     wp_cfg.site_url,
                                     wp_cfg.api_user,
@@ -211,6 +222,9 @@ def process_emails():
                                     wp_cfg.default_status,
                                     category_ids,
                                     featured_media_id,
+                                    excerpt=ai_result.get("summary", ""),
+                                    tag_ids=tag_ids,
+                                    keyphrase=ai_result.get("keyphrase", ""),
                                 )
 
                                 db.add(
