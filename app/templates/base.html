@@ -23,6 +23,9 @@
     <a href="/posts/" class="nav-link {% if '/posts' in request.url.path %}active{% endif %}">
       <i class="bi bi-inbox-fill"></i> Bandeja
     </a>
+    <a href="/publicaciones/" class="nav-link {% if '/publicaciones' in request.url.path %}active{% endif %}">
+      <i class="bi bi-file-earmark-text-fill"></i> Publicaciones
+    </a>
 
     {% if user and user.role == 'admin' %}
     <div class="nav-section">Configuración</div>
