@@ -504,9 +504,40 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
             )
             db.commit()
             published_count += 1
+
+            # Difusión WhatsApp tras primera publicación exitosa
+            if published_count == 1:
+                _broadcast_whatsapp(db, ai_result, wp_post.get("link", ""))
+
         except Exception as exc:
             log.error("Error publicando RSS en %s: %s", wp_cfg.name, exc)
     return published_count
+
+
+def _broadcast_whatsapp(db, ai_result: dict, wp_url: str):
+    """Envía el artículo recién publicado a los grupos de WhatsApp configurados."""
+    try:
+        from app.models import WhatsAppSettings, WhatsAppGroup
+        from app.services.whatsapp_service import send_text
+
+        s = db.query(WhatsAppSettings).first()
+        if not s or not s.broadcast_enabled or not s.evolution_api_url or not s.evolution_api_key:
+            return
+
+        groups = db.query(WhatsAppGroup).filter(WhatsAppGroup.enabled == True).all()
+        if not groups:
+            return
+
+        title = ai_result.get("title", "")
+        summary = ai_result.get("summary", "")
+        template = s.broadcast_template or "*{title}*\n\n{summary}\n\n{url}"
+        text = template.replace("{title}", title).replace("{summary}", summary).replace("{url}", wp_url)
+
+        for g in groups:
+            send_text(s.evolution_api_url, s.evolution_api_key, s.instance_name, g.jid, text)
+            log.info("WA difusión → %s (%s)", g.name, g.jid)
+    except Exception as exc:
+        log.warning("_broadcast_whatsapp error: %s", exc)
 
 
 def process_rss_feeds():

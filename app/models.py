@@ -178,3 +178,29 @@ class ProcessedRssItem(Base):
     error_message = Column(Text, nullable=True)
 
     rss_feed = relationship("RssFeed", back_populates="items")
+
+
+class WhatsAppSettings(Base):
+    __tablename__ = "whatsapp_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    evolution_api_url = Column(String(300), default="http://localhost:8080")
+    evolution_api_key = Column(String(300), default="")
+    instance_name = Column(String(100), default="botnews")
+    enabled = Column(Boolean, default=False)
+    # Números autorizados para enviar noticias (CSV, formato internacional sin +)
+    authorized_numbers = Column(Text, default="")
+    broadcast_enabled = Column(Boolean, default=False)
+    broadcast_template = Column(Text, default="*{title}*\n\n{summary}\n\n{url}")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class WhatsAppGroup(Base):
+    __tablename__ = "whatsapp_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    jid = Column(String(200), unique=True, nullable=False)   # 1234567890-123@g.us
+    name = Column(String(200), nullable=False)
+    enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

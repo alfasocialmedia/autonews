@@ -1,0 +1,455 @@
+{% extends "base.html" %}
+{% block title %}WhatsApp — AutoNews{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2 class="page-title"><i class="bi bi-whatsapp me-2 text-success"></i>WhatsApp</h2>
+  <span class="text-muted small">Recibe noticias por WhatsApp y difunde en grupos — Evolution API</span>
+</div>
+
+{% if request.query_params.get('saved') %}
+<div class="alert alert-success alert-dismissible fade show">
+  <i class="bi bi-check-circle-fill me-2"></i>Configuración guardada correctamente.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="row g-4">
+
+  <!-- ── Columna izquierda ── -->
+  <div class="col-lg-7">
+
+    <!-- Configuración Evolution API -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-transparent border-0 pt-3">
+        <h6 class="mb-0"><i class="bi bi-gear me-2"></i>Conexión Evolution API</h6>
+      </div>
+      <div class="card-body">
+        <form method="post" action="/settings/whatsapp/save" id="mainForm">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">URL de Evolution API</label>
+            <input type="url" name="evolution_api_url" class="form-control"
+                   placeholder="http://localhost:8080"
+                   value="{{ s.evolution_api_url or '' }}">
+            <div class="form-text">Ej: <code>http://TU_VPS_IP:8080</code> — donde está corriendo el contenedor Docker</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">API Key</label>
+            <div class="input-group">
+              <input type="password" name="evolution_api_key" class="form-control" id="apiKeyInput"
+                     placeholder="Tu api key de Evolution API"
+                     value="{{ s.evolution_api_key or '' }}">
+              <button class="btn btn-outline-secondary" type="button" id="toggleKey">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nombre de instancia</label>
+            <input type="text" name="instance_name" class="form-control"
+                   placeholder="botnews"
+                   value="{{ s.instance_name or 'botnews' }}">
+            <div class="form-text">Identificador de la conexión WA en Evolution API</div>
+          </div>
+
+          <div class="form-check form-switch mb-4">
+            <input class="form-check-input" type="checkbox" name="enabled" id="enabledSwitch"
+                   {% if s.enabled %}checked{% endif %}>
+            <label class="form-check-label" for="enabledSwitch">
+              <strong>Recepción activa</strong> — procesar mensajes entrantes como noticias
+            </label>
+          </div>
+
+          <hr class="my-3">
+          <h6 class="mb-3"><i class="bi bi-megaphone me-2"></i>Difusión a grupos</h6>
+
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" name="broadcast_enabled" id="broadcastSwitch"
+                   {% if s.broadcast_enabled %}checked{% endif %}>
+            <label class="form-check-label" for="broadcastSwitch">
+              Enviar artículo publicado a los grupos configurados
+            </label>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Plantilla del mensaje</label>
+            <textarea name="broadcast_template" class="form-control font-monospace" rows="4"
+                      placeholder="*{title}*&#10;&#10;{summary}&#10;&#10;{url}">{{ s.broadcast_template or '*{title}*\n\n{summary}\n\n{url}' }}</textarea>
+            <div class="form-text">Variables: <code>{title}</code> <code>{summary}</code> <code>{url}</code></div>
+          </div>
+
+          <hr class="my-3">
+          <h6 class="mb-3"><i class="bi bi-shield-lock me-2"></i>Números autorizados</h6>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Números que pueden enviar noticias (CSV)</label>
+            <textarea name="authorized_numbers" class="form-control font-monospace" rows="3"
+                      placeholder="5491112345678, 5491198765432">{{ s.authorized_numbers or '' }}</textarea>
+            <div class="form-text">Formato internacional sin <code>+</code>. Dejar vacío para aceptar cualquier número.</div>
+          </div>
+
+          <div class="d-flex gap-2 flex-wrap">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-save me-1"></i>Guardar configuración
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Configurar webhook -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-transparent border-0 pt-3">
+        <h6 class="mb-0"><i class="bi bi-link-45deg me-2"></i>Configurar Webhook</h6>
+      </div>
+      <div class="card-body">
+        <p class="small text-muted mb-3">
+          Ingresá la URL pública de este panel para que Evolution API envíe los mensajes entrantes.
+        </p>
+        <div class="input-group">
+          <input type="url" id="webhookBaseUrl" class="form-control"
+                 placeholder="https://tu-panel.com">
+          <button class="btn btn-outline-primary" id="setWebhookBtn">
+            <i class="bi bi-send me-1"></i>Configurar
+          </button>
+        </div>
+        <div id="webhookResult" class="mt-2 small"></div>
+      </div>
+    </div>
+
+    <!-- Grupos destino -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-people me-2"></i>Grupos destino
+          <span class="badge bg-secondary ms-1">{{ groups|length }}/{{ max_groups }}</span>
+        </h6>
+        <button class="btn btn-sm btn-outline-success" id="fetchGroupsBtn">
+          <i class="bi bi-arrow-clockwise me-1"></i>Cargar grupos de WA
+        </button>
+      </div>
+      <div class="card-body">
+
+        <!-- Lista de grupos guardados -->
+        <div id="savedGroups">
+          {% if groups %}
+          <table class="table table-sm mb-3">
+            <thead><tr><th>Nombre</th><th>JID</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+            {% for g in groups %}
+            <tr id="row-{{ g.id }}">
+              <td class="fw-semibold">{{ g.name }}</td>
+              <td class="font-monospace small text-muted">{{ g.jid }}</td>
+              <td>
+                <button class="btn btn-xs btn-outline-{% if g.enabled %}success{% else %}secondary{% endif %} toggle-btn"
+                        data-id="{{ g.id }}">
+                  {% if g.enabled %}Activo{% else %}Inactivo{% endif %}
+                </button>
+              </td>
+              <td>
+                <button class="btn btn-xs btn-outline-danger delete-btn" data-id="{{ g.id }}">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <p class="text-muted small mb-3">Sin grupos configurados.</p>
+          {% endif %}
+        </div>
+
+        <!-- Agregar grupo manual -->
+        {% if groups|length < max_groups %}
+        <div class="border rounded p-3 bg-light">
+          <p class="small fw-semibold mb-2">Agregar grupo manualmente</p>
+          <div class="row g-2">
+            <div class="col">
+              <input type="text" id="newGroupJid" class="form-control form-control-sm font-monospace"
+                     placeholder="1234567890-123456789@g.us">
+            </div>
+            <div class="col">
+              <input type="text" id="newGroupName" class="form-control form-control-sm"
+                     placeholder="Nombre del grupo">
+            </div>
+            <div class="col-auto">
+              <button class="btn btn-sm btn-success" id="addGroupBtn">
+                <i class="bi bi-plus-lg"></i>
+              </button>
+            </div>
+          </div>
+          <div class="form-text">El JID lo ves en Evolution API o al cargar grupos arriba.</div>
+        </div>
+        {% endif %}
+
+        <!-- Selector de grupos cargados desde WA -->
+        <div id="fetchedGroupsPanel" class="mt-3 d-none">
+          <p class="small fw-semibold mb-2">Grupos encontrados en WhatsApp:</p>
+          <div id="fetchedGroupsList" class="list-group list-group-flush small"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Columna derecha ── -->
+  <div class="col-lg-5">
+
+    <!-- Estado de conexión -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-wifi me-2"></i>Estado de conexión</h6>
+        <button class="btn btn-sm btn-outline-secondary" id="refreshStatusBtn">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+      <div class="card-body text-center">
+        <div id="statusBadge" class="mb-3">
+          <span class="badge bg-secondary fs-6 px-3 py-2">
+            <i class="bi bi-question-circle me-1"></i>Sin verificar
+          </span>
+        </div>
+        <div id="qrContainer" class="d-none">
+          <p class="small text-muted mb-2">Escaneá el QR con WhatsApp:</p>
+          <img id="qrImage" src="" alt="QR Code" class="img-fluid rounded border" style="max-width:220px">
+          <div class="mt-2">
+            <button class="btn btn-sm btn-outline-primary" id="refreshQrBtn">
+              <i class="bi bi-arrow-clockwise me-1"></i>Nuevo QR
+            </button>
+          </div>
+        </div>
+        <div class="d-flex gap-2 justify-content-center flex-wrap mt-2">
+          <button class="btn btn-sm btn-outline-primary" id="checkStatusBtn">
+            <i class="bi bi-plug me-1"></i>Verificar
+          </button>
+          <button class="btn btn-sm btn-outline-success" id="createInstanceBtn">
+            <i class="bi bi-plus-circle me-1"></i>Crear instancia
+          </button>
+          <button class="btn btn-sm btn-outline-info" id="showQrBtn">
+            <i class="bi bi-qr-code me-1"></i>Ver QR
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Prueba de difusión -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-transparent border-0 pt-3">
+        <h6 class="mb-0"><i class="bi bi-send me-2"></i>Prueba de difusión</h6>
+      </div>
+      <div class="card-body">
+        <p class="small text-muted">Envía un mensaje de prueba a todos los grupos activos.</p>
+        <button class="btn btn-outline-success w-100" id="testBroadcastBtn">
+          <i class="bi bi-lightning-charge me-1"></i>Enviar mensaje de prueba
+        </button>
+        <div id="broadcastResult" class="mt-2 small"></div>
+      </div>
+    </div>
+
+    <!-- Instrucciones -->
+    <div class="card border-0 bg-success-subtle">
+      <div class="card-body">
+        <h6 class="fw-semibold"><i class="bi bi-list-ol me-2 text-success"></i>Cómo configurar</h6>
+        <ol class="small mb-0 ps-3">
+          <li>Instalá <strong>Evolution API</strong> con Docker en tu VPS</li>
+          <li>Ingresá la URL y API key arriba y guardá</li>
+          <li>Hacé clic en <em>Crear instancia</em></li>
+          <li>Hacé clic en <em>Ver QR</em> y escaneá con WhatsApp</li>
+          <li>Configurá el webhook con la URL pública del panel</li>
+          <li>Agregá hasta {{ max_groups }} grupos destino</li>
+          <li>Activá <em>Recepción activa</em> y <em>Difusión</em> según necesites</li>
+        </ol>
+        <hr class="my-2">
+        <p class="small mb-0 text-muted">
+          <i class="bi bi-info-circle me-1"></i>
+          Enviá texto, imagen o video al número conectado desde un número autorizado para publicar en WordPress.
+        </p>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.btn-xs { padding: .15rem .4rem; font-size: .75rem; }
+</style>
+<script>
+// ── Toggle API key ─────────────────────────────────────────────────────────────
+document.getElementById('toggleKey')?.addEventListener('click', function () {
+  const inp = document.getElementById('apiKeyInput');
+  const icon = this.querySelector('i');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  icon.className = inp.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+});
+
+// ── Estado de conexión ─────────────────────────────────────────────────────────
+async function checkStatus() {
+  const badge = document.getElementById('statusBadge');
+  badge.innerHTML = '<span class="badge bg-secondary fs-6 px-3 py-2"><span class="spinner-border spinner-border-sm me-1"></span>Verificando...</span>';
+  const resp = await fetch('/settings/whatsapp/status');
+  const data = await resp.json();
+  const state = data.state || 'unknown';
+  const map = {
+    open:       ['success',   'bi-wifi',             'Conectado'],
+    close:      ['danger',    'bi-wifi-off',          'Desconectado'],
+    connecting: ['warning',   'bi-arrow-repeat',      'Conectando…'],
+    unknown:    ['secondary', 'bi-question-circle',   'Sin verificar'],
+    error:      ['danger',    'bi-exclamation-circle','Error'],
+  };
+  const [color, icon, label] = map[state] || map.unknown;
+  badge.innerHTML = `<span class="badge bg-${color} fs-6 px-3 py-2"><i class="bi ${icon} me-1"></i>${label}</span>`;
+
+  const qrPanel = document.getElementById('qrContainer');
+  if (state === 'close' || state === 'connecting') {
+    qrPanel.classList.remove('d-none');
+    loadQr();
+  } else {
+    qrPanel.classList.add('d-none');
+  }
+}
+
+document.getElementById('checkStatusBtn')?.addEventListener('click', checkStatus);
+document.getElementById('refreshStatusBtn')?.addEventListener('click', checkStatus);
+
+// ── QR ─────────────────────────────────────────────────────────────────────────
+async function loadQr() {
+  const img = document.getElementById('qrImage');
+  img.src = '';
+  const resp = await fetch('/settings/whatsapp/qr');
+  const data = await resp.json();
+  if (data.error) { showToast('Error QR: ' + data.error, 'danger'); return; }
+  if (data.base64) {
+    const src = data.base64.startsWith('data:') ? data.base64 : 'data:image/png;base64,' + data.base64;
+    img.src = src;
+    document.getElementById('qrContainer').classList.remove('d-none');
+  }
+}
+
+document.getElementById('showQrBtn')?.addEventListener('click', loadQr);
+document.getElementById('refreshQrBtn')?.addEventListener('click', loadQr);
+
+// ── Crear instancia ─────────────────────────────────────────────────────────────
+document.getElementById('createInstanceBtn')?.addEventListener('click', async function () {
+  const orig = this.innerHTML;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creando…';
+  this.disabled = true;
+  const resp = await fetch('/settings/whatsapp/create-instance', { method: 'POST' });
+  const data = await resp.json();
+  showToast(data.ok ? 'Instancia creada. Ahora escaneá el QR.' : ('Error: ' + data.error),
+            data.ok ? 'success' : 'danger');
+  this.innerHTML = orig;
+  this.disabled = false;
+  if (data.ok) loadQr();
+});
+
+// ── Webhook ─────────────────────────────────────────────────────────────────────
+document.getElementById('setWebhookBtn')?.addEventListener('click', async function () {
+  const baseUrl = document.getElementById('webhookBaseUrl').value.trim();
+  if (!baseUrl) { showToast('Ingresá la URL del panel', 'warning'); return; }
+  const form = new FormData();
+  form.append('webhook_base_url', baseUrl);
+  const resp = await fetch('/settings/whatsapp/set-webhook', { method: 'POST', body: form });
+  const data = await resp.json();
+  const el = document.getElementById('webhookResult');
+  if (data.ok) {
+    el.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>Webhook configurado: <code>${data.webhook_url}</code></span>`;
+  } else {
+    el.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${data.error}</span>`;
+  }
+});
+
+// ── Cargar grupos desde WA ──────────────────────────────────────────────────────
+document.getElementById('fetchGroupsBtn')?.addEventListener('click', async function () {
+  const orig = this.innerHTML;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Cargando…';
+  this.disabled = true;
+  const resp = await fetch('/settings/whatsapp/fetch-groups');
+  const data = await resp.json();
+  this.innerHTML = orig;
+  this.disabled = false;
+
+  if (data.error) { showToast('Error: ' + data.error, 'danger'); return; }
+  const groups = data.groups || [];
+  if (!groups.length) { showToast('No se encontraron grupos', 'warning'); return; }
+
+  const panel = document.getElementById('fetchedGroupsPanel');
+  const list = document.getElementById('fetchedGroupsList');
+  list.innerHTML = '';
+  groups.forEach(g => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+    item.innerHTML = `<span>${g.subject}</span><code class="small text-muted">${g.id}</code>`;
+    item.addEventListener('click', () => {
+      document.getElementById('newGroupJid').value = g.id;
+      document.getElementById('newGroupName').value = g.subject;
+      panel.classList.add('d-none');
+    });
+    list.appendChild(item);
+  });
+  panel.classList.remove('d-none');
+});
+
+// ── Agregar grupo ───────────────────────────────────────────────────────────────
+document.getElementById('addGroupBtn')?.addEventListener('click', async function () {
+  const jid = document.getElementById('newGroupJid').value.trim();
+  const name = document.getElementById('newGroupName').value.trim();
+  if (!jid) { showToast('JID requerido', 'warning'); return; }
+
+  const form = new FormData();
+  form.append('jid', jid);
+  form.append('name', name || jid);
+  const resp = await fetch('/settings/whatsapp/groups/add', { method: 'POST', body: form });
+  const data = await resp.json();
+
+  if (data.error) { showToast(data.error, 'danger'); return; }
+  showToast('Grupo agregado', 'success');
+  setTimeout(() => location.reload(), 800);
+});
+
+// ── Toggle / delete grupos ──────────────────────────────────────────────────────
+document.querySelectorAll('.toggle-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const id = this.dataset.id;
+    const resp = await fetch(`/settings/whatsapp/groups/${id}/toggle`, { method: 'POST' });
+    const data = await resp.json();
+    if (data.ok) {
+      this.className = `btn btn-xs btn-outline-${data.enabled ? 'success' : 'secondary'} toggle-btn`;
+      this.textContent = data.enabled ? 'Activo' : 'Inactivo';
+    }
+  });
+});
+
+document.querySelectorAll('.delete-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    if (!confirm('¿Eliminar este grupo?')) return;
+    const id = this.dataset.id;
+    const resp = await fetch(`/settings/whatsapp/groups/${id}/delete`, { method: 'POST' });
+    const data = await resp.json();
+    if (data.ok) document.getElementById('row-' + id)?.remove();
+  });
+});
+
+// ── Test broadcast ──────────────────────────────────────────────────────────────
+document.getElementById('testBroadcastBtn')?.addEventListener('click', async function () {
+  const orig = this.innerHTML;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando…';
+  this.disabled = true;
+  const resp = await fetch('/settings/whatsapp/test-broadcast', { method: 'POST' });
+  const data = await resp.json();
+  const el = document.getElementById('broadcastResult');
+  if (data.ok) {
+    el.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>Enviado a ${data.sent} grupo(s). Fallidos: ${data.failed}.</span>`;
+  } else {
+    el.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${data.error}</span>`;
+  }
+  this.innerHTML = orig;
+  this.disabled = false;
+});
+</script>
+{% endblock %}
