@@ -55,6 +55,15 @@ def _extract_image_url(entry) -> str | None:
     return None
 
 
+def _is_comment_entry(entry) -> bool:
+    """Detecta entradas de comentarios en feeds RSS (WordPress, Disqus, etc.)."""
+    for field in ("id", "link"):
+        url = entry.get(field, "")
+        if re.search(r'[#?&/]comment|replytocom|#respond', url, re.I):
+            return True
+    return entry.get("type") == "comment"
+
+
 def _extract_og_image(soup: BeautifulSoup) -> str | None:
     for attr in ({"property": "og:image"}, {"name": "twitter:image"}):
         tag = soup.find("meta", attrs=attr)
@@ -124,6 +133,9 @@ def fetch_rss_items(feed_url: str) -> list[dict]:
 
     items = []
     for entry in feed.entries:
+        if _is_comment_entry(entry):
+            continue
+
         guid = entry.get("id") or entry.get("link") or ""
         if not guid:
             continue
