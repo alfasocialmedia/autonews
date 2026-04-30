@@ -4,11 +4,15 @@ import logging
 import mimetypes
 import re
 
+import urllib3
 import requests
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 log = logging.getLogger("whatsapp_service")
 
 TIMEOUT = 20
+VERIFY_SSL = False  # servidor a servidor en el mismo VPS
 
 
 def _headers(api_key: str) -> dict:
@@ -22,7 +26,7 @@ def create_instance(url: str, api_key: str, instance_name: str) -> dict:
         f"{url}/instance/create",
         headers=_headers(api_key),
         json={"instanceName": instance_name, "qrcode": True},
-        timeout=TIMEOUT,
+        timeout=TIMEOUT, verify=VERIFY_SSL,
     )
     r.raise_for_status()
     return r.json()
@@ -34,7 +38,7 @@ def get_qr(url: str, api_key: str, instance_name: str) -> dict:
         r = requests.get(
             f"{url}/instance/connect/{instance_name}",
             headers=_headers(api_key),
-            timeout=TIMEOUT,
+            timeout=TIMEOUT, verify=VERIFY_SSL,
         )
         r.raise_for_status()
         data = r.json()
@@ -56,7 +60,7 @@ def get_status(url: str, api_key: str, instance_name: str) -> dict:
         r = requests.get(
             f"{url}/instance/connectionState/{instance_name}",
             headers=_headers(api_key),
-            timeout=TIMEOUT,
+            timeout=TIMEOUT, verify=VERIFY_SSL,
         )
         r.raise_for_status()
         data = r.json()
@@ -80,7 +84,7 @@ def set_webhook(url: str, api_key: str, instance_name: str, webhook_url: str) ->
                 "webhook_by_events": False,
                 "events": ["MESSAGES_UPSERT"],
             },
-            timeout=TIMEOUT,
+            timeout=TIMEOUT, verify=VERIFY_SSL,
         )
         r.raise_for_status()
         return True
@@ -98,7 +102,7 @@ def fetch_groups(url: str, api_key: str, instance_name: str) -> list[dict]:
             f"{url}/group/fetchAllGroups/{instance_name}",
             headers=_headers(api_key),
             params={"getParticipants": "false"},
-            timeout=TIMEOUT,
+            timeout=TIMEOUT, verify=VERIFY_SSL,
         )
         r.raise_for_status()
         data = r.json()
@@ -118,7 +122,7 @@ def send_text(url: str, api_key: str, instance_name: str, jid: str, text: str) -
             f"{url}/message/sendText/{instance_name}",
             headers=_headers(api_key),
             json={"number": jid, "text": text},
-            timeout=TIMEOUT,
+            timeout=TIMEOUT, verify=VERIFY_SSL,
         )
         r.raise_for_status()
         return True
@@ -141,7 +145,7 @@ def send_image(
                 "media": image_url,
                 "caption": caption,
             },
-            timeout=TIMEOUT,
+            timeout=TIMEOUT, verify=VERIFY_SSL,
         )
         r.raise_for_status()
         return True
