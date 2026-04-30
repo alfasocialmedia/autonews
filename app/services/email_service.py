@@ -21,30 +21,61 @@ def _decode_str(s: str) -> str:
     return "".join(result)
 
 
+_FWD_SEPARATOR_RE = re.compile(
+    r"-{4,}[ \t]*(Forwarded message|mensaje reenviado|mensaje original|Original Message)[ \t]*-{4,}",
+    re.IGNORECASE,
+)
+_EMAIL_META_LINE_RE = re.compile(
+    r"(?m)^[ \t]*(De|From|Date|Fecha|Subject|Asunto|To|Para|Enviado|Sent|Reply-To|Cc|Bcc)\s*:[ \t]*.+$"
+)
+
+
+def _clean_email_body(text: str) -> str:
+    """Elimina encabezados de reenvío y líneas de metadatos (De:, Date:, Subject:, etc.)."""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = _FWD_SEPARATOR_RE.sub("\n", text)
+    text = _EMAIL_META_LINE_RE.sub("", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 def _get_body(msg) -> str:
-    """Extrae texto plano del mensaje; si no hay, cae a HTML."""
-    body = ""
+    """Extrae el texto del email preservando estructura de párrafos."""
+    plain = ""
+    html = ""
+
     if msg.is_multipart():
         for part in msg.walk():
             ct = part.get_content_type()
             disp = str(part.get("Content-Disposition", ""))
             if "attachment" in disp:
                 continue
-            if ct == "text/plain":
+            if ct == "text/plain" and not plain:
                 charset = part.get_content_charset() or "utf-8"
-                body = (part.get_payload(decode=True) or b"").decode(charset, errors="replace")
-                break
-            if ct == "text/html" and not body:
+                plain = (part.get_payload(decode=True) or b"").decode(charset, errors="replace")
+            elif ct == "text/html" and not html:
                 charset = part.get_content_charset() or "utf-8"
-                body = (part.get_payload(decode=True) or b"").decode(charset, errors="replace")
+                html = (part.get_payload(decode=True) or b"").decode(charset, errors="replace")
     else:
         charset = msg.get_content_charset() or "utf-8"
-        body = (msg.get_payload(decode=True) or b"").decode(charset, errors="replace")
+        raw = (msg.get_payload(decode=True) or b"").decode(charset, errors="replace")
+        if msg.get_content_type() == "text/html":
+            html = raw
+        else:
+            plain = raw
 
-    # Strip basic HTML tags for plain-text storage
-    body = re.sub(r"<[^>]+>", " ", body)
-    body = re.sub(r"\s+", " ", body)
-    return body.strip()
+    if plain:
+        body = plain
+    elif html:
+        # Convertir etiquetas de bloque a saltos de línea antes de eliminar el HTML
+        body = re.sub(r"<br\s*/?>", "\n", html, flags=re.IGNORECASE)
+        body = re.sub(r"</?(?:p|div|h[1-6]|tr|li|blockquote)[^>]*>", "\n", body, flags=re.IGNORECASE)
+        body = re.sub(r"<[^>]+>", " ", body)
+        body = re.sub(r"[ \t]+", " ", body)
+    else:
+        return ""
+
+    return _clean_email_body(body)
 
 
 def test_imap_connection(server: str, port: int, username: str, password: str) -> tuple[bool, str]:
