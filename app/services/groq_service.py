@@ -163,6 +163,23 @@ def _clean_content(content: str) -> str:
 _DEFAULT_CATEGORIES = "Policiales, Política, Economía, Tecnología, Deportes, Cultura, Sociedad, Internacional, General"
 
 
+def _detect_headings(text: str) -> bool:
+    """True si el texto fuente contiene subtítulos HTML."""
+    return bool(re.search(r'<h[2-4][^>]*>', text, re.IGNORECASE))
+
+
+def _article_scale(char_count: int) -> tuple[str, int, int]:
+    """Devuelve (rango_párrafos, palabras_mínimas, max_tokens) según largo de la fuente."""
+    if char_count < 1500:
+        return "4 a 5", 400, 5000
+    elif char_count < 3000:
+        return "5 a 7", 550, 6000
+    elif char_count < 5000:
+        return "7 a 9", 700, 7000
+    else:
+        return "9 a 12", 900, 8000
+
+
 def process_rss_with_groq(
     api_key: str,
     model: str,
@@ -176,25 +193,36 @@ def process_rss_with_groq(
     client = _get_client(api_key, provider, api_base_url)
     cat_list = ", ".join(available_categories) if available_categories else _DEFAULT_CATEGORIES
 
+    source_len = len(article_text)
+    para_range, min_words, max_tokens = _article_scale(source_len)
+    source_has_headings = _detect_headings(article_text)
+
+    if source_has_headings:
+        heading_rule = "Usá 1 o 2 <h2> para separar secciones temáticas distintas si el contenido lo justifica."
+        content_hint = f"<p> bien separados, con <h2> donde corresponda"
+    else:
+        heading_rule = "NO uses <h2> ni ningún subtítulo. El artículo fuente no tiene subtítulos."
+        content_hint = "<p> bien separados, sin subtítulos"
+
     prompt = f"""{base_prompt}
 
 Título original de referencia: {title}
 
 Contenido del artículo:
-{article_text[:6000]}
+{article_text[:8000]}
 
 INSTRUCCIONES DE REDACCIÓN:
 
 Sos un periodista argentino con 20 años de experiencia en diarios nacionales. Escribís con voz activa, frases directas y datos concretos. El texto debe pasar cualquier detector de IA como escrito por humano.
 
-LEGIBILIDAD: oraciones de entre 10 y 20 palabras. Vocabulario cotidiano, sin tecnicismos. Alternás oraciones cortas con algunas más largas para ritmo natural. Apuntás a 95% de legibilidad Flesch.
+LEGIBILIDAD: oraciones de entre 10 y 18 palabras. Vocabulario cotidiano, sin tecnicismos. Alternás oraciones cortas con algunas más largas para ritmo natural. Apuntás a 95% de legibilidad Flesch.
 
-PÁRRAFOS: cada <p> con una idea concreta, bien separado del siguiente. Entre 4 y 6 párrafos.
+PÁRRAFOS: {para_range} párrafos en total. Cada <p> contiene UNA sola idea concreta, con MÁXIMO 2 oraciones. Párrafos cortos, directos y bien separados entre sí. NUNCA más de 2 oraciones por párrafo.
 - Primer párrafo: quién, qué, cuándo, dónde en 2 oraciones directas y fuertes.
 - Párrafos del medio: contexto, antecedentes, declaraciones. Una cita textual clave va entre comillas con <strong> solo en la frase citada.
 - Último párrafo: consecuencia, dato de cierre o proyección. Sin anunciar que termina.
 
-SUBTÍTULOS: Usá 1 o 2 <h2> SOLO si el artículo trata claramente 2 o más temas diferenciados y supera los 5 párrafos. Si es un solo hecho o nota corta, NO uses ningún subtítulo.
+SUBTÍTULOS: {heading_rule}
 
 PROHIBIDO:
 - <ul>, <ol> ni listas de ningún tipo
@@ -208,7 +236,7 @@ IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título SEO clickeable, máximo 65 caracteres, con dato concreto o pregunta, NO copiar el original",
-  "content": "HTML periodístico con <p> bien separados y ocasionalmente <h2> solo si hay múltiples temas. Mínimo 400 palabras. Sin listas, sin secciones forzadas.",
+  "content": "HTML periodístico. {para_range} párrafos {content_hint}. Cada <p> máximo 2 oraciones. Mínimo {min_words} palabras. Sin listas.",
   "category": "Una de: {cat_list}",
   "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder. Genera curiosidad e incluye la palabra clave.",
   "keyphrase": "frase clave de 2 a 4 palabras",
@@ -218,7 +246,7 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
     resp = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=6000,
+        max_tokens=max_tokens,
         temperature=0.85,
     )
 
@@ -263,25 +291,28 @@ def process_email_with_groq(
     clean_subject = _clean_subject(subject)
     cat_list = ", ".join(available_categories) if available_categories else _DEFAULT_CATEGORIES
 
+    body_len = len(body)
+    para_range, min_words, max_tokens = _article_scale(body_len)
+
     prompt = f"""{base_prompt}
 
 Asunto del correo: {clean_subject}
 
 Contenido del correo:
-{body[:6000]}
+{body[:8000]}
 
 INSTRUCCIONES DE REDACCIÓN:
 
 Sos un periodista argentino con 20 años de experiencia en diarios nacionales. Escribís con voz activa, frases directas y datos concretos. El texto debe pasar cualquier detector de IA como escrito por humano.
 
-LEGIBILIDAD: oraciones de entre 10 y 20 palabras. Vocabulario cotidiano, sin tecnicismos. Alternás oraciones cortas con algunas más largas para ritmo natural. Apuntás a 95% de legibilidad Flesch.
+LEGIBILIDAD: oraciones de entre 10 y 18 palabras. Vocabulario cotidiano, sin tecnicismos. Alternás oraciones cortas con algunas más largas para ritmo natural. Apuntás a 95% de legibilidad Flesch.
 
-PÁRRAFOS: cada <p> con una idea concreta, bien separado del siguiente. Entre 4 y 6 párrafos.
+PÁRRAFOS: {para_range} párrafos en total. Cada <p> contiene UNA sola idea concreta, con MÁXIMO 2 oraciones. Párrafos cortos, directos y bien separados entre sí. NUNCA más de 2 oraciones por párrafo.
 - Primer párrafo: quién, qué, cuándo, dónde en 2 oraciones directas y fuertes.
 - Párrafos del medio: contexto, antecedentes, declaraciones. Una cita textual clave va entre comillas con <strong> solo en la frase citada.
 - Último párrafo: consecuencia, dato de cierre o proyección. Sin anunciar que termina.
 
-SUBTÍTULOS: Usá 1 o 2 <h2> SOLO si el artículo trata claramente 2 o más temas diferenciados y supera los 5 párrafos. Si es un solo hecho o nota corta, NO uses ningún subtítulo.
+SUBTÍTULOS: Usá 1 o 2 <h2> SOLO si el artículo trata claramente 2 o más temas diferenciados y supera los 7 párrafos. Si es un solo hecho o nota corta, NO uses ningún subtítulo.
 
 PROHIBIDO:
 - <ul>, <ol> ni listas de ningún tipo
@@ -293,7 +324,7 @@ IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título SEO clickeable, máximo 65 caracteres, con dato concreto o pregunta, NO copiar el original",
-  "content": "HTML periodístico con <p> bien separados y ocasionalmente <h2> solo si hay múltiples temas. Mínimo 400 palabras. Sin listas, sin secciones forzadas.",
+  "content": "HTML periodístico. {para_range} párrafos <p>, cada uno con máximo 2 oraciones. Mínimo {min_words} palabras. Sin listas.",
   "category": "Una de: {cat_list}",
   "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder. Genera curiosidad e incluye la palabra clave.",
   "keyphrase": "frase clave de 2 a 4 palabras",
@@ -303,7 +334,7 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
     resp = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=6000,
+        max_tokens=max_tokens,
         temperature=0.85,
     )
 
