@@ -12,9 +12,10 @@ _API_BASE = "https://api.elevenlabs.io/v1"
 
 
 def strip_html(html_content: str) -> str:
-    """Elimina tags HTML y decodifica entidades, devuelve texto plano para TTS."""
+    """Elimina tags HTML, entidades y marcadores de imagen inline, devuelve texto plano para TTS."""
     text = re.sub(r"<[^>]+>", " ", html_content)
     text = html.unescape(text)
+    text = re.sub(r"\[image:[^\]]+\]", "", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 

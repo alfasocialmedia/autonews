@@ -57,6 +57,9 @@ def _clean_email_body(text: str) -> str:
     # Eliminar líneas que solo contienen una dirección de email suelta
     text = _EMAIL_ADDR_LINE_RE.sub("", text)
 
+    # Eliminar marcadores de imágenes inline [image: filename] que generan algunos clientes
+    text = re.sub(r"\[image:[^\]]+\]", "", text)
+
     # Eliminar líneas con solo ">" (restos de quote) o solo guiones
     text = re.sub(r"(?m)^[ \t]*[>-]{2,}[ \t]*$", "", text)
 
