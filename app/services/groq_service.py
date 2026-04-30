@@ -322,7 +322,7 @@ def process_email_with_groq(
 
     prompt = f"""{base_prompt}
 
-Asunto del correo: {clean_subject}
+Referencia interna (NO usar como título): {clean_subject}
 
 Contenido del correo:
 {body[:8000]}
@@ -341,6 +341,8 @@ PÁRRAFOS: {para_range} párrafos en total. Cada <p> contiene UNA sola idea conc
 SUBTÍTULOS: Usá 1 o 2 <h2> SOLO si el artículo trata claramente 2 o más temas diferenciados y supera los 7 párrafos. Si es un solo hecho o nota corta, NO uses ningún subtítulo.
 
 PROHIBIDO:
+- Copiar el asunto del correo como título — el título debe surgir del contenido
+- Incluir metadatos del correo (De:, Para:, Fecha:, Forwarded message, etc.)
 - <ul>, <ol> ni listas de ningún tipo
 - "En conclusión", "En resumen", "En definitiva", "Para finalizar"
 - "En primer lugar", "A continuación", "Por otro lado", "Cabe destacar"
@@ -352,8 +354,8 @@ Categorías disponibles: {cat_list}
 IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
-  "title": "Título SEO clickeable, máximo 65 caracteres, con dato concreto o pregunta, NO copiar el original",
-  "content": "HTML periodístico. {para_range} párrafos <p>, cada uno con máximo 2 oraciones. Mínimo {min_words} palabras. Sin listas.",
+  "title": "Título periodístico creado a partir del CONTENIDO, máximo 65 caracteres. NUNCA copiar el asunto del correo.",
+  "content": "HTML periodístico. {para_range} párrafos <p>, cada uno con máximo 2 oraciones. Mínimo {min_words} palabras. Sin listas. Sin metadatos de correo.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
   "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder. Genera curiosidad e incluye la palabra clave.",
   "keyphrase": "frase clave de 2 a 4 palabras",

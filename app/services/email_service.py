@@ -22,7 +22,7 @@ def _decode_str(s: str) -> str:
 
 
 _FWD_SEPARATOR_RE = re.compile(
-    r"-{4,}[ \t]*(Forwarded message|mensaje reenviado|mensaje original|Original Message)[ \t]*-{4,}",
+    r"[-—–]{3,}[ \t]*(Forwarded message|mensaje reenviado|mensaje original|Original Message)[ \t]*[-—–]{3,}",
     re.IGNORECASE,
 )
 _EMAIL_META_LINE_RE = re.compile(
