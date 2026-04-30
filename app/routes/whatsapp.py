@@ -20,8 +20,47 @@ templates = Jinja2Templates(directory="app/templates")
 MAX_GROUPS = 5
 
 
+def _ensure_tables():
+    """Crea las tablas de WhatsApp si no existen (fallback por si la migración no corrió)."""
+    from sqlalchemy import inspect, text
+    from app.database import engine
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
+    with engine.begin() as conn:
+        if "whatsapp_settings" not in tables:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS whatsapp_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    evolution_api_url VARCHAR(300) DEFAULT 'http://localhost:8080',
+                    evolution_api_key VARCHAR(300) DEFAULT '',
+                    instance_name VARCHAR(100) DEFAULT 'botnews',
+                    enabled BOOLEAN DEFAULT 0,
+                    authorized_numbers TEXT DEFAULT '',
+                    broadcast_enabled BOOLEAN DEFAULT 0,
+                    broadcast_template TEXT DEFAULT '*{title}*\n\n{summary}\n\n{url}',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME
+                )
+            """))
+        if "whatsapp_groups" not in tables:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS whatsapp_groups (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    jid VARCHAR(200) NOT NULL UNIQUE,
+                    name VARCHAR(200) NOT NULL,
+                    enabled BOOLEAN DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+
+
 def _get_settings(db: Session) -> WhatsAppSettings:
-    s = db.query(WhatsAppSettings).first()
+    try:
+        s = db.query(WhatsAppSettings).first()
+    except Exception:
+        _ensure_tables()
+        db.expire_all()
+        s = None
     if not s:
         s = WhatsAppSettings()
         db.add(s)
@@ -88,19 +127,18 @@ async def whatsapp_save(
 
 @router.post("/settings/whatsapp/create-instance")
 async def create_instance(request: Request, db: Session = Depends(get_db)):
-    user = _require_admin(request, db)
-    if not user:
-        return JSONResponse({"error": "No autorizado"}, status_code=403)
-
-    s = _get_settings(db)
-    if not s.evolution_api_url or not s.evolution_api_key:
-        return JSONResponse({"error": "Configurá la URL y API key primero"}, status_code=400)
-
-    from app.services.whatsapp_service import create_instance as svc_create
     try:
+        user = _require_admin(request, db)
+        if not user:
+            return JSONResponse({"error": "No autorizado"}, status_code=403)
+        s = _get_settings(db)
+        if not s.evolution_api_url or not s.evolution_api_key:
+            return JSONResponse({"error": "Configurá la URL y API key primero"}, status_code=400)
+        from app.services.whatsapp_service import create_instance as svc_create
         result = svc_create(s.evolution_api_url, s.evolution_api_key, s.instance_name)
         return JSONResponse({"ok": True, "data": result})
     except Exception as exc:
+        log.error("create_instance error: %s", exc)
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
@@ -108,26 +146,32 @@ async def create_instance(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/settings/whatsapp/qr")
 async def get_qr(request: Request, db: Session = Depends(get_db)):
-    user = _require_admin(request, db)
-    if not user:
-        return JSONResponse({"error": "No autorizado"}, status_code=403)
-
-    s = _get_settings(db)
-    from app.services.whatsapp_service import get_qr as svc_qr
-    return JSONResponse(svc_qr(s.evolution_api_url, s.evolution_api_key, s.instance_name))
+    try:
+        user = _require_admin(request, db)
+        if not user:
+            return JSONResponse({"error": "No autorizado"}, status_code=403)
+        s = _get_settings(db)
+        from app.services.whatsapp_service import get_qr as svc_qr
+        return JSONResponse(svc_qr(s.evolution_api_url, s.evolution_api_key, s.instance_name))
+    except Exception as exc:
+        log.error("get_qr error: %s", exc)
+        return JSONResponse({"error": str(exc)}, status_code=500)
 
 
 # ── Estado de conexión ─────────────────────────────────────────────────────────
 
 @router.get("/settings/whatsapp/status")
 async def connection_status(request: Request, db: Session = Depends(get_db)):
-    user = _require_admin(request, db)
-    if not user:
-        return JSONResponse({"error": "No autorizado"}, status_code=403)
-
-    s = _get_settings(db)
-    from app.services.whatsapp_service import get_status
-    return JSONResponse(get_status(s.evolution_api_url, s.evolution_api_key, s.instance_name))
+    try:
+        user = _require_admin(request, db)
+        if not user:
+            return JSONResponse({"error": "No autorizado"}, status_code=403)
+        s = _get_settings(db)
+        from app.services.whatsapp_service import get_status
+        return JSONResponse(get_status(s.evolution_api_url, s.evolution_api_key, s.instance_name))
+    except Exception as exc:
+        log.error("connection_status error: %s", exc)
+        return JSONResponse({"error": str(exc)}, status_code=500)
 
 
 # ── Configurar webhook en Evolution API ────────────────────────────────────────
@@ -138,17 +182,20 @@ async def configure_webhook(
     db: Session = Depends(get_db),
     webhook_base_url: str = Form(""),
 ):
-    user = _require_admin(request, db)
-    if not user:
-        return JSONResponse({"error": "No autorizado"}, status_code=403)
-
-    s = _get_settings(db)
-    webhook_url = webhook_base_url.rstrip("/") + "/webhook/whatsapp"
-    from app.services.whatsapp_service import set_webhook
-    ok = set_webhook(s.evolution_api_url, s.evolution_api_key, s.instance_name, webhook_url)
-    if ok:
-        return JSONResponse({"ok": True, "webhook_url": webhook_url})
-    return JSONResponse({"error": "No se pudo configurar el webhook"}, status_code=500)
+    try:
+        user = _require_admin(request, db)
+        if not user:
+            return JSONResponse({"error": "No autorizado"}, status_code=403)
+        s = _get_settings(db)
+        webhook_url = webhook_base_url.rstrip("/") + "/webhook/whatsapp"
+        from app.services.whatsapp_service import set_webhook
+        ok = set_webhook(s.evolution_api_url, s.evolution_api_key, s.instance_name, webhook_url)
+        if ok:
+            return JSONResponse({"ok": True, "webhook_url": webhook_url})
+        return JSONResponse({"error": "No se pudo configurar el webhook"}, status_code=500)
+    except Exception as exc:
+        log.error("configure_webhook error: %s", exc)
+        return JSONResponse({"error": str(exc)}, status_code=500)
 
 
 # ── Grupos ─────────────────────────────────────────────────────────────────────
