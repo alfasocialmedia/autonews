@@ -160,7 +160,30 @@ def _clean_content(content: str) -> str:
     return content
 
 
-_DEFAULT_CATEGORIES = "Policiales, Política, Economía, Tecnología, Deportes, Cultura, Sociedad, Internacional, General"
+_DEFAULT_CATEGORIES = (
+    "Nacionales, Internacionales, Policiales, Política, Economía, "
+    "Previsión Social, Salud, Educación, Tecnología, Deportes, "
+    "Espectáculos, Cultura, Sociedad, Ciencia, Turismo, Medio Ambiente, General"
+)
+
+_CATEGORY_GUIDE = """CATEGORIZACIÓN — elegí la más específica entre las disponibles:
+- Nacionales: hechos ocurridos en Argentina sin categoría más específica
+- Internacionales / Mundo: noticias de otros países
+- Policiales: crímenes, robos, homicidios, detenidos, narcotráfico, violencia, accidentes fatales
+- Política: gobierno, elecciones, partidos, legisladores, decretos, actos de gobierno
+- Economía: inflación, mercados, empresas, finanzas, dólar, precios, comercio exterior
+- Previsión Social: ANSES, jubilaciones, pensiones, AUH, asignaciones familiares, seguridad social
+- Salud: enfermedades, hospitales, medicamentos, epidemias, salud pública
+- Educación: escuelas, universidades, docentes, planes educativos, becas
+- Tecnología: software, hardware, IA, telecomunicaciones, internet, innovación digital
+- Deportes: fútbol, rugby, tenis, atletismo, cualquier competencia deportiva
+- Espectáculos: cine, televisión, música, teatro, celebrities, series, farándula
+- Cultura: arte, literatura, patrimonio, festivales culturales, museos
+- Sociedad: temas sociales, comunidad, género, derechos humanos
+- Ciencia: investigación científica, descubrimientos, astronomía, biología, física
+- Turismo: viajes, destinos, hotelería, gastronomía, temporada turística
+- Medio Ambiente: clima, ecología, catástrofes naturales, contaminación
+- General: solo si ninguna otra categoría aplica claramente"""
 
 
 def _detect_headings(text: str) -> bool:
@@ -232,12 +255,15 @@ PROHIBIDO:
 - "Fuente:", "Según informó...", "El portal X indicó que..."
 - Más de 2 usos de <strong>
 
+{_CATEGORY_GUIDE}
+Categorías disponibles: {cat_list}
+
 IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título SEO clickeable, máximo 65 caracteres, con dato concreto o pregunta, NO copiar el original",
   "content": "HTML periodístico. {para_range} párrafos {content_hint}. Cada <p> máximo 2 oraciones. Mínimo {min_words} palabras. Sin listas.",
-  "category": "Una de: {cat_list}",
+  "category": "La categoría más específica según los criterios de arriba",
   "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder. Genera curiosidad e incluye la palabra clave.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
@@ -320,12 +346,15 @@ PROHIBIDO:
 - "En primer lugar", "A continuación", "Por otro lado", "Cabe destacar"
 - Más de 2 usos de <strong>
 
+{_CATEGORY_GUIDE}
+Categorías disponibles: {cat_list}
+
 IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título SEO clickeable, máximo 65 caracteres, con dato concreto o pregunta, NO copiar el original",
   "content": "HTML periodístico. {para_range} párrafos <p>, cada uno con máximo 2 oraciones. Mínimo {min_words} palabras. Sin listas.",
-  "category": "Una de: {cat_list}",
+  "category": "La categoría más específica según los criterios de arriba",
   "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder. Genera curiosidad e incluye la palabra clave.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
