@@ -263,7 +263,7 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título SEO clickeable, máximo 65 caracteres, con dato concreto o pregunta, NO copiar el original",
   "content": "HTML periodístico. {para_range} párrafos {content_hint}. Cada <p> máximo 2 oraciones. Mínimo {min_words} palabras. Sin listas.",
-  "category": "La categoría más específica según los criterios de arriba",
+  "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
   "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder. Genera curiosidad e incluye la palabra clave.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
@@ -354,7 +354,7 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título SEO clickeable, máximo 65 caracteres, con dato concreto o pregunta, NO copiar el original",
   "content": "HTML periodístico. {para_range} párrafos <p>, cada uno con máximo 2 oraciones. Mínimo {min_words} palabras. Sin listas.",
-  "category": "La categoría más específica según los criterios de arriba",
+  "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
   "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder. Genera curiosidad e incluye la palabra clave.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
