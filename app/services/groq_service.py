@@ -258,10 +258,20 @@ PROHIBIDO:
 {_CATEGORY_GUIDE}
 Categorías disponibles: {cat_list}
 
+TÍTULO LLAMATIVO — OBLIGATORIO:
+El título debe generar el impulso inmediato de hacer clic. Usá UNA de estas fórmulas:
+1. Verbo de impacto + dato concreto: "Confirmaron 40 despidos en la empresa líder del sector"
+2. Cifra + consecuencia directa: "Sube 20%: así impacta en tu bolsillo el nuevo aumento"
+3. Pregunta que genera curiosidad o tensión: "¿Por qué el Gobierno frenó el proyecto más esperado del año?"
+4. Revelación o secreto: "El dato que nadie contó sobre el cierre de la planta en Córdoba"
+5. Conflicto o giro inesperado: "Iban a inaugurar la obra y encontraron esto debajo del suelo"
+NUNCA un título plano, descriptivo o que simplemente nombre el hecho sin gancho emocional.
+Máximo 65 caracteres. Sin puntos al final. Sin comillas en el título.
+
 IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
-  "title": "Título SEO clickeable, máximo 65 caracteres, con dato concreto o pregunta, NO copiar el original",
+  "title": "Título IMPACTANTE de máximo 65 caracteres usando una de las fórmulas indicadas. Generá el impulso de hacer clic.",
   "content": "HTML periodístico. {para_range} párrafos {content_hint}. Cada <p> máximo 2 oraciones. Mínimo {min_words} palabras. Sin listas.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
   "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder. Genera curiosidad e incluye la palabra clave.",
@@ -335,7 +345,14 @@ INSTRUCCIONES DE REDACCIÓN:
 
 Sos un periodista argentino con 20 años de experiencia en diarios nacionales. Tu tarea es REESCRIBIR completamente el contenido anterior como una noticia periodística. NO copies frases textuales — reformulá cada idea con voz propia, activa y directa. El texto debe sonar 100% humano.
 
-TÍTULO: Creá un título periodístico propio basado en el hecho central del contenido. Si el contenido empieza con una línea en mayúsculas como "{first_body_line[:60]}", esa es la noticia principal — reescribila como título atractivo (máximo 65 caracteres). NUNCA uses el asunto del correo como título.
+TÍTULO LLAMATIVO — OBLIGATORIO:
+El título debe generar el impulso inmediato de hacer clic. El hecho central del contenido es la base, pero transformalo usando UNA de estas fórmulas:
+1. Verbo de impacto + dato concreto: "Confirmaron 40 despidos en la empresa líder del sector"
+2. Cifra + consecuencia directa: "Sube 20%: así impacta en tu bolsillo el nuevo aumento"
+3. Pregunta que genera curiosidad o tensión: "¿Por qué el Gobierno frenó el proyecto más esperado del año?"
+4. Revelación o secreto: "El dato que nadie contó sobre el cierre de la planta en Córdoba"
+5. Conflicto o giro inesperado: "Iban a inaugurar la obra y encontraron esto debajo del suelo"
+Si el contenido empieza con "{first_body_line[:60]}", esa es la noticia — reescribila con gancho. NUNCA copies el asunto del correo. NUNCA título plano o descriptivo. Máximo 65 caracteres.
 
 LEGIBILIDAD: oraciones de entre 10 y 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas para ritmo natural. Apuntás a 95% de legibilidad Flesch.
 
@@ -359,7 +376,7 @@ Categorías disponibles: {cat_list}
 IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
-  "title": "Título periodístico propio, máximo 65 caracteres, basado en el hecho central del contenido",
+  "title": "Título IMPACTANTE de máximo 65 caracteres usando una de las fórmulas indicadas. Generá el impulso de hacer clic.",
   "content": "Noticia reescrita en HTML. {para_range} párrafos <p>. Mínimo {min_words} palabras. <h2> para secciones del original si las hay.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
   "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras. Genera curiosidad e incluye la palabra clave.",
