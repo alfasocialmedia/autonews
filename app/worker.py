@@ -340,11 +340,11 @@ def process_emails():
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _download_image(url: str) -> tuple[bytes, str, str] | None:
+def _download_image(url: str, timeout: int = 25) -> tuple[bytes, str, str] | None:
     """Descarga una imagen desde URL. Devuelve (bytes, filename, mimetype) o None."""
     import httpx, mimetypes, re
     try:
-        resp = httpx.get(url, timeout=15, follow_redirects=True,
+        resp = httpx.get(url, timeout=timeout, follow_redirects=True,
                          headers={"User-Agent": "Mozilla/5.0 (compatible; AutoNews/1.0)"})
         resp.raise_for_status()
         ctype = resp.headers.get("content-type", "image/jpeg").split(";")[0].strip()
@@ -357,6 +357,49 @@ def _download_image(url: str) -> tuple[bytes, str, str] | None:
     except Exception as exc:
         log.warning("No se pudo descargar imagen %s: %s", url, exc)
         return None
+
+
+_CAT_IMG_HINTS: dict[str, str] = {
+    "policiales":       "crime scene police investigation photojournalism",
+    "política":         "government parliament politicians press conference",
+    "economía":         "economy finance business stock market",
+    "deportes":         "sports competition stadium crowd",
+    "espectáculos":     "entertainment show stage performance",
+    "salud":            "healthcare hospital medicine doctor",
+    "tecnología":       "technology digital innovation computer",
+    "educación":        "education school university students",
+    "nacionales":       "argentina city urban landscape",
+    "internacionales":  "world globe international diplomacy",
+    "previsión social": "social welfare retirement elderly",
+    "cultura":          "culture art museum exhibition",
+    "sociedad":         "society community people street",
+    "ciencia":          "science laboratory research discovery",
+    "turismo":          "travel tourism landscape destination",
+    "medio ambiente":   "environment nature ecology outdoor",
+}
+
+
+def _generate_fallback_image(title: str, category: str = "") -> str | None:
+    """Genera una imagen con IA usando Pollinations.ai (gratuito, sin API key)."""
+    import urllib.parse, random
+
+    cat_hint = ""
+    if category:
+        for k, v in _CAT_IMG_HINTS.items():
+            if k in category.lower():
+                cat_hint = v
+                break
+
+    parts = [p for p in ["professional news photo editorial style", title[:120], cat_hint] if p]
+    prompt = ", ".join(parts)
+    encoded = urllib.parse.quote(prompt)
+    seed = random.randint(1, 99999)
+    url = (
+        f"https://image.pollinations.ai/prompt/{encoded}"
+        f"?width=1200&height=630&seed={seed}&nologo=true&model=flux"
+    )
+    log.info("  🎨 Generando imagen IA para: %s", title[:70])
+    return url
 
 
 def _gdrive_list_images(folder_id: str, api_key: str, client) -> list[dict]:
@@ -673,7 +716,8 @@ def process_rss_feeds():
                                     rss_item.status = "skipped"
                                     db.commit()
                                     continue
-                            if not image_url and scraped_img:
+                            # og:image del artículo siempre es mejor que el thumbnail del RSS
+                            if scraped_img:
                                 image_url = scraped_img
 
                         ai_result = process_rss_with_groq(
@@ -693,6 +737,13 @@ def process_rss_feeds():
                             ai_result["_forced_category_name"] = feed.wp_category_name or ""
                         elif feed.wp_category_name and not feed.wp_category_id:
                             ai_result["category"] = feed.wp_category_name
+
+                        # Si no hay imagen, generar una con IA relacionada al tema
+                        if not image_url:
+                            image_url = _generate_fallback_image(
+                                ai_result.get("title", item["title"]),
+                                ai_result.get("category", ""),
+                            )
 
                         rss_item.status = "processed"
                         db.commit()

@@ -29,15 +29,22 @@ _NOISE_SELECTORS = [
 ]
 
 
+_MIN_IMAGE_WIDTH = 400  # px mínimos para aceptar una imagen del feed
+
+
 def _extract_image_url(entry) -> str | None:
+    # media_content: aceptar solo si no declara dimensiones o supera el mínimo
     for mc in entry.get("media_content", []):
         url = mc.get("url", "")
-        if url and (mc.get("type", "").startswith("image/") or re.search(r"\.(jpe?g|png|webp|gif)(\?|$)", url, re.I)):
+        if not url:
+            continue
+        if not (mc.get("type", "").startswith("image/") or re.search(r"\.(jpe?g|png|webp|gif)(\?|$)", url, re.I)):
+            continue
+        width = int(mc.get("width") or 0)
+        if width == 0 or width >= _MIN_IMAGE_WIDTH:
             return url
 
-    for mt in entry.get("media_thumbnail", []):
-        if mt.get("url"):
-            return mt["url"]
+    # media_thumbnail omitido: son miniaturas pequeñas; se prefiere og:image al scrapear
 
     for enc in entry.get("enclosures", []):
         if enc.get("type", "").startswith("image/"):
