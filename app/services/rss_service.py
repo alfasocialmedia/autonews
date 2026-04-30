@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import datetime, timezone
@@ -79,6 +80,46 @@ def _extract_og_image(soup: BeautifulSoup) -> str | None:
     return None
 
 
+_SCRAPE_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
+    "DNT": "1",
+}
+
+_JSONLD_ARTICLE_TYPES = {"NewsArticle", "Article", "ReportageNewsArticle", "BlogPosting"}
+
+
+def _extract_jsonld_text(soup: BeautifulSoup) -> str:
+    """Extrae articleBody de datos estructurados JSON-LD (schema.org).
+    La mayoría de los grandes medios (La Nacion, Infobae, Clarín) incluyen
+    el artículo completo aquí, incluso cuando el HTML está parcialmente oculto por paywall o JS.
+    """
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            raw = script.string or ""
+            data = json.loads(raw)
+            # Puede ser objeto único o lista [@graph o array]
+            candidates = data if isinstance(data, list) else [data]
+            # Buscar también en @graph
+            if isinstance(data, dict) and "@graph" in data:
+                candidates = data["@graph"]
+            for item in candidates:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("@type") in _JSONLD_ARTICLE_TYPES:
+                    body = item.get("articleBody", "")
+                    if len(body) > 300:
+                        return body
+        except Exception:
+            continue
+    return ""
+
+
 def scrape_full_article(url: str) -> tuple[str, str | None]:
     """Extrae el texto completo de un artículo y su og:image. Devuelve (texto, imagen_url)."""
     try:
@@ -86,7 +127,7 @@ def scrape_full_article(url: str) -> tuple[str, str | None]:
             url,
             timeout=_SCRAPE_TIMEOUT,
             follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; AutoNews/1.0)"},
+            headers=_SCRAPE_HEADERS,
         )
         resp.raise_for_status()
     except Exception as exc:
@@ -96,7 +137,13 @@ def scrape_full_article(url: str) -> tuple[str, str | None]:
     soup = BeautifulSoup(resp.text, "html.parser")
     og_image = _extract_og_image(soup)
 
-    # Eliminar ruido: scripts, estilos, nav, publicidad
+    # 1. Preferir JSON-LD: contiene el artículo completo sin paywall ni JS
+    jsonld_text = _extract_jsonld_text(soup)
+    if jsonld_text:
+        lines = [l.strip() for l in jsonld_text.splitlines() if l.strip()]
+        return "\n".join(lines)[:12000], og_image
+
+    # 2. Fallback: scraping HTML tradicional
     for tag in soup(_NOISE_TAGS):
         tag.decompose()
     for sel in _NOISE_SELECTORS:
@@ -106,29 +153,22 @@ def scrape_full_article(url: str) -> tuple[str, str | None]:
         except Exception:
             pass
 
-    # Eliminar links sueltos que sean publicidad (solo anchor sin texto relevante)
     for a in soup.find_all("a"):
-        txt = (a.get_text() or "").strip()
-        if len(txt) < 4:
+        if len((a.get_text() or "").strip()) < 4:
             a.decompose()
 
-    # Intentar encontrar el contenedor principal del artículo
     article = (
-        soup.find("article")
+        soup.find(attrs={"itemprop": "articleBody"})
+        or soup.find("article")
         or soup.find("main")
-        or soup.find(attrs={"itemprop": "articleBody"})
         or soup.find("div", class_=re.compile(r"(article|content|entry|post|nota|cuerpo|body|story)", re.I))
         or soup.find("div", id=re.compile(r"(article|content|entry|post|nota|cuerpo|body|story)", re.I))
     )
 
     container = article if article else soup
     text = container.get_text(separator="\n", strip=True)
-
-    # Limpiar líneas vacías duplicadas
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    text = "\n".join(lines)
-
-    return text[:8000], og_image
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    return "\n".join(lines)[:12000], og_image
 
 
 def fetch_rss_items(feed_url: str) -> list[dict]:
