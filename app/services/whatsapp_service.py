@@ -22,14 +22,26 @@ def _headers(api_key: str) -> dict:
 # ── Instancia ──────────────────────────────────────────────────────────────────
 
 def create_instance(url: str, api_key: str, instance_name: str) -> dict:
-    r = requests.post(
-        f"{url}/instance/create",
-        headers=_headers(api_key),
-        json={"instanceName": instance_name, "qrcode": True},
-        timeout=TIMEOUT, verify=VERIFY_SSL,
-    )
-    r.raise_for_status()
-    return r.json()
+    try:
+        r = requests.post(
+            f"{url}/instance/create",
+            headers=_headers(api_key),
+            json={
+                "instanceName": instance_name,
+                "qrcode": True,
+                "integration": "WHATSAPP-BAILEYS",
+            },
+            timeout=TIMEOUT, verify=VERIFY_SSL,
+        )
+        if r.status_code == 400:
+            # Instancia ya existe — no es un error
+            return {"instanceName": instance_name, "already_exists": True}
+        r.raise_for_status()
+        return r.json()
+    except requests.exceptions.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 400:
+            return {"instanceName": instance_name, "already_exists": True}
+        raise
 
 
 def get_qr(url: str, api_key: str, instance_name: str) -> dict:
