@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}ElevenLabs TTS — AutoNews{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2 class="page-title"><i class="bi bi-mic-fill me-2 text-danger"></i>ElevenLabs — Audio IA</h2>
+  <span class="text-muted small">Genera un audio MP3 con voz IA para cada nota y lo incrusta en WordPress</span>
+</div>
+
+{% with messages = request.query_params %}
+{% if messages.get('msg') %}
+<div class="alert alert-success alert-dismissible fade show">
+  <i class="bi bi-check-circle-fill me-2"></i>{{ messages.get('msg') | replace('+', ' ') }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% elif messages.get('err') %}
+<div class="alert alert-danger alert-dismissible fade show">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ messages.get('err') | replace('+', ' ') }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+{% endwith %}
+
+<div class="row g-4">
+  <!-- Formulario principal -->
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 pt-3">
+        <h6 class="mb-0"><i class="bi bi-sliders me-2"></i>Configuración</h6>
+      </div>
+      <div class="card-body">
+        <form method="post" action="/settings/elevenlabs/save">
+
+          <!-- API Key -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">API Key de ElevenLabs</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-key"></i></span>
+              <input type="password" name="api_key" class="form-control" id="apiKeyInput"
+                placeholder="{% if cfg %}Dejar vacío para no cambiar (actual: {{ mask(cfg.encrypted_api_key) if mask else '••••' }}){% else %}sk_...{% endif %}">
+              <button class="btn btn-outline-secondary" type="button" id="toggleKey">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+            <div class="form-text">Obtenela en <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank">elevenlabs.io → Settings → API Keys</a></div>
+          </div>
+
+          <!-- Voice ID -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Voice ID</label>
+            <input type="text" name="voice_id" class="form-control font-monospace"
+              value="{{ cfg.voice_id if cfg else 'pNInz6obpgDQGcFmaJgB' }}"
+              placeholder="pNInz6obpgDQGcFmaJgB">
+            <div class="form-text">
+              ID de la voz a usar. Podés copiarlo desde
+              <a href="https://elevenlabs.io/app/voice-library" target="_blank">Voice Library</a> o usar una de las voces de referencia del panel lateral.
+            </div>
+          </div>
+
+          <!-- Modelo -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Modelo</label>
+            <select name="model_id" class="form-select">
+              <option value="eleven_multilingual_v2" {% if not cfg or cfg.model_id == 'eleven_multilingual_v2' %}selected{% endif %}>
+                eleven_multilingual_v2 — Multilingüe, alta calidad (recomendado para español)
+              </option>
+              <option value="eleven_turbo_v2_5" {% if cfg and cfg.model_id == 'eleven_turbo_v2_5' %}selected{% endif %}>
+                eleven_turbo_v2_5 — Multilingüe, más rápido y económico
+              </option>
+              <option value="eleven_flash_v2_5" {% if cfg and cfg.model_id == 'eleven_flash_v2_5' %}selected{% endif %}>
+                eleven_flash_v2_5 — El más rápido (menor calidad)
+              </option>
+              <option value="eleven_monolingual_v1" {% if cfg and cfg.model_id == 'eleven_monolingual_v1' %}selected{% endif %}>
+                eleven_monolingual_v1 — Solo inglés, alta calidad
+              </option>
+            </select>
+          </div>
+
+          <!-- Habilitado -->
+          <div class="mb-4">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" name="enabled" id="enabledSwitch"
+                {% if not cfg or cfg.enabled %}checked{% endif %}>
+              <label class="form-check-label fw-semibold" for="enabledSwitch">
+                Activar generación de audio en cada nota
+              </label>
+            </div>
+            <div class="form-text">Si está desactivado, las notas se publican normalmente sin audio.</div>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-save me-1"></i>Guardar
+            </button>
+            {% if cfg %}
+            <button type="button" class="btn btn-outline-info" id="testEl">
+              <i class="bi bi-lightning-charge me-1"></i>Probar conexión
+            </button>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel lateral -->
+  <div class="col-lg-5">
+
+    <!-- Estado -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-transparent border-0 pt-3">
+        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Estado</h6>
+      </div>
+      <div class="card-body">
+        {% if cfg %}
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted">API Key</dt>
+          <dd class="col-7 font-monospace">{{ mask(cfg.encrypted_api_key) if mask else '••••' }}</dd>
+          <dt class="col-5 text-muted">Voice ID</dt>
+          <dd class="col-7 font-monospace text-break">{{ cfg.voice_id }}</dd>
+          <dt class="col-5 text-muted">Modelo</dt>
+          <dd class="col-7 font-monospace">{{ cfg.model_id }}</dd>
+          <dt class="col-5 text-muted">Estado</dt>
+          <dd class="col-7">
+            {% if cfg.enabled %}
+            <span class="badge bg-success">Activo</span>
+            {% else %}
+            <span class="badge bg-secondary">Desactivado</span>
+            {% endif %}
+          </dd>
+        </dl>
+        {% else %}
+        <p class="text-muted small mb-0">Sin configuración todavía.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Voces de referencia -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-transparent border-0 pt-3">
+        <h6 class="mb-0"><i class="bi bi-person-lines-fill me-2"></i>Voces premade de referencia</h6>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0 small">
+          <thead class="table-light">
+            <tr><th>Nombre</th><th>Voice ID</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Adam <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">ES</span></td><td class="font-monospace" style="font-size:.75rem"><button class="btn btn-link btn-sm p-0 copy-voice" data-id="pNInz6obpgDQGcFmaJgB">pNInz6obpgDQGcFmaJgB</button></td></tr>
+            <tr><td>Daniel <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">ES</span></td><td class="font-monospace" style="font-size:.75rem"><button class="btn btn-link btn-sm p-0 copy-voice" data-id="onwK4e9ZLuTAKqWW03F9">onwK4e9ZLuTAKqWW03F9</button></td></tr>
+            <tr><td>Charlotte <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">ES</span></td><td class="font-monospace" style="font-size:.75rem"><button class="btn btn-link btn-sm p-0 copy-voice" data-id="XB0fDUnXU5powFXDhCwa">XB0fDUnXU5powFXDhCwa</button></td></tr>
+            <tr><td>Rachel</td><td class="font-monospace" style="font-size:.75rem"><button class="btn btn-link btn-sm p-0 copy-voice" data-id="21m00Tcm4TlvDq8ikWAM">21m00Tcm4TlvDq8ikWAM</button></td></tr>
+            <tr><td>Josh</td><td class="font-monospace" style="font-size:.75rem"><button class="btn btn-link btn-sm p-0 copy-voice" data-id="TxGEqnHWrfWFTfGW9XjX">TxGEqnHWrfWFTfGW9XjX</button></td></tr>
+            <tr><td>Arnold</td><td class="font-monospace" style="font-size:.75rem"><button class="btn btn-link btn-sm p-0 copy-voice" data-id="VR6AewLTigWG4xSOukaG">VR6AewLTigWG4xSOukaG</button></td></tr>
+          </tbody>
+        </table>
+        <p class="small text-muted px-3 py-2 mb-0">Clic en el ID para copiarlo al campo Voice ID.</p>
+      </div>
+    </div>
+
+    <!-- Cómo funciona -->
+    <div class="card border-0 bg-danger-subtle">
+      <div class="card-body">
+        <h6 class="fw-semibold"><i class="bi bi-lightbulb me-2 text-danger"></i>Cómo funciona</h6>
+        <ul class="small mb-0 ps-3">
+          <li>Cada vez que se procesa una nota, el contenido se convierte a texto y se envía a ElevenLabs</li>
+          <li>El MP3 resultante se sube a la biblioteca de medios de WordPress</li>
+          <li>Se inserta un <strong>reproductor de audio</strong> al inicio de la nota antes de publicar</li>
+          <li>Si ElevenLabs falla, la nota se publica igual (sin audio)</li>
+          <li>Usar <strong>eleven_multilingual_v2</strong> con una voz multilingüe da mejores resultados en español</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('toggleKey')?.addEventListener('click', function () {
+  const inp = document.getElementById('apiKeyInput');
+  const icon = this.querySelector('i');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    icon.className = 'bi bi-eye-slash';
+  } else {
+    inp.type = 'password';
+    icon.className = 'bi bi-eye';
+  }
+});
+
+document.getElementById('testEl')?.addEventListener('click', async function () {
+  const orig = this.innerHTML;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Probando...';
+  this.disabled = true;
+  const resp = await fetch('/settings/elevenlabs/test', { method: 'POST' });
+  const data = await resp.json();
+  showToast(data.message, data.success ? 'success' : 'danger', 7000);
+  this.innerHTML = orig;
+  this.disabled = false;
+});
+
+document.querySelectorAll('.copy-voice').forEach(btn => {
+  btn.addEventListener('click', function () {
+    const voiceInput = document.querySelector('input[name="voice_id"]');
+    if (voiceInput) {
+      voiceInput.value = this.dataset.id;
+      showToast('Voice ID copiado al campo: ' + this.dataset.id, 'info', 3000);
+    }
+  });
+});
+</script>
+{% endblock %}

@@ -64,6 +64,24 @@ def _migrate_whatsapp():
             """))
 
 
+def _migrate_elevenlabs():
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        if "elevenlabs_settings" not in inspector.get_table_names():
+            conn.execute(text("""
+                CREATE TABLE elevenlabs_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    encrypted_api_key TEXT NOT NULL,
+                    voice_id VARCHAR(100) DEFAULT 'pNInz6obpgDQGcFmaJgB',
+                    model_id VARCHAR(100) DEFAULT 'eleven_multilingual_v2',
+                    enabled BOOLEAN DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME
+                )
+            """))
+
+
 def _migrate_columns():
     from sqlalchemy import inspect, text
     inspector = inspect(engine)
@@ -97,6 +115,7 @@ async def lifespan(app: FastAPI):
     pathlib.Path("/app/data").mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
     _migrate_whatsapp()
+    _migrate_elevenlabs()
     _migrate_columns()
     _create_default_admin()
     from app.worker import start_background

@@ -180,6 +180,18 @@ class ProcessedRssItem(Base):
     rss_feed = relationship("RssFeed", back_populates="items")
 
 
+class ElevenLabsSettings(Base):
+    __tablename__ = "elevenlabs_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    encrypted_api_key = Column(Text, nullable=False)
+    voice_id = Column(String(100), default="pNInz6obpgDQGcFmaJgB")
+    model_id = Column(String(100), default="eleven_multilingual_v2")
+    enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
 class WhatsAppSettings(Base):
     __tablename__ = "whatsapp_settings"
 

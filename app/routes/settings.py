@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.crypto import decrypt_value, encrypt_value, mask_value
 from app.database import get_db
-from app.models import CategoryMapping, EmailAccount, GoogleDriveSettings, GroqSettings, WordPressSettings
+from app.models import CategoryMapping, ElevenLabsSettings, EmailAccount, GoogleDriveSettings, GroqSettings, WordPressSettings
 from app.services.email_service import test_imap_connection
 from app.services.groq_service import PROVIDERS, test_groq_connection
 from app.services.wordpress_service import get_categories, test_wordpress_connection
@@ -459,5 +459,76 @@ async def test_googledrive(request: Request, db: Session = Depends(get_db)):
             return JSONResponse({"success": True, "message": "Conexión con Google Drive API exitosa"})
         error = resp.json().get("error", {}).get("message", f"HTTP {resp.status_code}")
         return JSONResponse({"success": False, "message": error})
+    except Exception as exc:
+        return JSONResponse({"success": False, "message": str(exc)})
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  ELEVENLABS TTS
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/elevenlabs", response_class=HTMLResponse)
+async def elevenlabs_settings(request: Request, db: Session = Depends(get_db)):
+    user = _require_auth(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    cfg = db.query(ElevenLabsSettings).first()
+    return templates.TemplateResponse(
+        "settings_elevenlabs.html",
+        {"request": request, "user": user, "cfg": cfg, "mask": mask_value},
+    )
+
+
+@router.post("/elevenlabs/save")
+async def save_elevenlabs(
+    request: Request,
+    api_key: str = Form(""),
+    voice_id: str = Form("pNInz6obpgDQGcFmaJgB"),
+    model_id: str = Form("eleven_multilingual_v2"),
+    enabled: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = _require_auth(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    is_enabled = enabled.lower() in ("on", "true", "1", "yes")
+    cfg = db.query(ElevenLabsSettings).first()
+    if cfg:
+        if api_key.strip():
+            cfg.encrypted_api_key = encrypt_value(api_key)
+        cfg.voice_id = voice_id.strip() or cfg.voice_id
+        cfg.model_id = model_id.strip() or cfg.model_id
+        cfg.enabled = is_enabled
+    else:
+        if not api_key.strip():
+            return RedirectResponse(
+                "/settings/elevenlabs?err=La+API+Key+es+obligatoria+la+primera+vez",
+                status_code=302,
+            )
+        cfg = ElevenLabsSettings(
+            encrypted_api_key=encrypt_value(api_key),
+            voice_id=voice_id.strip() or "pNInz6obpgDQGcFmaJgB",
+            model_id=model_id.strip() or "eleven_multilingual_v2",
+            enabled=is_enabled,
+        )
+        db.add(cfg)
+    db.commit()
+    return RedirectResponse("/settings/elevenlabs?msg=Configuración+guardada", status_code=302)
+
+
+@router.post("/elevenlabs/test")
+async def test_elevenlabs(request: Request, db: Session = Depends(get_db)):
+    if not _require_auth(request, db):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    cfg = db.query(ElevenLabsSettings).first()
+    if not cfg:
+        return JSONResponse({"success": False, "message": "No hay configuración de ElevenLabs"})
+    try:
+        from app.services.elevenlabs_service import test_connection
+        key = decrypt_value(cfg.encrypted_api_key)
+        ok, msg = test_connection(key)
+        return JSONResponse({"success": ok, "message": msg})
     except Exception as exc:
         return JSONResponse({"success": False, "message": str(exc)})

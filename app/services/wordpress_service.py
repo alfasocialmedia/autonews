@@ -56,6 +56,32 @@ def upload_media(
     return None
 
 
+def upload_audio(
+    site_url: str,
+    api_user: str,
+    app_password: str,
+    audio_bytes: bytes,
+    filename: str,
+) -> tuple[int, str] | None:
+    """Sube un MP3 a la biblioteca de WordPress. Devuelve (media_id, source_url) o None."""
+    url = site_url.rstrip("/") + "/wp-json/wp/v2/media"
+    creds = base64.b64encode(f"{api_user}:{app_password}".encode()).decode()
+    headers = {
+        "Authorization": f"Basic {creds}",
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Content-Type": "audio/mpeg",
+    }
+    try:
+        with httpx.Client(timeout=60, verify=False) as client:
+            resp = client.post(url, content=audio_bytes, headers=headers)
+        if resp.status_code in (200, 201):
+            data = resp.json()
+            return data.get("id"), data.get("source_url", "")
+    except Exception as exc:
+        log.warning("upload_audio error: %s", exc)
+    return None
+
+
 def find_category_by_name(
     site_url: str, api_user: str, app_password: str, category_name: str
 ) -> int | None:
