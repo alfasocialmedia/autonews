@@ -21,8 +21,10 @@ def _decode_str(s: str) -> str:
     return "".join(result)
 
 
-_FWD_SEPARATOR_RE = re.compile(
-    r"[-—–]{3,}[ \t]*(Forwarded message|mensaje reenviado|mensaje original|Original Message)[ \t]*[-—–]{3,}",
+# Detecta cualquier línea que sea un separador de reenvío, sin importar
+# el tipo de guión (-, —, –, ─, etc.) ni cuántos haya
+_FWD_LINE_RE = re.compile(
+    r"(?m)^[^\w\n]*(Forwarded message|mensaje reenviado|mensaje original|Original Message)[^\w\n]*$",
     re.IGNORECASE,
 )
 _EMAIL_META_LINE_RE = re.compile(
@@ -37,13 +39,17 @@ def _clean_email_body(text: str) -> str:
     """Elimina encabezados de reenvío, metadatos y direcciones de email sueltas."""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
 
-    # Si hay separador de reenvío, borrar TODO el bloque de metadatos
-    # (separador + líneas De/Date/Subject/To) hasta la primera línea en blanco
-    fwd_match = _FWD_SEPARATOR_RE.search(text)
-    if fwd_match:
-        after = text[fwd_match.end():]
+    # Loop: eliminar todos los bloques "Forwarded message + metadatos"
+    # (puede haber múltiples niveles de reenvío)
+    for _ in range(10):
+        m = _FWD_LINE_RE.search(text)
+        if not m:
+            break
+        after = text[m.end():]
+        # El bloque de metadatos termina en la primera línea en blanco
         blank = re.search(r"\n[ \t]*\n", after)
-        text = after[blank.end():] if blank else after
+        remaining = after[blank.end():] if blank else after
+        text = text[:m.start()] + remaining
 
     # Eliminar líneas de metadatos residuales (De:, To:, Date:, etc.)
     text = _EMAIL_META_LINE_RE.sub("", text)
@@ -51,8 +57,8 @@ def _clean_email_body(text: str) -> str:
     # Eliminar líneas que solo contienen una dirección de email suelta
     text = _EMAIL_ADDR_LINE_RE.sub("", text)
 
-    # Eliminar líneas con solo ">" (restos de quote)
-    text = re.sub(r"(?m)^[ \t]*>[ \t]*$", "", text)
+    # Eliminar líneas con solo ">" (restos de quote) o solo guiones
+    text = re.sub(r"(?m)^[ \t]*[>-]{2,}[ \t]*$", "", text)
 
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
