@@ -320,29 +320,34 @@ def process_email_with_groq(
     body_len = len(body)
     para_range, min_words, max_tokens = _article_scale(body_len)
 
+    # Extraer la primera línea significativa del cuerpo como pista de titular
+    first_body_line = next(
+        (l.strip() for l in body.splitlines() if len(l.strip()) > 15),
+        ""
+    )
+
     prompt = f"""{base_prompt}
 
-Referencia interna (NO usar como título): {clean_subject}
-
-Contenido del correo:
+CONTENIDO A TRANSFORMAR EN NOTICIA:
 {body[:8000]}
 
 INSTRUCCIONES DE REDACCIÓN:
 
-Sos un periodista argentino con 20 años de experiencia en diarios nacionales. Escribís con voz activa, frases directas y datos concretos. El texto debe pasar cualquier detector de IA como escrito por humano.
+Sos un periodista argentino con 20 años de experiencia en diarios nacionales. Tu tarea es REESCRIBIR completamente el contenido anterior como una noticia periodística. NO copies frases textuales — reformulá cada idea con voz propia, activa y directa. El texto debe sonar 100% humano.
 
-LEGIBILIDAD: oraciones de entre 10 y 18 palabras. Vocabulario cotidiano, sin tecnicismos. Alternás oraciones cortas con algunas más largas para ritmo natural. Apuntás a 95% de legibilidad Flesch.
+TÍTULO: Creá un título periodístico propio basado en el hecho central del contenido. Si el contenido empieza con una línea en mayúsculas como "{first_body_line[:60]}", esa es la noticia principal — reescribila como título atractivo (máximo 65 caracteres). NUNCA uses el asunto del correo como título.
 
-PÁRRAFOS: {para_range} párrafos en total. Cada <p> contiene UNA sola idea concreta, con MÁXIMO 2 oraciones. Párrafos cortos, directos y bien separados entre sí. NUNCA más de 2 oraciones por párrafo.
-- Primer párrafo: quién, qué, cuándo, dónde en 2 oraciones directas y fuertes.
-- Párrafos del medio: contexto, antecedentes, declaraciones. Una cita textual clave va entre comillas con <strong> solo en la frase citada.
-- Último párrafo: consecuencia, dato de cierre o proyección. Sin anunciar que termina.
+LEGIBILIDAD: oraciones de entre 10 y 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas para ritmo natural. Apuntás a 95% de legibilidad Flesch.
 
-SUBTÍTULOS: Usá 1 o 2 <h2> SOLO si el artículo trata claramente 2 o más temas diferenciados y supera los 7 párrafos. Si es un solo hecho o nota corta, NO uses ningún subtítulo.
+PÁRRAFOS: {para_range} párrafos en total. Cada <p> con UNA sola idea, MÁXIMO 2 oraciones.
+- Primer párrafo: quién, qué, cuándo, dónde — 2 oraciones directas y fuertes.
+- Párrafos del medio: contexto, antecedentes, declaraciones textuales entre comillas con <strong>.
+- Último párrafo: consecuencia o proyección. Sin anunciar que termina.
+
+SUBTÍTULOS: Si el contenido original tiene secciones claramente diferenciadas con títulos propios, convertí cada una en un <h2>. Máximo 2 subtítulos.
 
 PROHIBIDO:
-- Copiar el asunto del correo como título — el título debe surgir del contenido
-- Incluir metadatos del correo (De:, Para:, Fecha:, Forwarded message, etc.)
+- Copiar líneas textuales del original sin reescribir
 - <ul>, <ol> ni listas de ningún tipo
 - "En conclusión", "En resumen", "En definitiva", "Para finalizar"
 - "En primer lugar", "A continuación", "Por otro lado", "Cabe destacar"
@@ -354,10 +359,10 @@ Categorías disponibles: {cat_list}
 IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
-  "title": "Título periodístico creado a partir del CONTENIDO, máximo 65 caracteres. NUNCA copiar el asunto del correo.",
-  "content": "HTML periodístico. {para_range} párrafos <p>, cada uno con máximo 2 oraciones. Mínimo {min_words} palabras. Sin listas. Sin metadatos de correo.",
+  "title": "Título periodístico propio, máximo 65 caracteres, basado en el hecho central del contenido",
+  "content": "Noticia reescrita en HTML. {para_range} párrafos <p>. Mínimo {min_words} palabras. <h2> para secciones del original si las hay.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
-  "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder. Genera curiosidad e incluye la palabra clave.",
+  "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras. Genera curiosidad e incluye la palabra clave.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
@@ -388,8 +393,9 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
         return result
 
     log.warning("No se pudo parsear JSON de IA. Raw (200): %s", raw[:200])
+    fallback_title = first_body_line[:65] if first_body_line else clean_subject
     return {
-        "title": clean_subject,
+        "title": fallback_title,
         "content": f"<p>{body[:1000]}</p>",
         "category": "General",
         "summary": body[:200],
