@@ -26,15 +26,34 @@ _FWD_SEPARATOR_RE = re.compile(
     re.IGNORECASE,
 )
 _EMAIL_META_LINE_RE = re.compile(
-    r"(?m)^[ \t]*(De|From|Date|Fecha|Subject|Asunto|To|Para|Enviado|Sent|Reply-To|Cc|Bcc)\s*:[ \t]*.+$"
+    r"(?m)^[ \t]*(De|From|Date|Fecha|Subject|Asunto|To|Para|Enviado|Sent|Reply-To|Cc|Bcc)\s*:[ \t]*.*$"
+)
+_EMAIL_ADDR_LINE_RE = re.compile(
+    r"(?m)^[ \t]*<?[\w.+\-]+@[\w.\-]+\.[a-zA-Z]{2,}>?[ \t]*$"
 )
 
 
 def _clean_email_body(text: str) -> str:
-    """Elimina encabezados de reenvío y líneas de metadatos (De:, Date:, Subject:, etc.)."""
+    """Elimina encabezados de reenvío, metadatos y direcciones de email sueltas."""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = _FWD_SEPARATOR_RE.sub("\n", text)
+
+    # Si hay separador de reenvío, borrar TODO el bloque de metadatos
+    # (separador + líneas De/Date/Subject/To) hasta la primera línea en blanco
+    fwd_match = _FWD_SEPARATOR_RE.search(text)
+    if fwd_match:
+        after = text[fwd_match.end():]
+        blank = re.search(r"\n[ \t]*\n", after)
+        text = after[blank.end():] if blank else after
+
+    # Eliminar líneas de metadatos residuales (De:, To:, Date:, etc.)
     text = _EMAIL_META_LINE_RE.sub("", text)
+
+    # Eliminar líneas que solo contienen una dirección de email suelta
+    text = _EMAIL_ADDR_LINE_RE.sub("", text)
+
+    # Eliminar líneas con solo ">" (restos de quote)
+    text = re.sub(r"(?m)^[ \t]*>[ \t]*$", "", text)
+
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
