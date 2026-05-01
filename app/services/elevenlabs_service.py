@@ -43,7 +43,8 @@ def generate_audio(
     }
     with httpx.Client(timeout=120) as client:
         resp = client.post(url, json=payload, headers=headers)
-        resp.raise_for_status()
+        if not resp.is_success:
+            raise ValueError(f"HTTP {resp.status_code}: {resp.text[:400]}")
     return resp.content
 
 
