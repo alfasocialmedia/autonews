@@ -229,7 +229,20 @@ def process_rss_with_groq(
 
     prompt = f"""{base_prompt}
 
-Título original de referencia: {title}
+╔══════════════════════════════════════════════════════╗
+║  REGLA #1 — TÍTULO VIRAL  (leer antes que todo)     ║
+╚══════════════════════════════════════════════════════╝
+El título es lo más importante de la nota. Debe tener ENTRE 80 Y 110 CARACTERES.
+Inspirate en Infobae, Clarín y La Nación. Ejemplos reales del estilo requerido:
+• "Un comerciante brasileño cruzó la frontera, comparó los precios y no podía creer lo que veía"
+• "Reveló que los precios en Argentina son 50% más baratos que en Brasil y el video se hizo viral"
+• "¿Por qué cientos de brasileños cruzan la frontera solo para hacer las compras en Argentina?"
+• "\"En Brasil vale el doble\": el comerciante que viajó y volvió con el changuito desbordado"
+• "Fue a inaugurar una obra pública, encontró irregularidades graves y el Gobierno ya tiene que responder"
+• "Confirmaron los 40 despidos en la planta de Córdoba: los trabajadores cortaron la ruta principal"
+CONTÁ los caracteres antes de responder. Si tu título tiene menos de 75 caracteres, ES INCORRECTO — rehacelo más largo y específico. Sin punto al final. Sin comillas que envuelvan todo el título.
+
+Título original (solo referencia, NO copies): {title}
 
 Contenido del artículo:
 {article_text[:8000]}
@@ -258,19 +271,10 @@ PROHIBIDO:
 {_CATEGORY_GUIDE}
 Categorías disponibles: {cat_list}
 
-TÍTULO LLAMATIVO — OBLIGATORIO:
-El título debe generar el impulso inmediato de hacer clic. Entre 70 y 90 caracteres. Usá UNA de estas fórmulas:
-1. Verbo de impacto + dato concreto: "Confirmaron 40 despidos en la empresa líder del sector y hay más en camino"
-2. Cifra + consecuencia directa: "Sube 20% la tarifa de luz: así impacta en el bolsillo de los vecinos"
-3. Pregunta que genera curiosidad o tensión: "¿Por qué el Gobierno frenó el proyecto más esperado del año y qué viene ahora?"
-4. Revelación o secreto: "El dato que nadie contó sobre el cierre de la planta que dejó sin trabajo a 300 personas"
-5. Conflicto o giro inesperado: "Iban a inaugurar la obra más importante de la provincia y encontraron esto debajo del suelo"
-NUNCA un título plano o descriptivo. NUNCA menos de 60 caracteres. Sin puntos al final. Sin comillas en el título.
-
 IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
-  "title": "Título IMPACTANTE entre 70 y 90 caracteres usando una de las fórmulas indicadas. Generá el impulso de hacer clic. NUNCA menos de 60 caracteres.",
+  "title": "Título VIRAL entre 80 y 110 caracteres, estilo Infobae/Clarín. NUNCA menos de 75 caracteres. Con nombre, cifra o detalle concreto.",
   "content": "HTML periodístico. {para_range} párrafos {content_hint}. Cada <p> máximo 2 oraciones. Mínimo {min_words} palabras. Sin listas.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
   "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder. Genera curiosidad e incluye la palabra clave.",
@@ -337,21 +341,26 @@ def process_email_with_groq(
 
     prompt = f"""{base_prompt}
 
+╔══════════════════════════════════════════════════════╗
+║  REGLA #1 — TÍTULO VIRAL  (leer antes que todo)     ║
+╚══════════════════════════════════════════════════════╝
+El título es lo más importante de la nota. Debe tener ENTRE 80 Y 110 CARACTERES.
+Inspirate en Infobae, Clarín y La Nación. Ejemplos reales del estilo requerido:
+• "Un comerciante brasileño cruzó la frontera, comparó los precios y no podía creer lo que veía"
+• "Reveló que los precios en Argentina son 50% más baratos que en Brasil y el video se hizo viral"
+• "¿Por qué cientos de brasileños cruzan la frontera solo para hacer las compras en Argentina?"
+• "Confirmaron los 40 despidos en la planta de Córdoba: los trabajadores cortaron la ruta principal"
+• "Fue a inaugurar una obra pública, encontró irregularidades graves y el Gobierno ya tiene que responder"
+• "Sube 20% la tarifa de luz en todo el país: cuánto vas a pagar de más a partir del mes que viene"
+El hecho principal del contenido es: "{first_body_line[:80]}" — reescribilo con ese estilo viral.
+CONTÁ los caracteres antes de responder. Si tu título tiene menos de 75 caracteres, ES INCORRECTO — rehacelo más largo. NUNCA copies el asunto del correo. Sin punto al final.
+
 CONTENIDO A TRANSFORMAR EN NOTICIA:
 {body[:8000]}
 
 INSTRUCCIONES DE REDACCIÓN:
 
 Sos un periodista argentino con 20 años de experiencia en diarios nacionales. Tu tarea es REESCRIBIR completamente el contenido anterior como una noticia periodística. NO copies frases textuales — reformulá cada idea con voz propia, activa y directa. El texto debe sonar 100% humano.
-
-TÍTULO LLAMATIVO — OBLIGATORIO:
-El título debe generar el impulso inmediato de hacer clic. Entre 70 y 90 caracteres. Transformá el hecho central usando UNA de estas fórmulas:
-1. Verbo de impacto + dato concreto: "Confirmaron 40 despidos en la empresa líder del sector y hay más en camino"
-2. Cifra + consecuencia directa: "Sube 20% la tarifa de luz: así impacta en el bolsillo de los vecinos"
-3. Pregunta que genera curiosidad o tensión: "¿Por qué el Gobierno frenó el proyecto más esperado del año y qué viene ahora?"
-4. Revelación o secreto: "El dato que nadie contó sobre el cierre de la planta que dejó sin trabajo a 300 personas"
-5. Conflicto o giro inesperado: "Iban a inaugurar la obra más importante de la provincia y encontraron esto debajo del suelo"
-Si el contenido empieza con "{first_body_line[:60]}", esa es la noticia — reescribila con gancho. NUNCA copies el asunto del correo. NUNCA título plano o descriptivo. NUNCA menos de 60 caracteres. Sin puntos al final.
 
 LEGIBILIDAD: oraciones de entre 10 y 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas para ritmo natural. Apuntás a 95% de legibilidad Flesch.
 
@@ -375,7 +384,7 @@ Categorías disponibles: {cat_list}
 IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
-  "title": "Título IMPACTANTE entre 70 y 90 caracteres usando una de las fórmulas indicadas. Generá el impulso de hacer clic. NUNCA menos de 60 caracteres.",
+  "title": "Título VIRAL entre 80 y 110 caracteres, estilo Infobae/Clarín. NUNCA menos de 75 caracteres. Con nombre, cifra o detalle concreto.",
   "content": "Noticia reescrita en HTML. {para_range} párrafos <p>. Mínimo {min_words} palabras. <h2> para secciones del original si las hay.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
   "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras. Genera curiosidad e incluye la palabra clave.",

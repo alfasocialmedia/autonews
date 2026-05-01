@@ -785,6 +785,13 @@ def process_rss_feeds():
                             # og:image del artículo siempre es mejor que el thumbnail del RSS
                             if scraped_img:
                                 image_url = scraped_img
+                        elif item["link"]:
+                            # Aunque el contenido sea completo, la og:image del artículo
+                            # siempre es de mayor resolución que el thumbnail del feed RSS
+                            _, scraped_img = scrape_full_article(item["link"])
+                            if scraped_img:
+                                image_url = scraped_img
+                                log.info("  🖼 og:image scrapeada: %s", scraped_img[:80])
 
                         ai_result = process_rss_with_groq(
                             groq_key,
