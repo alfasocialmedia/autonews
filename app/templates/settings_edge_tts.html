@@ -3,20 +3,20 @@
 
 {% block content %}
 <div class="page-header">
-  <h2 class="page-title"><i class="bi bi-soundwave me-2 text-primary"></i>Edge TTS — Audio IA gratuito</h2>
-  <span class="text-muted small">Voces neurales de Microsoft Edge — sin API key, sin límites, en español</span>
+  <h2 class="page-title"><i class="bi bi-soundwave me-2 text-primary"></i>Google TTS — Audio gratuito</h2>
+  <span class="text-muted small">Text-to-speech de Google — sin API key, sin límites, funciona desde cualquier servidor</span>
 </div>
 
 {% with messages = request.query_params %}
 {% if messages.get('msg') %}
 <div class="alert alert-success alert-dismissible fade show">
   <i class="bi bi-check-circle-fill me-2"></i>{{ messages.get('msg') | replace('+', ' ') }}
-  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
 </div>
 {% elif messages.get('err') %}
 <div class="alert alert-danger alert-dismissible fade show">
   <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ messages.get('err') | replace('+', ' ') }}
-  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
 </div>
 {% endif %}
 {% endwith %}
@@ -32,15 +32,15 @@
 
           <!-- Voz -->
           <div class="mb-3">
-            <label class="form-label fw-semibold">Voz</label>
-            <select name="voice" class="form-select">
+            <label class="form-label fw-semibold" for="voiceSelect">Acento / Variante</label>
+            <select name="voice" id="voiceSelect" class="form-select" title="Seleccioná el acento de español">
               {% for v in voices %}
               <option value="{{ v.name }}" {% if cfg and cfg.voice == v.name %}selected{% elif not cfg and v.name == default_voice %}selected{% endif %}>
                 {{ v.display }}
               </option>
               {% endfor %}
             </select>
-            <div class="form-text">Todas son voces neurales de alta calidad. Las voces argentinas suenan más naturales para Argentina.</div>
+            <div class="form-text">Variante regional del español. "Argentina" suena más natural para audiencias locales.</div>
           </div>
 
           <!-- Habilitado -->
@@ -49,7 +49,7 @@
               <input class="form-check-input" type="checkbox" name="enabled" id="enabledSwitch"
                 {% if cfg and cfg.enabled %}checked{% endif %}>
               <label class="form-check-label fw-semibold" for="enabledSwitch">
-                Activar Edge TTS como generador de audio
+                Activar Google TTS como generador de audio
               </label>
             </div>
             <div class="form-text">Si ElevenLabs está desactivado o falla, se usa Edge TTS automáticamente.</div>
@@ -102,10 +102,10 @@
     <!-- Info -->
     <div class="card border-0 bg-primary-subtle">
       <div class="card-body">
-        <h6 class="fw-semibold"><i class="bi bi-lightbulb me-2 text-primary"></i>Ventajas de Edge TTS</h6>
+        <h6 class="fw-semibold"><i class="bi bi-lightbulb me-2 text-primary"></i>Ventajas de Google TTS</h6>
         <ul class="small mb-0 ps-3">
-          <li><strong>100% gratuito</strong> — sin API key, sin límite de caracteres</li>
-          <li>Voces <strong>neurales de Microsoft</strong> — alta calidad natural</li>
+          <li><strong>100% gratuito</strong> — sin API key, sin cuenta requerida</li>
+          <li>Funciona desde cualquier <strong>servidor o VPS</strong></li>
           <li>Múltiples acentos en español: Argentina, España, México, Colombia</li>
           <li>Funciona como <strong>fallback</strong> si ElevenLabs falla o está desactivado</li>
           <li>Si ambos están activos, ElevenLabs tiene prioridad</li>
