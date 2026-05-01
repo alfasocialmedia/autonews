@@ -90,7 +90,7 @@ def _migrate_edge_tts():
             conn.execute(text("""
                 CREATE TABLE edge_tts_settings (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    voice VARCHAR(100) DEFAULT 'es-AR-TomasNeural',
+                    voice VARCHAR(100) DEFAULT 'com.ar',
                     enabled BOOLEAN DEFAULT 0,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME

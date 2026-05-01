@@ -196,7 +196,7 @@ class EdgeTTSSettings(Base):
     __tablename__ = "edge_tts_settings"
 
     id = Column(Integer, primary_key=True, index=True)
-    voice = Column(String(100), default="es-AR-TomasNeural")
+    voice = Column(String(100), default="com.ar")
     enabled = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

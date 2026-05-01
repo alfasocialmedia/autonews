@@ -592,7 +592,7 @@ async def edge_tts_settings(request: Request, db: Session = Depends(get_db)):
 @router.post("/edge-tts/save")
 async def save_edge_tts(
     request: Request,
-    voice: str = Form("es-AR-TomasNeural"),
+    voice: str = Form("com.ar"),
     enabled: str = Form(""),
     db: Session = Depends(get_db),
 ):
@@ -605,7 +605,7 @@ async def save_edge_tts(
         cfg.voice = voice.strip() or cfg.voice
         cfg.enabled = is_enabled
     else:
-        cfg = EdgeTTSSettings(voice=voice.strip() or "es-AR-TomasNeural", enabled=is_enabled)
+        cfg = EdgeTTSSettings(voice=voice.strip() or "com.ar", enabled=is_enabled)
         db.add(cfg)
     db.commit()
     return RedirectResponse("/settings/edge-tts?msg=Configuración+guardada", status_code=302)
