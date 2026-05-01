@@ -619,8 +619,8 @@ async def test_edge_tts_voice(request: Request, db: Session = Depends(get_db)):
     voice = cfg.voice if cfg else "es-AR-TomasNeural"
     try:
         import base64
-        from app.services.edge_tts_service import generate_audio
-        audio = generate_audio(
+        from app.services.edge_tts_service import generate_audio_async
+        audio = await generate_audio_async(
             "Hola, esta es una prueba de voz con Edge TTS de Microsoft. Si escuchás esto, la voz está funcionando correctamente.",
             voice,
         )

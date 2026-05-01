@@ -21,7 +21,8 @@ SPANISH_VOICES = [
 DEFAULT_VOICE = "es-AR-TomasNeural"
 
 
-async def _generate_async(text: str, voice: str) -> bytes:
+async def generate_audio_async(text: str, voice: str = DEFAULT_VOICE) -> bytes:
+    """Versión async — usar en contextos async (FastAPI routes)."""
     import edge_tts
     communicate = edge_tts.Communicate(text, voice)
     audio = b""
@@ -32,8 +33,5 @@ async def _generate_async(text: str, voice: str) -> bytes:
 
 
 def generate_audio(text: str, voice: str = DEFAULT_VOICE) -> bytes:
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(_generate_async(text, voice))
-    finally:
-        loop.close()
+    """Versión sync — usar en hilos de fondo (worker). No llamar desde async."""
+    return asyncio.run(generate_audio_async(text, voice))
