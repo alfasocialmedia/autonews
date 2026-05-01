@@ -88,7 +88,7 @@
             <div class="form-text">Si está desactivado, las notas se publican normalmente sin audio.</div>
           </div>
 
-          <div class="d-flex gap-2">
+          <div class="d-flex gap-2 flex-wrap">
             <button type="submit" class="btn btn-primary">
               <i class="bi bi-save me-1"></i>Guardar
             </button>
@@ -96,8 +96,17 @@
             <button type="button" class="btn btn-outline-info" id="testEl">
               <i class="bi bi-lightning-charge me-1"></i>Probar conexión
             </button>
+            <button type="button" class="btn btn-outline-success" id="testVoiceBtn">
+              <i class="bi bi-play-circle me-1"></i>Probar voz
+            </button>
             {% endif %}
           </div>
+          {% if cfg %}
+          <div id="testVoicePlayer" class="mt-3 d-none">
+            <audio id="voiceAudio" controls class="w-100"></audio>
+            <p class="small text-muted mt-1 mb-0" id="testVoiceInfo"></p>
+          </div>
+          {% endif %}
         </form>
       </div>
     </div>
@@ -135,10 +144,25 @@
       </div>
     </div>
 
+    <!-- Mis voces en ElevenLabs -->
+    {% if cfg %}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-transparent border-0 pt-3 d-flex align-items-center justify-content-between">
+        <h6 class="mb-0"><i class="bi bi-person-lines-fill me-2"></i>Mis voces en ElevenLabs</h6>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="loadVoicesBtn">
+          <i class="bi bi-arrow-clockwise me-1"></i>Cargar
+        </button>
+      </div>
+      <div class="card-body p-0" id="voicesContainer">
+        <p class="small text-muted px-3 py-2 mb-0">Hacé clic en "Cargar" para ver las voces disponibles en tu cuenta.</p>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Voces de referencia -->
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-transparent border-0 pt-3">
-        <h6 class="mb-0"><i class="bi bi-person-lines-fill me-2"></i>Voces premade de referencia</h6>
+        <h6 class="mb-0"><i class="bi bi-collection-play me-2"></i>Voces premade de referencia</h6>
       </div>
       <div class="card-body p-0">
         <table class="table table-sm table-hover mb-0 small">
@@ -146,12 +170,12 @@
             <tr><th>Nombre</th><th>Voice ID</th></tr>
           </thead>
           <tbody>
-            <tr><td>Adam <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">ES</span></td><td class="font-monospace" style="font-size:.75rem"><button class="btn btn-link btn-sm p-0 copy-voice" data-id="pNInz6obpgDQGcFmaJgB">pNInz6obpgDQGcFmaJgB</button></td></tr>
-            <tr><td>Daniel <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">ES</span></td><td class="font-monospace" style="font-size:.75rem"><button class="btn btn-link btn-sm p-0 copy-voice" data-id="onwK4e9ZLuTAKqWW03F9">onwK4e9ZLuTAKqWW03F9</button></td></tr>
-            <tr><td>Charlotte <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">ES</span></td><td class="font-monospace" style="font-size:.75rem"><button class="btn btn-link btn-sm p-0 copy-voice" data-id="XB0fDUnXU5powFXDhCwa">XB0fDUnXU5powFXDhCwa</button></td></tr>
-            <tr><td>Rachel</td><td class="font-monospace" style="font-size:.75rem"><button class="btn btn-link btn-sm p-0 copy-voice" data-id="21m00Tcm4TlvDq8ikWAM">21m00Tcm4TlvDq8ikWAM</button></td></tr>
-            <tr><td>Josh</td><td class="font-monospace" style="font-size:.75rem"><button class="btn btn-link btn-sm p-0 copy-voice" data-id="TxGEqnHWrfWFTfGW9XjX">TxGEqnHWrfWFTfGW9XjX</button></td></tr>
-            <tr><td>Arnold</td><td class="font-monospace" style="font-size:.75rem"><button class="btn btn-link btn-sm p-0 copy-voice" data-id="VR6AewLTigWG4xSOukaG">VR6AewLTigWG4xSOukaG</button></td></tr>
+            <tr><td>Adam <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">ES</span></td><td class="font-monospace voice-id-cell"><button type="button" class="btn btn-link btn-sm p-0 copy-voice" data-id="pNInz6obpgDQGcFmaJgB">pNInz6obpgDQGcFmaJgB</button></td></tr>
+            <tr><td>Daniel <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">ES</span></td><td class="font-monospace voice-id-cell"><button type="button" class="btn btn-link btn-sm p-0 copy-voice" data-id="onwK4e9ZLuTAKqWW03F9">onwK4e9ZLuTAKqWW03F9</button></td></tr>
+            <tr><td>Charlotte <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">ES</span></td><td class="font-monospace voice-id-cell"><button type="button" class="btn btn-link btn-sm p-0 copy-voice" data-id="XB0fDUnXU5powFXDhCwa">XB0fDUnXU5powFXDhCwa</button></td></tr>
+            <tr><td>Rachel</td><td class="font-monospace voice-id-cell"><button type="button" class="btn btn-link btn-sm p-0 copy-voice" data-id="21m00Tcm4TlvDq8ikWAM">21m00Tcm4TlvDq8ikWAM</button></td></tr>
+            <tr><td>Josh</td><td class="font-monospace voice-id-cell"><button type="button" class="btn btn-link btn-sm p-0 copy-voice" data-id="TxGEqnHWrfWFTfGW9XjX">TxGEqnHWrfWFTfGW9XjX</button></td></tr>
+            <tr><td>Arnold</td><td class="font-monospace voice-id-cell"><button type="button" class="btn btn-link btn-sm p-0 copy-voice" data-id="VR6AewLTigWG4xSOukaG">VR6AewLTigWG4xSOukaG</button></td></tr>
           </tbody>
         </table>
         <p class="small text-muted px-3 py-2 mb-0">Clic en el ID para copiarlo al campo Voice ID.</p>
@@ -176,6 +200,7 @@
 {% endblock %}
 
 {% block scripts %}
+<style>.voice-id-cell { font-size: .75rem; }</style>
 <script>
 document.getElementById('toggleKey')?.addEventListener('click', function () {
   const inp = document.getElementById('apiKeyInput');
@@ -200,14 +225,88 @@ document.getElementById('testEl')?.addEventListener('click', async function () {
   this.disabled = false;
 });
 
-document.querySelectorAll('.copy-voice').forEach(btn => {
-  btn.addEventListener('click', function () {
-    const voiceInput = document.querySelector('input[name="voice_id"]');
-    if (voiceInput) {
-      voiceInput.value = this.dataset.id;
-      showToast('Voice ID copiado al campo: ' + this.dataset.id, 'info', 3000);
+document.getElementById('testVoiceBtn')?.addEventListener('click', async function () {
+  const orig = this.innerHTML;
+  const player = document.getElementById('testVoicePlayer');
+  const audio = document.getElementById('voiceAudio');
+  const info = document.getElementById('testVoiceInfo');
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generando audio...';
+  this.disabled = true;
+  player.classList.add('d-none');
+  try {
+    const resp = await fetch('/settings/elevenlabs/test-voice', { method: 'POST' });
+    const data = await resp.json();
+    if (data.success) {
+      const blob = new Blob([Uint8Array.from(atob(data.audio_b64), c => c.charCodeAt(0))], { type: 'audio/mpeg' });
+      audio.src = URL.createObjectURL(blob);
+      info.textContent = 'Voice ID: ' + data.voice_id;
+      player.classList.remove('d-none');
+      audio.play();
+    } else {
+      showToast('Error: ' + data.message, 'danger', 8000);
     }
+  } catch (e) {
+    showToast('Error de red: ' + e.message, 'danger', 5000);
+  } finally {
+    this.innerHTML = orig;
+    this.disabled = false;
+  }
+});
+
+function bindCopyVoice(root) {
+  root.querySelectorAll('.copy-voice').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const voiceInput = document.querySelector('input[name="voice_id"]');
+      if (voiceInput) {
+        voiceInput.value = this.dataset.id;
+        showToast('Voice ID seleccionado: ' + this.dataset.id, 'info', 3000);
+      }
+    });
   });
+}
+bindCopyVoice(document);
+
+document.getElementById('loadVoicesBtn')?.addEventListener('click', async function () {
+  const container = document.getElementById('voicesContainer');
+  const btn = this;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Cargando...';
+  container.innerHTML = '<p class="small text-muted px-3 py-2 mb-0">Consultando ElevenLabs...</p>';
+  try {
+    const resp = await fetch('/settings/elevenlabs/voices', { method: 'POST' });
+    const data = await resp.json();
+    if (!data.success) {
+      container.innerHTML = `<p class="small text-danger px-3 py-2 mb-0"><i class="bi bi-exclamation-triangle me-1"></i>${data.message || 'Error al cargar voces'}</p>`;
+      return;
+    }
+    if (!data.voices.length) {
+      container.innerHTML = '<p class="small text-muted px-3 py-2 mb-0">No se encontraron voces en tu cuenta.</p>';
+      return;
+    }
+    const rows = data.voices.map(v => {
+      const isActive = v.voice_id === data.current_voice_id;
+      const lang = v.language ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${v.language}</span>` : '';
+      const cat = v.category === 'cloned' ? '<span class="badge bg-warning-subtle text-warning border border-warning-subtle ms-1">clonada</span>' : '';
+      const activeTag = isActive ? '<span class="badge bg-success ms-1">activa</span>' : '';
+      return `<tr>
+        <td>${v.name}${lang}${cat}${activeTag}</td>
+        <td class="font-monospace voice-id-cell">
+          <button type="button" class="btn btn-link btn-sm p-0 copy-voice" data-id="${v.voice_id}">${v.voice_id}</button>
+        </td>
+      </tr>`;
+    }).join('');
+    container.innerHTML = `<table class="table table-sm table-hover mb-0 small">
+      <thead class="table-light"><tr><th>Nombre</th><th>Voice ID</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p class="small text-muted px-3 py-2 mb-0">${data.voices.length} voces en tu cuenta. Clic en el ID para seleccionar.</p>`;
+    bindCopyVoice(container);
+  } catch (e) {
+    container.innerHTML = `<p class="small text-danger px-3 py-2 mb-0">Error de red: ${e.message}</p>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Cargar';
+  }
 });
 </script>
 {% endblock %}

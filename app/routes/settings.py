@@ -532,3 +532,42 @@ async def test_elevenlabs(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"success": ok, "message": msg})
     except Exception as exc:
         return JSONResponse({"success": False, "message": str(exc)})
+
+
+@router.post("/elevenlabs/voices")
+async def list_elevenlabs_voices(request: Request, db: Session = Depends(get_db)):
+    if not _require_auth(request, db):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    cfg = db.query(ElevenLabsSettings).first()
+    if not cfg:
+        return JSONResponse({"success": False, "voices": [], "message": "Sin configuración"})
+    try:
+        from app.services.elevenlabs_service import list_voices
+        key = decrypt_value(cfg.encrypted_api_key)
+        voices = list_voices(key)
+        return JSONResponse({"success": True, "voices": voices, "current_voice_id": cfg.voice_id})
+    except Exception as exc:
+        return JSONResponse({"success": False, "voices": [], "message": str(exc)})
+
+
+@router.post("/elevenlabs/test-voice")
+async def test_voice_audio(request: Request, db: Session = Depends(get_db)):
+    if not _require_auth(request, db):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    cfg = db.query(ElevenLabsSettings).first()
+    if not cfg:
+        return JSONResponse({"success": False, "message": "Sin configuración de ElevenLabs"})
+    try:
+        import base64
+        from app.services.elevenlabs_service import generate_audio
+        key = decrypt_value(cfg.encrypted_api_key)
+        audio = generate_audio(
+            "Hola, esta es una prueba de voz con ElevenLabs. Si escuchás esto, la voz está funcionando correctamente.",
+            key,
+            cfg.voice_id,
+            cfg.model_id,
+        )
+        audio_b64 = base64.b64encode(audio).decode()
+        return JSONResponse({"success": True, "audio_b64": audio_b64, "voice_id": cfg.voice_id})
+    except Exception as exc:
+        return JSONResponse({"success": False, "message": str(exc)})

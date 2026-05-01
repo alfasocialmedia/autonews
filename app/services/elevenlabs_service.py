@@ -62,3 +62,25 @@ def test_connection(api_key: str) -> tuple[bool, str]:
         return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
     except Exception as exc:
         return False, str(exc)
+
+
+def list_voices(api_key: str) -> list[dict]:
+    """Devuelve la lista de voces disponibles en la cuenta: [{voice_id, name, category, labels}]."""
+    with httpx.Client(timeout=15) as client:
+        resp = client.get(
+            f"{_API_BASE}/voices",
+            headers={"xi-api-key": api_key},
+        )
+        resp.raise_for_status()
+    voices = resp.json().get("voices", [])
+    return [
+        {
+            "voice_id": v["voice_id"],
+            "name": v["name"],
+            "category": v.get("category", ""),
+            "language": v.get("labels", {}).get("language", ""),
+            "accent": v.get("labels", {}).get("accent", ""),
+            "gender": v.get("labels", {}).get("gender", ""),
+        }
+        for v in voices
+    ]
