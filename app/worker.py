@@ -668,6 +668,8 @@ def process_rss_feeds():
     """Revisa los feeds RSS activos y publica artículos nuevos según su configuración."""
     from datetime import timedelta, timezone as tz
 
+    TZ_AR = tz(timedelta(hours=-3))  # Argentina UTC-3, sin horario de verano
+
     log.info("▶ Revisando feeds RSS")
     db = SessionLocal()
     try:
@@ -684,7 +686,7 @@ def process_rss_feeds():
 
         groq_key = decrypt_value(groq_cfg.encrypted_api_key)
         wp_categories = _fetch_wp_category_names(wp_sites)
-        now = datetime.now(tz.utc)
+        now = datetime.now(TZ_AR)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
         for feed in feeds:
