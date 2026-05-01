@@ -82,6 +82,22 @@ def _migrate_elevenlabs():
             """))
 
 
+def _migrate_edge_tts():
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        if "edge_tts_settings" not in inspector.get_table_names():
+            conn.execute(text("""
+                CREATE TABLE edge_tts_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    voice VARCHAR(100) DEFAULT 'es-AR-TomasNeural',
+                    enabled BOOLEAN DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME
+                )
+            """))
+
+
 def _migrate_columns():
     from sqlalchemy import inspect, text
     inspector = inspect(engine)
@@ -116,6 +132,7 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     _migrate_whatsapp()
     _migrate_elevenlabs()
+    _migrate_edge_tts()
     _migrate_columns()
     _create_default_admin()
     from app.worker import start_background

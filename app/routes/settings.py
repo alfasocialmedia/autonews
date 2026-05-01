@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.crypto import decrypt_value, encrypt_value, mask_value
 from app.database import get_db
-from app.models import CategoryMapping, ElevenLabsSettings, EmailAccount, GoogleDriveSettings, GroqSettings, WordPressSettings
+from app.models import CategoryMapping, EdgeTTSSettings, ElevenLabsSettings, EmailAccount, GoogleDriveSettings, GroqSettings, WordPressSettings
 from app.services.email_service import test_imap_connection
 from app.services.groq_service import PROVIDERS, test_groq_connection
 from app.services.wordpress_service import get_categories, test_wordpress_connection
@@ -569,5 +569,62 @@ async def test_voice_audio(request: Request, db: Session = Depends(get_db)):
         )
         audio_b64 = base64.b64encode(audio).decode()
         return JSONResponse({"success": True, "audio_b64": audio_b64, "voice_id": cfg.voice_id})
+    except Exception as exc:
+        return JSONResponse({"success": False, "message": str(exc)})
+
+
+# ── Edge TTS ────────────────────────────────────────────────────────────────
+
+@router.get("/edge-tts", response_class=HTMLResponse)
+async def edge_tts_settings(request: Request, db: Session = Depends(get_db)):
+    user = _require_auth(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    from app.services.edge_tts_service import SPANISH_VOICES, DEFAULT_VOICE
+    cfg = db.query(EdgeTTSSettings).first()
+    return templates.TemplateResponse(
+        "settings_edge_tts.html",
+        {"request": request, "user": user, "cfg": cfg,
+         "voices": SPANISH_VOICES, "default_voice": DEFAULT_VOICE},
+    )
+
+
+@router.post("/edge-tts/save")
+async def save_edge_tts(
+    request: Request,
+    voice: str = Form("es-AR-TomasNeural"),
+    enabled: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = _require_auth(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    is_enabled = enabled.lower() in ("on", "true", "1", "yes")
+    cfg = db.query(EdgeTTSSettings).first()
+    if cfg:
+        cfg.voice = voice.strip() or cfg.voice
+        cfg.enabled = is_enabled
+    else:
+        cfg = EdgeTTSSettings(voice=voice.strip() or "es-AR-TomasNeural", enabled=is_enabled)
+        db.add(cfg)
+    db.commit()
+    return RedirectResponse("/settings/edge-tts?msg=Configuración+guardada", status_code=302)
+
+
+@router.post("/edge-tts/test-voice")
+async def test_edge_tts_voice(request: Request, db: Session = Depends(get_db)):
+    if not _require_auth(request, db):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    cfg = db.query(EdgeTTSSettings).first()
+    voice = cfg.voice if cfg else "es-AR-TomasNeural"
+    try:
+        import base64
+        from app.services.edge_tts_service import generate_audio
+        audio = generate_audio(
+            "Hola, esta es una prueba de voz con Edge TTS de Microsoft. Si escuchás esto, la voz está funcionando correctamente.",
+            voice,
+        )
+        audio_b64 = base64.b64encode(audio).decode()
+        return JSONResponse({"success": True, "audio_b64": audio_b64, "voice": voice})
     except Exception as exc:
         return JSONResponse({"success": False, "message": str(exc)})

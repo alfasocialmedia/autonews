@@ -494,22 +494,37 @@ def _resolve_image_url(raw_url: str, gdrive_api_key: str | None) -> str | None:
 
 
 def _generate_tts_audio(db, ai_result: dict) -> bytes | None:
-    """Genera audio MP3 con ElevenLabs si está configurado y activo. Devuelve bytes o None."""
-    from app.services.elevenlabs_service import generate_audio, strip_html
+    """Genera audio MP3 con ElevenLabs (prioridad) o Edge TTS (fallback gratuito). Devuelve bytes o None."""
+    from app.services.elevenlabs_service import strip_html
+    plain_text = strip_html(ai_result.get("content", ""))
+    if not plain_text:
+        return None
+
+    # Intentar ElevenLabs primero
     try:
         el_cfg = db.query(ElevenLabsSettings).filter(ElevenLabsSettings.enabled == True).first()
-        if not el_cfg:
-            return None
-        el_key = decrypt_value(el_cfg.encrypted_api_key)
-        plain_text = strip_html(ai_result.get("content", ""))
-        if not plain_text:
-            return None
-        audio = generate_audio(plain_text, el_key, el_cfg.voice_id, el_cfg.model_id)
-        log.info("🔊 Audio TTS generado: %d bytes", len(audio))
-        return audio
+        if el_cfg:
+            from app.services.elevenlabs_service import generate_audio as el_generate
+            el_key = decrypt_value(el_cfg.encrypted_api_key)
+            audio = el_generate(plain_text, el_key, el_cfg.voice_id, el_cfg.model_id)
+            log.info("🔊 Audio ElevenLabs generado: %d bytes", len(audio))
+            return audio
     except Exception as exc:
-        log.warning("ElevenLabs TTS error (artículo se publicará sin audio): %s", exc)
-        return None
+        log.warning("ElevenLabs TTS error, intentando Edge TTS: %s", exc)
+
+    # Fallback: Edge TTS gratuito
+    try:
+        from app.models import EdgeTTSSettings
+        from app.services.edge_tts_service import generate_audio as edge_generate
+        edge_cfg = db.query(EdgeTTSSettings).filter(EdgeTTSSettings.enabled == True).first()
+        if edge_cfg:
+            audio = edge_generate(plain_text, edge_cfg.voice)
+            log.info("🔊 Audio Edge TTS generado: %d bytes", len(audio))
+            return audio
+    except Exception as exc:
+        log.warning("Edge TTS error (artículo se publicará sin audio): %s", exc)
+
+    return None
 
 
 def _prepend_audio(
