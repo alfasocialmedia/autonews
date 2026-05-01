@@ -173,10 +173,23 @@ def scrape_full_article(url: str) -> tuple[str, str | None]:
 
 def fetch_rss_items(feed_url: str) -> list[dict]:
     """Descarga y parsea un feed RSS. Devuelve lista de items normalizados."""
-    feed = feedparser.parse(feed_url, agent="AutoNews/1.0 (+https://autonews.local)")
+    # Descargar con httpx (timeout, SSL, redirects) y luego parsear el contenido.
+    # feedparser.parse(url) usa urllib sin timeout y puede fallar con certificados en VPS.
+    try:
+        resp = httpx.get(
+            feed_url,
+            timeout=15,
+            follow_redirects=True,
+            headers=_SCRAPE_HEADERS,
+        )
+        resp.raise_for_status()
+    except Exception as exc:
+        raise ValueError(f"No se pudo descargar el feed: {exc}") from exc
+
+    feed = feedparser.parse(resp.content)  # bytes → mejor detección de encoding
 
     if feed.bozo and not feed.entries:
-        raise ValueError(f"Feed invalido o inaccesible: {feed.bozo_exception}")
+        raise ValueError(f"Feed inválido o sin artículos: {feed.bozo_exception}")
 
     items = []
     for entry in feed.entries:

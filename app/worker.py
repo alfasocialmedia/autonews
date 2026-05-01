@@ -668,11 +668,6 @@ def process_rss_feeds():
     """Revisa los feeds RSS activos y publica artículos nuevos según su configuración."""
     from datetime import timedelta, timezone as tz
 
-    # Argentina = UTC-3, sin horario de verano
-    TZ_AR = tz(timedelta(hours=-3))
-    # No procesar ningún ítem publicado antes de esta fecha
-    RSS_ABSOLUTE_CUTOFF = datetime(2026, 4, 30, tzinfo=TZ_AR)
-
     log.info("▶ Revisando feeds RSS")
     db = SessionLocal()
     try:
@@ -680,6 +675,7 @@ def process_rss_feeds():
         wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).all()
 
         if not groq_cfg or not wp_sites:
+            log.warning("RSS: Groq o WordPress no configurados/activos — saltando feeds")
             return
 
         feeds = db.query(RssFeed).filter(RssFeed.is_active == True).all()
@@ -688,7 +684,7 @@ def process_rss_feeds():
 
         groq_key = decrypt_value(groq_cfg.encrypted_api_key)
         wp_categories = _fetch_wp_category_names(wp_sites)
-        now = datetime.now(TZ_AR)
+        now = datetime.now(tz.utc)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
         for feed in feeds:
@@ -710,15 +706,11 @@ def process_rss_feeds():
                 ).count()
 
                 # Cutoff: solo ítems publicados después del último chequeo.
-                # Para feeds nuevos (sin historial), usar las últimas 24h.
+                # Para feeds nuevos (sin historial), usar las últimas 48h.
                 prev_checked = feed.last_checked_at
                 if prev_checked and prev_checked.tzinfo is None:
                     prev_checked = prev_checked.replace(tzinfo=tz.utc)
-                # Nunca retroceder antes del 30/04/2026 (fecha de activación del sistema)
-                if prev_checked:
-                    cutoff = max(prev_checked, RSS_ABSOLUTE_CUTOFF)
-                else:
-                    cutoff = RSS_ABSOLUTE_CUTOFF
+                cutoff = prev_checked if prev_checked else (now - timedelta(hours=48))
 
                 feed.last_checked_at = now
                 db.commit()
