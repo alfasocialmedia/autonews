@@ -88,7 +88,20 @@ _SCRAPE_HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Cache-Control": "max-age=0",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
     "DNT": "1",
+}
+
+_RSS_HEADERS = {
+    **_SCRAPE_HEADERS,
+    "Accept": "application/rss+xml,application/atom+xml,application/xml;q=0.9,text/xml;q=0.8,*/*;q=0.7",
 }
 
 _JSONLD_ARTICLE_TYPES = {"NewsArticle", "Article", "ReportageNewsArticle", "BlogPosting"}
@@ -171,20 +184,37 @@ def scrape_full_article(url: str) -> tuple[str, str | None]:
     return "\n".join(lines)[:12000], og_image
 
 
-def fetch_rss_items(feed_url: str) -> list[dict]:
-    """Descarga y parsea un feed RSS. Devuelve lista de items normalizados."""
-    # Descargar con httpx (timeout, SSL, redirects) y luego parsear el contenido.
-    # feedparser.parse(url) usa urllib sin timeout y puede fallar con certificados en VPS.
+def _download_feed(feed_url: str):
+    """Descarga y parsea un feed RSS con múltiples estrategias ante bloqueos."""
     try:
         resp = httpx.get(
             feed_url,
             timeout=15,
             follow_redirects=True,
-            headers=_SCRAPE_HEADERS,
+            headers=_RSS_HEADERS,
+            verify=False,
         )
-        resp.raise_for_status()
+        if resp.status_code != 403:
+            resp.raise_for_status()
+            return feedparser.parse(resp.content)
+    except httpx.HTTPStatusError:
+        pass
     except Exception as exc:
         raise ValueError(f"No se pudo descargar el feed: {exc}") from exc
+
+    # Fallback: feedparser con su propio User-Agent (algunos sitios lo aceptan)
+    feed = feedparser.parse(feed_url)
+    if feed.entries:
+        return feed
+
+    raise ValueError(f"No se pudo descargar el feed: 403 Forbidden para {feed_url}")
+
+
+def fetch_rss_items(feed_url: str) -> list[dict]:
+    """Descarga y parsea un feed RSS. Devuelve lista de items normalizados."""
+    # Descargar con httpx (timeout, SSL, redirects) y luego parsear el contenido.
+    # feedparser.parse(url) usa urllib sin timeout y puede fallar con certificados en VPS.
+    feed = _download_feed(feed_url)
 
     feed = feedparser.parse(resp.content)  # bytes → mejor detección de encoding
 
