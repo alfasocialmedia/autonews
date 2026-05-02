@@ -515,17 +515,16 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
 
     log.info("WA: IA generó — %s", ai_result.get("title", "")[:80])
 
-    # Difundir a grupos (sin WordPress, con URL original si viene de un link)
-    _broadcast_whatsapp(db, settings, ai_result, media_data, scraped_image_url, source_url)
+    # Difundir a grupos (sin link externo — el cierre usa la URL del sitio WordPress)
+    _broadcast_whatsapp(db, settings, ai_result, media_data, scraped_image_url)
 
 
 def _broadcast_whatsapp(
     db, settings, ai_result: dict,
     img_payload=None,
     fallback_image_url: str | None = None,
-    source_url: str | None = None,
 ):
-    """Envía la noticia completa a los grupos de WA. Sin link de WordPress."""
+    """Envía la noticia completa a los grupos de WA. Cierra con el sitio WordPress."""
     if not settings.broadcast_enabled:
         log.info("WA broadcast: difusión deshabilitada")
         return
@@ -542,16 +541,22 @@ def _broadcast_whatsapp(
     content_html = ai_result.get("content", "")
     summary = ai_result.get("summary", "")
 
-    # Cuerpo: artículo completo en texto plano (sin HTML, sin truncar innecesariamente)
-    if content_html:
-        body = _html_to_plain(content_html, max_chars=3000)
-    else:
-        body = summary
+    # Cuerpo: artículo completo en texto plano
+    body = _html_to_plain(content_html, max_chars=3000) if content_html else summary
 
-    # Formato: *Título* + artículo completo + URL fuente al final (clickeable)
+    # URL del sitio WordPress como cierre (sin link externo a la fuente)
+    site_url = ""
+    try:
+        from app.models import WordPressSettings
+        wp_cfg = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).first()
+        if wp_cfg:
+            site_url = wp_cfg.site_url.rstrip("/")
+    except Exception:
+        pass
+
     msg_text = f"*{title}*\n\n{body}"
-    if source_url:
-        msg_text += f"\n\n🔗 {source_url}"
+    if site_url:
+        msg_text += f"\n\n{site_url}"
 
     log.info("WA broadcast: enviando a %d grupo(s) — %s", len(groups), title[:60])
     for g in groups:
