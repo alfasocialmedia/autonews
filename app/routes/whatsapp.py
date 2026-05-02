@@ -365,9 +365,25 @@ def _process_wa_message(payload: dict):
                 ext = _mt.guess_extension(img_mime) or ".jpg"
                 media_data = (img_bytes, f"wa_image{ext}", img_mime)
                 log.info("WA: imagen descargada (%d bytes, %s)", len(img_bytes), img_mime)
+
+                # OCR/visión: extraer texto de la imagen cuando no hay caption o es muy corto
+                if len(text) < 30:
+                    from app.models import GroqSettings
+                    from app.crypto import decrypt_value
+                    groq_cfg = db.query(GroqSettings).filter(GroqSettings.is_active == True).first()
+                    if groq_cfg:
+                        from app.services.groq_service import extract_image_text
+                        groq_key = decrypt_value(groq_cfg.encrypted_api_key)
+                        ocr = extract_image_text(
+                            groq_key, img_bytes, img_mime,
+                            provider=groq_cfg.provider or "groq",
+                            api_base_url=groq_cfg.api_base_url,
+                        )
+                        if ocr:
+                            text = (text + "\n\n" + ocr).strip() if text else ocr
+                            log.info("WA: OCR extraído (%d chars)", len(ocr))
             else:
                 log.warning("WA: no se pudo descargar la imagen — se continúa sin foto")
-            # Siempre publicar aunque falle la descarga
             if not text:
                 text = "Foto compartida vía WhatsApp"
 
@@ -448,6 +464,7 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, msg: dict):
     if media_data:
         img_payload = media_data  # ya es (bytes, filename, mimetype)
 
+    wp_url = ""
     for wp_cfg in wp_sites:
         try:
             wp_pwd = decrypt_value(wp_cfg.encrypted_app_password)
@@ -502,39 +519,46 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, msg: dict):
             ))
             db.commit()
             log.info("WA: publicado en %s — %s", wp_cfg.name, ai_result.get("title", ""))
-
-            # Difundir a grupos si está habilitado
-            _broadcast_post(db, settings, ai_result, wp_post.get("link", ""), img_payload)
+            if not wp_url:
+                wp_url = wp_post.get("link", "")
 
         except Exception as exc:
             log.error("WA: error publicando en %s: %s", wp_cfg.name, exc)
+
+    # Difundir a grupos siempre (con o sin URL de WordPress)
+    _broadcast_post(db, settings, ai_result, wp_url, img_payload)
 
 
 def _broadcast_post(db, settings, ai_result: dict, wp_url: str, img_payload=None):
     """Envía el artículo publicado a los grupos de WA configurados."""
     if not settings.broadcast_enabled:
+        log.info("WA broadcast: difusión deshabilitada")
         return
 
     groups = db.query(WhatsAppGroup).filter(WhatsAppGroup.enabled == True).all()
     if not groups:
+        log.info("WA broadcast: no hay grupos activos configurados")
         return
 
-    from app.services.whatsapp_service import send_text, send_image
+    from app.services.whatsapp_service import send_text, send_image_base64
 
     title = ai_result.get("title", "")
     summary = ai_result.get("summary", "")
     template = settings.broadcast_template or "*{title}*\n\n{summary}\n\n{url}"
-    text = template.replace("{title}", title).replace("{summary}", summary).replace("{url}", wp_url)
+    text = template.replace("{title}", title).replace("{summary}", summary).replace("{url}", wp_url).strip()
 
+    log.info("WA broadcast: enviando a %d grupo(s) — %s", len(groups), title[:60])
     for g in groups:
-        if img_payload and wp_url:
-            ok = send_image(
+        sent = False
+        if img_payload:
+            img_bytes, _img_name, img_mime = img_payload
+            sent = send_image_base64(
                 settings.evolution_api_url, settings.evolution_api_key,
-                settings.instance_name, g.jid, wp_url, text,
+                settings.instance_name, g.jid, img_bytes, img_mime, text,
             )
-            if not ok:
-                send_text(settings.evolution_api_url, settings.evolution_api_key,
-                          settings.instance_name, g.jid, text)
-        else:
-            send_text(settings.evolution_api_url, settings.evolution_api_key,
-                      settings.instance_name, g.jid, text)
+        if not sent:
+            sent = send_text(
+                settings.evolution_api_url, settings.evolution_api_key,
+                settings.instance_name, g.jid, text,
+            )
+        log.info("WA broadcast → %s (%s): %s", g.name, g.jid, "ok" if sent else "ERROR")

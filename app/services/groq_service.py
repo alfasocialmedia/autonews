@@ -90,6 +90,65 @@ def test_groq_connection(
         return False, str(exc)
 
 
+_VISION_MODELS: dict[str, str] = {
+    "groq": "meta-llama/llama-4-scout-17b-16e-instruct",
+    "google_gemini": "gemini-2.0-flash",
+    "openrouter": "google/gemini-2.0-flash-exp:free",
+    "together": "meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo",
+}
+
+
+def extract_image_text(
+    api_key: str,
+    image_bytes: bytes,
+    mimetype: str = "image/jpeg",
+    provider: str = "groq",
+    api_base_url: str | None = None,
+) -> str:
+    """Extrae texto o descripción de una imagen con visión IA. Devuelve '' si falla."""
+    import base64 as b64lib
+
+    clean_mime = mimetype.split(";")[0].strip()
+    b64 = b64lib.b64encode(image_bytes).decode()
+    image_data_url = f"data:{clean_mime};base64,{b64}"
+
+    vision_model = _VISION_MODELS.get(provider)
+    actual_provider = provider
+    actual_base_url = api_base_url
+    if not vision_model:
+        actual_provider = "groq"
+        actual_base_url = None
+        vision_model = _VISION_MODELS["groq"]
+
+    prompt_text = (
+        "Describí esta imagen en español de forma concisa y directa. "
+        "Si contiene texto (captura de pantalla, imagen de noticia, cartel, documento, tweet), "
+        "transcribí el texto completo y exacto. "
+        "Si no hay texto, describí el acontecimiento o escena principal."
+    )
+
+    try:
+        client = _get_client(api_key, actual_provider, actual_base_url)
+        resp = client.chat.completions.create(
+            model=vision_model,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": image_data_url}},
+                    {"type": "text", "text": prompt_text},
+                ],
+            }],
+            max_tokens=1000,
+            temperature=0.2,
+        )
+        result = resp.choices[0].message.content.strip()
+        log.info("extract_image_text: %d chars (%s/%s)", len(result), actual_provider, vision_model)
+        return result
+    except Exception as exc:
+        log.warning("extract_image_text error (%s/%s): %s", actual_provider, vision_model, exc)
+        return ""
+
+
 def transcribe_audio(api_key: str, audio_bytes: bytes, mimetype: str = "audio/ogg") -> str:
     """Transcribe audio con Groq Whisper (solo funciona con provider=groq). Devuelve '' si falla."""
     import io

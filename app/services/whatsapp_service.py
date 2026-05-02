@@ -147,6 +147,33 @@ def send_text(url: str, api_key: str, instance_name: str, jid: str, text: str) -
         return False
 
 
+def send_image_base64(
+    url: str, api_key: str, instance_name: str,
+    jid: str, image_bytes: bytes, mimetype: str, caption: str = "",
+) -> bool:
+    """Envía una imagen como base64 a un número o grupo de WhatsApp."""
+    import base64 as b64lib
+    try:
+        b64 = b64lib.b64encode(image_bytes).decode()
+        r = requests.post(
+            f"{url}/message/sendMedia/{instance_name}",
+            headers=_headers(api_key),
+            json={
+                "number": jid,
+                "mediatype": "image",
+                "mimetype": mimetype.split(";")[0].strip(),
+                "caption": caption,
+                "media": b64,
+            },
+            timeout=TIMEOUT, verify=VERIFY_SSL,
+        )
+        r.raise_for_status()
+        return True
+    except Exception as exc:
+        log.warning("send_image_base64 to %s error: %s", jid, exc)
+        return False
+
+
 def send_image(
     url: str, api_key: str, instance_name: str,
     jid: str, image_url: str, caption: str = "",
