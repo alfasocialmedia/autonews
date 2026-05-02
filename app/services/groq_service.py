@@ -42,11 +42,11 @@ PROVIDERS: dict[str, dict] = {
         "models": [
             "deepseek/deepseek-chat-v3-0324:free",
             "meta-llama/llama-3.3-70b-instruct:free",
-            "qwen/qwen-2.5-72b-instruct:free",
+            "qwen/qwen3-235b-a22b:free",
             "google/gemini-2.0-flash-exp:free",
             "deepseek/deepseek-chat-v3-0324",
             "meta-llama/llama-3.3-70b-instruct",
-            "qwen/qwen-2.5-72b-instruct",
+            "qwen/qwen3-235b-a22b",
         ],
     },
     "together": {
