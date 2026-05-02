@@ -59,6 +59,16 @@ PROVIDERS: dict[str, dict] = {
             "mistralai/Mixtral-8x7B-Instruct-v0.1",
         ],
     },
+    "anthropic": {
+        "label": "Anthropic (Claude)",
+        "base_url": "",
+        "models": [
+            "claude-opus-4-7",
+            "claude-sonnet-4-6",
+            "claude-haiku-4-5",
+            "claude-opus-4-6",
+        ],
+    },
     "custom": {
         "label": "Personalizado",
         "base_url": "",
@@ -79,6 +89,16 @@ def test_groq_connection(
     api_base_url: str | None = None,
 ) -> tuple[bool, str]:
     try:
+        if provider == "anthropic":
+            import anthropic as _anthropic
+            client = _anthropic.Anthropic(api_key=api_key)
+            resp = client.messages.create(
+                model=model,
+                max_tokens=10,
+                messages=[{"role": "user", "content": "Responde únicamente con la palabra: ok"}],
+            )
+            text = next(b.text for b in resp.content if b.type == "text")
+            return True, text.strip()
         client = _get_client(api_key, provider, api_base_url)
         resp = client.chat.completions.create(
             model=model,
@@ -95,6 +115,7 @@ _VISION_MODELS: dict[str, str] = {
     "google_gemini": "gemini-2.0-flash",
     "openrouter": "google/gemini-2.0-flash-exp:free",
     "together": "meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo",
+    "anthropic": "claude-sonnet-4-6",
 }
 
 
@@ -128,20 +149,43 @@ def extract_image_text(
     )
 
     try:
-        client = _get_client(api_key, actual_provider, actual_base_url)
-        resp = client.chat.completions.create(
-            model=vision_model,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {"url": image_data_url}},
-                    {"type": "text", "text": prompt_text},
-                ],
-            }],
-            max_tokens=1000,
-            temperature=0.2,
-        )
-        result = resp.choices[0].message.content.strip()
+        if actual_provider == "anthropic":
+            import anthropic as _anthropic
+            aclient = _anthropic.Anthropic(api_key=api_key)
+            resp = aclient.messages.create(
+                model=vision_model,
+                max_tokens=1000,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": clean_mime,
+                                "data": b64,
+                            },
+                        },
+                        {"type": "text", "text": prompt_text},
+                    ],
+                }],
+            )
+            result = next(bl.text for bl in resp.content if bl.type == "text")
+        else:
+            client = _get_client(api_key, actual_provider, actual_base_url)
+            resp = client.chat.completions.create(
+                model=vision_model,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": image_data_url}},
+                        {"type": "text", "text": prompt_text},
+                    ],
+                }],
+                max_tokens=1000,
+                temperature=0.2,
+            )
+            result = resp.choices[0].message.content.strip()
         log.info("extract_image_text: %d chars (%s/%s)", len(result), actual_provider, vision_model)
         return result
     except Exception as exc:
@@ -272,6 +316,21 @@ _CATEGORY_GUIDE = """CATEGORIZACIÓN — elegí la más específica entre las di
 - General: solo si ninguna otra categoría aplica claramente"""
 
 
+def _call_anthropic_text(api_key: str, model: str, prompt: str, max_tokens: int) -> str:
+    """Llama a la API de Anthropic con el SDK nativo y devuelve el texto de respuesta."""
+    import anthropic as _anthropic
+    client = _anthropic.Anthropic(api_key=api_key)
+    kwargs: dict = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    if model != "claude-opus-4-7":
+        kwargs["temperature"] = 0.85
+    response = client.messages.create(**kwargs)
+    return next(b.text for b in response.content if b.type == "text").strip()
+
+
 def _detect_headings(text: str) -> bool:
     """True si el texto fuente contiene subtítulos HTML."""
     return bool(re.search(r'<h[2-4][^>]*>', text, re.IGNORECASE))
@@ -299,7 +358,6 @@ def process_rss_with_groq(
     provider: str = "groq",
     api_base_url: str | None = None,
 ) -> dict:
-    client = _get_client(api_key, provider, api_base_url)
     cat_list = ", ".join(available_categories) if available_categories else _DEFAULT_CATEGORIES
 
     source_len = len(article_text)
@@ -368,14 +426,17 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
 
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=max_tokens,
-        temperature=0.85,
-    )
-
-    raw = resp.choices[0].message.content.strip()
+    if provider == "anthropic":
+        raw = _call_anthropic_text(api_key, model, prompt, max_tokens)
+    else:
+        client = _get_client(api_key, provider, api_base_url)
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            temperature=0.85,
+        )
+        raw = resp.choices[0].message.content.strip()
     log.debug("AI RSS raw response (500 chars): %s", raw[:500])
 
     text = _normalize_quotes(raw)
@@ -419,7 +480,6 @@ def process_email_with_groq(
     provider: str = "groq",
     api_base_url: str | None = None,
 ) -> dict:
-    client = _get_client(api_key, provider, api_base_url)
     clean_subject = _clean_subject(subject)
     cat_list = ", ".join(available_categories) if available_categories else _DEFAULT_CATEGORIES
 
@@ -485,14 +545,17 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
 
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=max_tokens,
-        temperature=0.85,
-    )
-
-    raw = resp.choices[0].message.content.strip()
+    if provider == "anthropic":
+        raw = _call_anthropic_text(api_key, model, prompt, max_tokens)
+    else:
+        client = _get_client(api_key, provider, api_base_url)
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            temperature=0.85,
+        )
+        raw = resp.choices[0].message.content.strip()
     log.debug("AI raw response (500 chars): %s", raw[:500])
 
     text = _normalize_quotes(raw)

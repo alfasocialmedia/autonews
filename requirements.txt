@@ -18,3 +18,4 @@ feedparser==6.0.11
 beautifulsoup4==4.12.3
 requests==2.32.3
 gTTS==2.5.3
+anthropic>=0.40.0
