@@ -73,10 +73,20 @@ def _is_comment_entry(entry) -> bool:
 
 
 def _extract_og_image(soup: BeautifulSoup) -> str | None:
-    for attr in ({"property": "og:image"}, {"name": "twitter:image"}):
-        tag = soup.find("meta", attrs=attr)
-        if tag and tag.get("content"):
-            return tag["content"]
+    # og:image / twitter:image (case-insensitive via BeautifulSoup string search)
+    for tag in soup.find_all("meta"):
+        prop = (tag.get("property") or tag.get("name") or "").lower()
+        if prop in ("og:image", "twitter:image", "og:image:url"):
+            val = tag.get("content") or tag.get("value") or ""
+            if val and val.startswith("http"):
+                return val
+    # Fallback: primera imagen grande en el cuerpo del artículo
+    article = soup.find("article") or soup.find("main")
+    if article:
+        for img in article.find_all("img", src=True):
+            src = img["src"]
+            if src.startswith("http") and not any(x in src for x in ("logo", "icon", "avatar", "pixel", "tracking")):
+                return src
     return None
 
 
@@ -147,7 +157,9 @@ def scrape_full_article(url: str) -> tuple[str, str | None]:
         log.warning("No se pudo scrapear %s: %s", url, exc)
         return "", None
 
-    soup = BeautifulSoup(resp.text, "html.parser")
+    # Pasar bytes crudos para que BeautifulSoup detecte el charset real del HTML
+    # (evita errores cuando el sitio declara UTF-8 en el header pero sirve Windows-1252)
+    soup = BeautifulSoup(resp.content, "html.parser")
     og_image = _extract_og_image(soup)
 
     # 1. Preferir JSON-LD: contiene el artículo completo sin paywall ni JS
