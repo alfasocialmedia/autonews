@@ -120,7 +120,7 @@
         </dl>
       </div>
       <div class="card-footer bg-transparent border-0 d-flex gap-2">
-        <button class="btn btn-sm btn-outline-info test-feed" data-id="{{ feed.id }}">
+        <button class="btn btn-sm btn-outline-info test-feed" data-id="{{ feed.id }}" data-name="{{ feed.name }}">
           <i class="bi bi-plug me-1"></i>Probar
         </button>
         <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
@@ -223,6 +223,23 @@
 </div>
 {% endif %}
 
+<!-- Test Result Modal -->
+<div class="modal fade" id="testModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-rss me-2 text-warning"></i><span id="testModalFeedName"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="testModalBody">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Add Modal -->
 <div class="modal fade" id="addModal" tabindex="-1">
   <div class="modal-dialog">
@@ -324,17 +341,110 @@ document.querySelectorAll('.toggle-feed').forEach(toggle => {
   });
 });
 
-// Probar feed
+// Probar feed — muestra modal con artículos recientes
+let _testFeedId = null;
+
 document.querySelectorAll('.test-feed').forEach(btn => {
   btn.addEventListener('click', async function () {
+    _testFeedId = this.dataset.id;
+    const feedName = this.dataset.name || 'Feed';
     const orig = this.innerHTML;
     this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Probando...';
     this.disabled = true;
-    const resp = await fetch(`/settings/rss/${this.dataset.id}/test`, { method: 'POST' });
-    const data = await resp.json();
-    showToast(data.message, data.success ? 'success' : 'danger');
-    this.innerHTML = orig;
-    this.disabled = false;
+
+    try {
+      const resp = await fetch(`/settings/rss/${_testFeedId}/test`, { method: 'POST' });
+      const data = await resp.json();
+
+      if (!data.success) {
+        showToast(data.message, 'danger');
+        return;
+      }
+
+      document.getElementById('testModalFeedName').textContent = feedName;
+
+      const statusBadge = s => {
+        if (s === 'published') return '<span class="badge bg-success">Publicado</span>';
+        if (s === 'skipped')   return '<span class="badge bg-secondary">Omitido</span>';
+        if (s === 'error')     return '<span class="badge bg-danger">Error</span>';
+        return '<span class="badge bg-primary">Nuevo</span>';
+      };
+
+      let html = `<p class="text-success mb-3"><i class="bi bi-check-circle-fill me-1"></i>${data.message}</p>`;
+
+      if (data.items && data.items.length) {
+        html += '<div class="list-group list-group-flush">';
+        for (const item of data.items) {
+          const canPublish = item.status !== 'published';
+          html += `
+            <div class="list-group-item px-0 py-3">
+              <div class="d-flex align-items-start gap-3">
+                <div class="flex-grow-1 min-w-0">
+                  <div class="fw-semibold text-truncate">
+                    <a href="${item.link}" target="_blank" class="text-decoration-none link-dark">${item.title}</a>
+                  </div>
+                  <div class="d-flex align-items-center gap-2 mt-1">
+                    ${statusBadge(item.status)}
+                    ${item.published_at ? `<small class="text-muted">${item.published_at}</small>` : ''}
+                  </div>
+                </div>
+                <button class="btn btn-sm ${canPublish ? 'btn-outline-primary' : 'btn-success'} flex-shrink-0 btn-publish-now"
+                        data-guid="${item.guid}"
+                        ${canPublish ? '' : 'disabled'}>
+                  <i class="bi bi-${canPublish ? 'send' : 'check'} me-1"></i>${canPublish ? 'Publicar' : 'Publicado'}
+                </button>
+              </div>
+            </div>`;
+        }
+        html += '</div>';
+      }
+
+      document.getElementById('testModalBody').innerHTML = html;
+
+      // Wiring publish buttons
+      document.querySelectorAll('#testModalBody .btn-publish-now').forEach(pubBtn => {
+        pubBtn.addEventListener('click', async function () {
+          const guid = this.dataset.guid;
+          const origHtml = this.innerHTML;
+          this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+          this.disabled = true;
+
+          try {
+            const pr = await fetch(`/settings/rss/${_testFeedId}/publish-now`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ guid }),
+              signal: AbortSignal.timeout(120000),
+            });
+            const pd = await pr.json();
+
+            if (pd.success) {
+              this.className = 'btn btn-sm btn-success flex-shrink-0 btn-publish-now';
+              this.innerHTML = '<i class="bi bi-check me-1"></i>Publicado';
+              // Update badge
+              const badgeEl = this.closest('.list-group-item').querySelector('.badge');
+              if (badgeEl) { badgeEl.className = 'badge bg-success'; badgeEl.textContent = 'Publicado'; }
+              let msg = `Publicado: ${pd.title}`;
+              if (pd.wp_link) msg += ` — <a href="${pd.wp_link}" target="_blank">Ver en WordPress</a>`;
+              showToast(msg, 'success');
+            } else {
+              this.innerHTML = origHtml;
+              this.disabled = false;
+              showToast(pd.message || 'Error al publicar', 'danger');
+            }
+          } catch (e) {
+            this.innerHTML = origHtml;
+            this.disabled = false;
+            showToast('Error de conexión o timeout', 'danger');
+          }
+        });
+      });
+
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('testModal')).show();
+    } finally {
+      this.innerHTML = orig;
+      this.disabled = false;
+    }
   });
 });
 

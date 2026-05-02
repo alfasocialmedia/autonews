@@ -860,6 +860,85 @@ def process_rss_feeds():
     log.info("⏹ Feeds RSS procesados")
 
 
+def publish_rss_item_now(db, feed: RssFeed, item: dict) -> dict:
+    """Publica un ítem RSS específico de inmediato desde el panel de administración.
+    Devuelve {'title': ..., 'wp_link': ...} o lanza ValueError."""
+    groq_cfg = db.query(GroqSettings).filter(GroqSettings.is_active == True).first()
+    wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).all()
+    if not groq_cfg:
+        raise ValueError("Groq no configurado — actívalo en Configuración → Groq IA")
+    if not wp_sites:
+        raise ValueError("WordPress no configurado — agrega un sitio en Configuración → WordPress")
+
+    groq_key = decrypt_value(groq_cfg.encrypted_api_key)
+    wp_categories = _fetch_wp_category_names(wp_sites)
+
+    body = item["body"]
+    image_url = item.get("image_url")
+
+    if item.get("needs_scraping") and item["link"]:
+        log.info("[manual] Scrapeando artículo: %s", item["link"][:80])
+        scraped_text, scraped_img = scrape_full_article(item["link"])
+        if scraped_text:
+            body = scraped_text
+        if scraped_img:
+            image_url = scraped_img
+    elif item["link"]:
+        _, scraped_img = scrape_full_article(item["link"])
+        if scraped_img:
+            image_url = scraped_img
+
+    ai_result = process_rss_with_groq(
+        groq_key, groq_cfg.model, groq_cfg.base_prompt,
+        item["title"], body,
+        available_categories=wp_categories or None,
+        provider=groq_cfg.provider or "groq",
+        api_base_url=groq_cfg.api_base_url,
+    )
+
+    if feed.wp_category_id:
+        ai_result["_forced_category_id"] = feed.wp_category_id
+        ai_result["_forced_category_name"] = feed.wp_category_name or ""
+    elif feed.wp_category_name and not feed.wp_category_id:
+        ai_result["category"] = feed.wp_category_name
+
+    if not image_url:
+        image_url = _generate_fallback_image(
+            ai_result.get("title", item["title"]),
+            ai_result.get("category", ""),
+        )
+
+    # Registrar en BD (o reutilizar si ya existe)
+    rss_item = db.query(ProcessedRssItem).filter(ProcessedRssItem.guid == item["guid"]).first()
+    if not rss_item:
+        rss_item = ProcessedRssItem(
+            rss_feed_id=feed.id,
+            guid=item["guid"],
+            title=item["title"],
+            link=item["link"],
+            published_at=item["published_at"],
+            status="received",
+        )
+        db.add(rss_item)
+        db.commit()
+        db.refresh(rss_item)
+
+    count = _publish_ai_result(db, ai_result, wp_sites, image_url=image_url, source_name=feed.name)
+
+    if count > 0:
+        rss_item.status = "published"
+        db.commit()
+        post = db.query(Post).filter(Post.source_name == feed.name).order_by(Post.id.desc()).first()
+        return {
+            "title": ai_result.get("title", item["title"]),
+            "wp_link": post.wp_link if post else "",
+        }
+
+    rss_item.status = "error"
+    db.commit()
+    raise ValueError("No se pudo publicar en ningún sitio WordPress")
+
+
 def main():
     log.info("=" * 60)
     log.info("  AutoNews Worker — iniciado")

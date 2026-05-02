@@ -216,8 +216,6 @@ def fetch_rss_items(feed_url: str) -> list[dict]:
     # feedparser.parse(url) usa urllib sin timeout y puede fallar con certificados en VPS.
     feed = _download_feed(feed_url)
 
-    feed = feedparser.parse(resp.content)  # bytes → mejor detección de encoding
-
     if feed.bozo and not feed.entries:
         raise ValueError(f"Feed inválido o sin artículos: {feed.bozo_exception}")
 

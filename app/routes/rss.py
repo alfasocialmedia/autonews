@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import ProcessedRssItem, RssFeed
-from app.services.rss_service import test_rss_feed
+from app.services.rss_service import fetch_rss_items, test_rss_feed
 
 router = APIRouter(prefix="/settings/rss")
 templates = Jinja2Templates(directory="app/templates")
@@ -155,5 +155,68 @@ async def test_feed(feed_id: int, request: Request, db: Session = Depends(get_db
     if not feed:
         return JSONResponse({"success": False, "message": "Feed no encontrado"})
 
-    success, message = test_rss_feed(feed.url)
-    return JSONResponse({"success": success, "message": message})
+    try:
+        items = fetch_rss_items(feed.url)
+    except Exception as exc:
+        return JSONResponse({"success": False, "message": str(exc)})
+
+    if not items:
+        return JSONResponse({"success": False, "message": "El feed no contiene ítems o no es accesible."})
+
+    guids = [it["guid"] for it in items[:10]]
+    processed = {
+        row.guid: row.status
+        for row in db.query(ProcessedRssItem).filter(ProcessedRssItem.guid.in_(guids)).all()
+    }
+
+    article_list = []
+    for it in items[:5]:
+        article_list.append({
+            "guid": it["guid"],
+            "title": it["title"],
+            "link": it["link"],
+            "published_at": it["published_at"].strftime("%d/%m/%Y %H:%M") if it["published_at"] else "",
+            "status": processed.get(it["guid"], "new"),
+        })
+
+    return JSONResponse({
+        "success": True,
+        "message": f"Feed válido — {len(items)} artículos encontrados.",
+        "items": article_list,
+    })
+
+
+class PublishNowRequest(BaseModel):
+    guid: str
+
+
+@router.post("/{feed_id}/publish-now")
+async def publish_now(
+    feed_id: int,
+    payload: PublishNowRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    feed = db.query(RssFeed).filter(RssFeed.id == feed_id).first()
+    if not feed:
+        return JSONResponse({"success": False, "message": "Feed no encontrado"})
+
+    try:
+        items = fetch_rss_items(feed.url)
+    except Exception as exc:
+        return JSONResponse({"success": False, "message": f"No se pudo descargar el feed: {exc}"})
+
+    item = next((it for it in items if it["guid"] == payload.guid), None)
+    if not item:
+        return JSONResponse({"success": False, "message": "Artículo no encontrado en el feed actual"})
+
+    try:
+        from app.worker import publish_rss_item_now
+        result = publish_rss_item_now(db, feed, item)
+        return JSONResponse({"success": True, **result})
+    except Exception as exc:
+        return JSONResponse({"success": False, "message": str(exc)})
