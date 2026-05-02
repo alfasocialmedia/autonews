@@ -25,11 +25,13 @@ _URL_RE = re.compile(r'https?://[^\s<>"\']+', re.IGNORECASE)
 _TAG_RE = re.compile(r'<[^>]+>')
 
 
-def _html_to_plain(html_text: str, max_chars: int = 700) -> str:
+def _html_to_plain(html_text: str, max_chars: int = 3000) -> str:
     """Convierte HTML de artículo a texto plano legible para WhatsApp."""
     # Reemplazar etiquetas de bloque por saltos de línea
     text = re.sub(r'</(p|h[1-6]|li|br)>', '\n', html_text, flags=re.IGNORECASE)
     text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+    # Convertir <h2>/<h3> en texto con negrita WhatsApp
+    text = re.sub(r'<h[2-4][^>]*>(.*?)</h[2-4]>', r'*\1*', text, flags=re.IGNORECASE | re.DOTALL)
     # Eliminar todas las etiquetas restantes
     text = _TAG_RE.sub('', text)
     # Decodificar entidades HTML (&amp; &nbsp; etc.)
@@ -483,7 +485,17 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
             log.warning("WA: no se pudo scrapear %s: %s", source_url, exc)
 
     # Procesar con IA
-    subject = article_body[:100] if article_body else "Noticia por WhatsApp"
+    # Para URLs: pasar el dominio como hint de título — evita que la IA copie el titular original
+    if source_url:
+        try:
+            from urllib.parse import urlparse
+            domain = urlparse(source_url).netloc.replace("www.", "")
+        except Exception:
+            domain = "fuente"
+        subject = f"Artículo de {domain}"
+    else:
+        subject = article_body[:100] if article_body else "Noticia por WhatsApp"
+
     if source_url and len(article_body) > 300:
         from app.services.groq_service import process_rss_with_groq
         ai_result = process_rss_with_groq(
@@ -503,12 +515,17 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
 
     log.info("WA: IA generó — %s", ai_result.get("title", "")[:80])
 
-    # Difundir a grupos (sin WordPress)
-    _broadcast_whatsapp(db, settings, ai_result, media_data, scraped_image_url)
+    # Difundir a grupos (sin WordPress, con URL original si viene de un link)
+    _broadcast_whatsapp(db, settings, ai_result, media_data, scraped_image_url, source_url)
 
 
-def _broadcast_whatsapp(db, settings, ai_result: dict, img_payload=None, fallback_image_url: str | None = None):
-    """Envía título+resumen a los grupos de WA. Sin link de WordPress."""
+def _broadcast_whatsapp(
+    db, settings, ai_result: dict,
+    img_payload=None,
+    fallback_image_url: str | None = None,
+    source_url: str | None = None,
+):
+    """Envía la noticia completa a los grupos de WA. Sin link de WordPress."""
     if not settings.broadcast_enabled:
         log.info("WA broadcast: difusión deshabilitada")
         return
@@ -525,14 +542,16 @@ def _broadcast_whatsapp(db, settings, ai_result: dict, img_payload=None, fallbac
     content_html = ai_result.get("content", "")
     summary = ai_result.get("summary", "")
 
-    # Cuerpo del mensaje: primeros ~700 chars del artículo en texto plano
+    # Cuerpo: artículo completo en texto plano (sin HTML, sin truncar innecesariamente)
     if content_html:
-        body = _html_to_plain(content_html, max_chars=700)
+        body = _html_to_plain(content_html, max_chars=3000)
     else:
         body = summary
 
-    # Formato final: *Título en negrita* + cuerpo del artículo (sin link)
+    # Formato: *Título* + artículo completo + URL fuente al final (clickeable)
     msg_text = f"*{title}*\n\n{body}"
+    if source_url:
+        msg_text += f"\n\n🔗 {source_url}"
 
     log.info("WA broadcast: enviando a %d grupo(s) — %s", len(groups), title[:60])
     for g in groups:
