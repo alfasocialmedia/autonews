@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html as _html_mod
 import logging
 import re
 import threading
@@ -21,6 +22,31 @@ templates = Jinja2Templates(directory="app/templates")
 MAX_GROUPS = 5
 
 _URL_RE = re.compile(r'https?://[^\s<>"\']+', re.IGNORECASE)
+_TAG_RE = re.compile(r'<[^>]+>')
+
+
+def _html_to_plain(html_text: str, max_chars: int = 700) -> str:
+    """Convierte HTML de artículo a texto plano legible para WhatsApp."""
+    # Reemplazar etiquetas de bloque por saltos de línea
+    text = re.sub(r'</(p|h[1-6]|li|br)>', '\n', html_text, flags=re.IGNORECASE)
+    text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+    # Eliminar todas las etiquetas restantes
+    text = _TAG_RE.sub('', text)
+    # Decodificar entidades HTML (&amp; &nbsp; etc.)
+    text = _html_mod.unescape(text)
+    # Colapsar espacios y líneas en blanco múltiples
+    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r'\n{3,}', '\n\n', text).strip()
+
+    if len(text) <= max_chars:
+        return text
+
+    # Cortar en el último punto antes del límite
+    cut = text[:max_chars]
+    last_dot = cut.rfind('.')
+    if last_dot > max_chars // 2:
+        return cut[:last_dot + 1]
+    return cut.rstrip() + "…"
 
 
 def _ensure_tables():
@@ -494,10 +520,19 @@ def _broadcast_whatsapp(db, settings, ai_result: dict, img_payload=None, fallbac
 
     from app.services.whatsapp_service import send_text, send_image_base64, send_image
 
-    title = ai_result.get("title", "")
+    # Título limpio: sin saltos de línea (rompen el bold en WhatsApp)
+    title = re.sub(r'\s+', ' ', ai_result.get("title", "")).strip()
+    content_html = ai_result.get("content", "")
     summary = ai_result.get("summary", "")
-    # Formato: título en negrita + resumen. Sin URL (no hay nota de WordPress).
-    msg_text = f"*{title}*\n\n{summary}"
+
+    # Cuerpo del mensaje: primeros ~700 chars del artículo en texto plano
+    if content_html:
+        body = _html_to_plain(content_html, max_chars=700)
+    else:
+        body = summary
+
+    # Formato final: *Título en negrita* + cuerpo del artículo (sin link)
+    msg_text = f"*{title}*\n\n{body}"
 
     log.info("WA broadcast: enviando a %d grupo(s) — %s", len(groups), title[:60])
     for g in groups:
