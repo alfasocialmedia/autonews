@@ -90,6 +90,33 @@ def test_groq_connection(
         return False, str(exc)
 
 
+def transcribe_audio(api_key: str, audio_bytes: bytes, mimetype: str = "audio/ogg") -> str:
+    """Transcribe audio con Groq Whisper (solo funciona con provider=groq). Devuelve '' si falla."""
+    import io
+    ext_map = {
+        "audio/ogg": "ogg",
+        "audio/mpeg": "mp3",
+        "audio/mp4": "mp4",
+        "audio/wav": "wav",
+        "audio/webm": "webm",
+        "audio/aac": "aac",
+    }
+    clean_mime = mimetype.split(";")[0].strip()
+    ext = ext_map.get(clean_mime, "ogg")
+    try:
+        client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+        result = client.audio.transcriptions.create(
+            model="whisper-large-v3-turbo",
+            file=(f"audio.{ext}", io.BytesIO(audio_bytes), clean_mime),
+            response_format="text",
+            language="es",
+        )
+        return str(result).strip()
+    except Exception as exc:
+        log.warning("transcribe_audio error: %s", exc)
+        return ""
+
+
 _FWD_RE = re.compile(r"^(fwd?|re|fw)\s*:\s*", re.IGNORECASE)
 
 

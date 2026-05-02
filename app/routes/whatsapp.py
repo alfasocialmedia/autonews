@@ -320,7 +320,7 @@ def _process_wa_message(payload: dict):
     from app.database import SessionLocal
     db = SessionLocal()
     try:
-        from app.services.whatsapp_service import parse_incoming, download_media
+        from app.services.whatsapp_service import parse_incoming, get_media_base64
         msg = parse_incoming(payload)
         if not msg:
             return
@@ -329,30 +329,57 @@ def _process_wa_message(payload: dict):
         if not s or not s.enabled:
             return
 
-        # Verificar número autorizado
+        # Verificar número autorizado (soporta CSV)
         authorized = [n.strip() for n in (s.authorized_numbers or "").split(",") if n.strip()]
         if authorized and msg["from"] not in authorized:
             log.info("WA: mensaje de número no autorizado %s", msg["from"])
             return
 
-        # Ignorar mensajes propios y grupos no autorizados
+        # Ignorar mensajes de grupos (solo procesar DMs)
         if msg["is_group"]:
             log.info("WA: mensaje de grupo ignorado (solo se procesan DMs)")
             return
 
         text = msg.get("text", "").strip()
-        media_data = None
+        media_data = None   # (bytes, filename, mimetype) para imagen adjunta
+        audio_transcript = ""
 
-        # Descargar imagen si tiene
-        if msg["type"] == "image" and msg.get("media"):
-            media_data = download_media(
-                s.evolution_api_url, s.evolution_api_key, s.instance_name, msg["media"]
-            )
+        raw_data = msg.get("_raw_data", {})
+        msg_type = msg["type"]
 
-        if not text and not media_data:
+        if msg_type == "image" and raw_data:
+            result = get_media_base64(s.evolution_api_url, s.evolution_api_key, s.instance_name, raw_data)
+            if result:
+                import mimetypes as _mt
+                img_bytes, img_mime = result
+                ext = _mt.guess_extension(img_mime) or ".jpg"
+                media_data = (img_bytes, f"wa_image{ext}", img_mime)
+                log.info("WA: imagen descargada (%d bytes, %s)", len(img_bytes), img_mime)
+
+        elif msg_type == "audio" and raw_data:
+            result = get_media_base64(s.evolution_api_url, s.evolution_api_key, s.instance_name, raw_data)
+            if result:
+                audio_bytes, audio_mime = result
+                log.info("WA: audio descargado (%d bytes) — transcribiendo…", len(audio_bytes))
+                from app.models import GroqSettings
+                from app.crypto import decrypt_value
+                groq_cfg = db.query(GroqSettings).filter(GroqSettings.is_active == True).first()
+                if groq_cfg and (groq_cfg.provider or "groq") == "groq":
+                    from app.services.groq_service import transcribe_audio
+                    groq_key = decrypt_value(groq_cfg.encrypted_api_key)
+                    audio_transcript = transcribe_audio(groq_key, audio_bytes, audio_mime)
+                    log.info("WA: transcripción (%d chars): %s…", len(audio_transcript), audio_transcript[:80])
+                if not audio_transcript:
+                    audio_transcript = "Nota de voz recibida por WhatsApp"
+
+        # Para video/documento: el caption ya viene en msg["text"]
+        # Construir texto final
+        final_text = audio_transcript or text
+        if not final_text and not media_data:
+            log.info("WA: mensaje sin contenido procesable (%s)", msg_type)
             return
 
-        _publish_whatsapp_news(db, s, text, media_data, msg)
+        _publish_whatsapp_news(db, s, final_text, media_data, msg)
     except Exception as exc:
         log.error("_process_wa_message error: %s", exc)
     finally:

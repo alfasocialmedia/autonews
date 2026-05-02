@@ -172,11 +172,36 @@ def send_image(
 
 # ── Descarga de media desde WA ─────────────────────────────────────────────────
 
+def get_media_base64(url: str, api_key: str, instance_name: str, raw_data: dict) -> tuple[bytes, str] | None:
+    """
+    Descarga media de un mensaje usando la API de Evolution (base64).
+    raw_data es el objeto completo del mensaje (incluye key + message).
+    Devuelve (bytes, mimetype) o None si falla.
+    """
+    import base64 as b64lib
+    try:
+        r = requests.post(
+            f"{url}/chat/getBase64FromMediaMessage/{instance_name}",
+            headers=_headers(api_key),
+            json={"message": raw_data},
+            timeout=60,
+            verify=VERIFY_SSL,
+        )
+        r.raise_for_status()
+        data = r.json()
+        encoded = data.get("base64", "")
+        if not encoded:
+            return None
+        raw = b64lib.b64decode(encoded)
+        mimetype = (data.get("mimetype") or "application/octet-stream").split(";")[0].strip()
+        return raw, mimetype
+    except Exception as exc:
+        log.warning("get_media_base64 error: %s", exc)
+        return None
+
+
 def download_media(url: str, api_key: str, instance_name: str, message: dict) -> tuple[bytes, str, str] | None:
-    """
-    Descarga el archivo de media de un mensaje de WA.
-    Devuelve (bytes, filename, mimetype) o None si falla.
-    """
+    """Descarga media por URL directa (fallback). Devuelve (bytes, filename, mimetype) o None."""
     try:
         media_url = (
             message.get("mediaUrl")
@@ -255,6 +280,7 @@ def parse_incoming(payload: dict) -> dict | None:
             "is_group": is_group,
             "group_jid": remote_jid if is_group else None,
             "raw_message": msg,
+            "_raw_data": data,
         }
     except Exception as exc:
         log.warning("parse_incoming error: %s", exc)
