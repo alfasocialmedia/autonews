@@ -24,20 +24,54 @@ MAX_GROUPS = 5
 _URL_RE = re.compile(r'https?://[^\s<>"\']+', re.IGNORECASE)
 _TAG_RE = re.compile(r'<[^>]+>')
 
+# Patrones de ruido típicos del scraping de portales de noticias
+_NOISE_LINE_RE = re.compile(
+    r'^\s*('
+    r'\+|[-–—]{2,}'                          # separadores
+    r'|[\d]{1,2}/[\d]{1,2}/[\d]{2,4}.*'      # fechas
+    r'|\d{1,2}:\d{2}\s*(am|pm)?'             # horas
+    r'|seguinos(\s+en)?'                      # "Seguinos en"
+    r'|compartir|copiar(\s+(enlace|link))?'  # botones sociales
+    r'|publicidad|suscri\w*|newsletter'
+    r'|comentar|imprimir|relacionad\w*'
+    r'|whatsapp|facebook|twitter|instagram|tiktok|youtube'
+    r'|leer\s+m[aá]s|ver\s+m[aá]s|click\s+aqu[ií]'
+    r'|tags?:|etiquetas?:'
+    r')\s*$',
+    re.IGNORECASE,
+)
+
+
+def _clean_scrape_noise(text: str) -> str:
+    """Elimina ruido típico del scraping: fechas, botones sociales, categorías cortas."""
+    lines = text.splitlines()
+    result = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            result.append("")
+            continue
+        # Saltar líneas cortas que son categorías / etiquetas / noise
+        if len(stripped) < 45 and _NOISE_LINE_RE.match(stripped):
+            continue
+        result.append(line)
+    return re.sub(r'\n{3,}', '\n\n', '\n'.join(result)).strip()
+
 
 def _html_to_plain(html_text: str, max_chars: int = 3000) -> str:
-    """Convierte HTML de artículo a texto plano legible para WhatsApp."""
-    # Reemplazar etiquetas de bloque por saltos de línea
-    text = re.sub(r'</(p|h[1-6]|li|br)>', '\n', html_text, flags=re.IGNORECASE)
+    """Convierte HTML de artículo a texto plano con párrafos bien espaciados para WhatsApp."""
+    # Convertir subtítulos en negrita WhatsApp antes de eliminar tags
+    text = re.sub(r'<h[2-4][^>]*>(.*?)</h[2-4]>', r'\n\n*\1*\n', html_text, flags=re.IGNORECASE | re.DOTALL)
+    # Párrafos y listas → doble salto (respira bien en WhatsApp)
+    text = re.sub(r'</(p|li)>', '\n\n', text, flags=re.IGNORECASE)
     text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
-    # Convertir <h2>/<h3> en texto con negrita WhatsApp
-    text = re.sub(r'<h[2-4][^>]*>(.*?)</h[2-4]>', r'*\1*', text, flags=re.IGNORECASE | re.DOTALL)
-    # Eliminar todas las etiquetas restantes
+    # Eliminar etiquetas restantes
     text = _TAG_RE.sub('', text)
     # Decodificar entidades HTML (&amp; &nbsp; etc.)
     text = _html_mod.unescape(text)
-    # Colapsar espacios y líneas en blanco múltiples
+    # Colapsar espacios horizontales y líneas en blanco excesivas
     text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r' \n', '\n', text)
     text = re.sub(r'\n{3,}', '\n\n', text).strip()
 
     if len(text) <= max_chars:
@@ -477,22 +511,18 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
             from app.services.rss_service import scrape_full_article
             scraped_text, scraped_image_url = scrape_full_article(source_url)
             if scraped_text and len(scraped_text) > 200:
-                article_body = scraped_text
-                log.info("WA: artículo scrapeado (%d chars)", len(article_body))
+                # Limpiar ruido del scraping (categorías, fechas, botones sociales)
+                article_body = _clean_scrape_noise(scraped_text)
+                log.info("WA: artículo scrapeado y limpio (%d chars)", len(article_body))
             else:
                 log.warning("WA: scraping insuficiente, usando texto original")
         except Exception as exc:
             log.warning("WA: no se pudo scrapear %s: %s", source_url, exc)
 
     # Procesar con IA
-    # Para URLs: pasar el dominio como hint de título — evita que la IA copie el titular original
+    # Para URLs: subject vacío → la IA genera el título únicamente desde el contenido
     if source_url:
-        try:
-            from urllib.parse import urlparse
-            domain = urlparse(source_url).netloc.replace("www.", "")
-        except Exception:
-            domain = "fuente"
-        subject = f"Artículo de {domain}"
+        subject = ""
     else:
         subject = article_body[:100] if article_body else "Noticia por WhatsApp"
 

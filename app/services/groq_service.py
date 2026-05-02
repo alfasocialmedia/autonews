@@ -394,8 +394,15 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
         return result
 
     log.warning("No se pudo parsear JSON RSS. Raw (200): %s", raw[:200])
+    # Fallback: usar primera línea larga del artículo como título (no el hint vacío o de dominio)
+    fallback_title = title
+    if not fallback_title or len(fallback_title) < 10:
+        fallback_title = next(
+            (l.strip() for l in article_text.splitlines() if len(l.strip()) > 25),
+            "Noticia"
+        )
     return {
-        "title": title,
+        "title": fallback_title,
         "content": f"<p>{article_text[:1000]}</p>",
         "category": "General",
         "summary": article_text[:200],
