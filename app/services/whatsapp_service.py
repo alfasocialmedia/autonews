@@ -92,9 +92,11 @@ def set_webhook(url: str, api_key: str, instance_name: str, webhook_url: str) ->
             f"{url}/webhook/set/{instance_name}",
             headers=_headers(api_key),
             json={
+                "enabled": True,
                 "url": webhook_url,
-                "webhook_by_events": False,
-                "events": ["MESSAGES_UPSERT"],
+                "webhookByEvents": False,
+                "webhookBase64": False,
+                "events": ["MESSAGES_UPSERT", "CONNECTION_UPDATE"],
             },
             timeout=TIMEOUT, verify=VERIFY_SSL,
         )
