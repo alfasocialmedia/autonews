@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import threading
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -18,6 +19,8 @@ router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
 MAX_GROUPS = 5
+
+_URL_RE = re.compile(r'https?://[^\s<>"\']+', re.IGNORECASE)
 
 
 def _ensure_tables():
@@ -409,18 +412,24 @@ def _process_wa_message(payload: dict):
             log.info("WA: mensaje sin contenido procesable (%s)", msg_type)
             return
 
-        _publish_whatsapp_news(db, s, final_text, media_data, msg)
+        # Detectar si el mensaje contiene una URL para scrapear
+        url_match = _URL_RE.search(final_text)
+        source_url = url_match.group().rstrip(".,;)>") if url_match else None
+
+        _publish_whatsapp_news(db, s, final_text, media_data, source_url)
     except Exception as exc:
         log.error("_process_wa_message error: %s", exc)
     finally:
         db.close()
 
 
-def _publish_whatsapp_news(db, settings, text: str, media_data, msg: dict):
-    """Procesa con IA y publica en WordPress el contenido recibido por WA."""
-    from app.models import GroqSettings, WordPressSettings, Post
-    from app.services.groq_service import process_email_with_groq
-    from app.services.wordpress_service import create_post, get_or_create_category, get_or_create_tags, upload_media
+def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str | None):
+    """
+    Procesa con IA el contenido recibido por WA y difunde a grupos.
+    NO publica en WordPress — eso es exclusivo de RSS y Email.
+    Si source_url está presente, scrapea el artículo de esa URL.
+    """
+    from app.models import GroqSettings
     from app.crypto import decrypt_value
 
     groq_cfg = db.query(GroqSettings).filter(GroqSettings.is_active == True).first()
@@ -428,109 +437,52 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, msg: dict):
         log.warning("WA: no hay configuración de IA activa")
         return
 
-    wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).all()
-    if not wp_sites:
-        log.warning("WA: no hay sitios WordPress activos")
-        return
-
     api_key = decrypt_value(groq_cfg.encrypted_api_key)
 
-    from app.services.wordpress_service import get_categories
-    all_cats = []
-    for wp in wp_sites:
+    article_body = text
+    scraped_image_url = None
+
+    # Si el mensaje tiene una URL: scrapear el artículo completo
+    if source_url:
+        log.info("WA: URL detectada — scrapeando %s", source_url)
         try:
-            wp_pwd = decrypt_value(wp.encrypted_app_password)
-            cats = get_categories(wp.site_url, wp.api_user, wp_pwd)
-            all_cats = [c["name"] for c in cats]
-            break
-        except Exception:
-            pass
-
-    subject = text[:100] if text else "Noticia por WhatsApp"
-    body = text or "(sin texto)"
-
-    ai_result = process_email_with_groq(
-        api_key,
-        groq_cfg.model,
-        groq_cfg.base_prompt,
-        subject,
-        body,
-        available_categories=all_cats or None,
-        provider=groq_cfg.provider,
-        api_base_url=groq_cfg.api_base_url,
-    )
-
-    img_payload = None
-    if media_data:
-        img_payload = media_data  # ya es (bytes, filename, mimetype)
-
-    wp_url = ""
-    for wp_cfg in wp_sites:
-        try:
-            wp_pwd = decrypt_value(wp_cfg.encrypted_app_password)
-
-            cat_name = ai_result.get("category", "General")
-            try:
-                cat_id = get_or_create_category(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, cat_name)
-                category_ids = [cat_id] if cat_id else []
-            except Exception:
-                category_ids = []
-
-            tag_ids = []
-            raw_tags = ai_result.get("tags", [])
-            if isinstance(raw_tags, list) and raw_tags:
-                try:
-                    tag_ids = get_or_create_tags(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, raw_tags)
-                except Exception:
-                    pass
-
-            featured_media_id = None
-            if img_payload:
-                try:
-                    img_bytes, img_name, img_mime = img_payload
-                    featured_media_id = upload_media(
-                        wp_cfg.site_url, wp_cfg.api_user, wp_pwd,
-                        img_bytes, img_name, img_mime,
-                    )
-                except Exception as exc:
-                    log.warning("WA: no se pudo subir imagen: %s", exc)
-
-            wp_post = create_post(
-                wp_cfg.site_url, wp_cfg.api_user, wp_pwd,
-                ai_result.get("title", subject),
-                ai_result.get("content", body),
-                wp_cfg.default_status,
-                category_ids,
-                featured_media_id,
-                excerpt=ai_result.get("summary", ""),
-                tag_ids=tag_ids,
-                keyphrase=ai_result.get("keyphrase", ""),
-            )
-
-            db.add(Post(
-                processed_email_id=None,
-                wordpress_post_id=wp_post.get("id"),
-                title=ai_result.get("title", subject),
-                content=ai_result.get("content", body),
-                category=ai_result.get("category", ""),
-                status=wp_cfg.default_status,
-                wp_link=wp_post.get("link", ""),
-                source_name="WhatsApp",
-            ))
-            db.commit()
-            log.info("WA: publicado en %s — %s", wp_cfg.name, ai_result.get("title", ""))
-            if not wp_url:
-                wp_url = wp_post.get("link", "")
-
+            from app.services.rss_service import scrape_full_article
+            scraped_text, scraped_image_url = scrape_full_article(source_url)
+            if scraped_text and len(scraped_text) > 200:
+                article_body = scraped_text
+                log.info("WA: artículo scrapeado (%d chars)", len(article_body))
+            else:
+                log.warning("WA: scraping insuficiente, usando texto original")
         except Exception as exc:
-            log.error("WA: error publicando en %s: %s", wp_cfg.name, exc)
+            log.warning("WA: no se pudo scrapear %s: %s", source_url, exc)
 
-    # Difundir a grupos siempre (con o sin URL de WordPress)
-    _broadcast_post(db, settings, ai_result, wp_url, img_payload)
+    # Procesar con IA
+    subject = article_body[:100] if article_body else "Noticia por WhatsApp"
+    if source_url and len(article_body) > 300:
+        from app.services.groq_service import process_rss_with_groq
+        ai_result = process_rss_with_groq(
+            api_key, groq_cfg.model, groq_cfg.base_prompt,
+            subject, article_body,
+            provider=groq_cfg.provider,
+            api_base_url=groq_cfg.api_base_url,
+        )
+    else:
+        from app.services.groq_service import process_email_with_groq
+        ai_result = process_email_with_groq(
+            api_key, groq_cfg.model, groq_cfg.base_prompt,
+            subject, article_body,
+            provider=groq_cfg.provider,
+            api_base_url=groq_cfg.api_base_url,
+        )
+
+    log.info("WA: IA generó — %s", ai_result.get("title", "")[:80])
+
+    # Difundir a grupos (sin WordPress)
+    _broadcast_whatsapp(db, settings, ai_result, media_data, scraped_image_url)
 
 
-def _broadcast_post(db, settings, ai_result: dict, wp_url: str, img_payload=None):
-    """Envía el artículo publicado a los grupos de WA configurados."""
+def _broadcast_whatsapp(db, settings, ai_result: dict, img_payload=None, fallback_image_url: str | None = None):
+    """Envía título+resumen a los grupos de WA. Sin link de WordPress."""
     if not settings.broadcast_enabled:
         log.info("WA broadcast: difusión deshabilitada")
         return
@@ -540,25 +492,33 @@ def _broadcast_post(db, settings, ai_result: dict, wp_url: str, img_payload=None
         log.info("WA broadcast: no hay grupos activos configurados")
         return
 
-    from app.services.whatsapp_service import send_text, send_image_base64
+    from app.services.whatsapp_service import send_text, send_image_base64, send_image
 
     title = ai_result.get("title", "")
     summary = ai_result.get("summary", "")
-    template = settings.broadcast_template or "*{title}*\n\n{summary}\n\n{url}"
-    text = template.replace("{title}", title).replace("{summary}", summary).replace("{url}", wp_url).strip()
+    # Formato: título en negrita + resumen. Sin URL (no hay nota de WordPress).
+    msg_text = f"*{title}*\n\n{summary}"
 
     log.info("WA broadcast: enviando a %d grupo(s) — %s", len(groups), title[:60])
     for g in groups:
         sent = False
+        # 1. Imagen adjunta recibida (bytes)
         if img_payload:
             img_bytes, _img_name, img_mime = img_payload
             sent = send_image_base64(
                 settings.evolution_api_url, settings.evolution_api_key,
-                settings.instance_name, g.jid, img_bytes, img_mime, text,
+                settings.instance_name, g.jid, img_bytes, img_mime, msg_text,
             )
+        # 2. Imagen scrapeada del artículo (URL pública)
+        if not sent and fallback_image_url:
+            sent = send_image(
+                settings.evolution_api_url, settings.evolution_api_key,
+                settings.instance_name, g.jid, fallback_image_url, msg_text,
+            )
+        # 3. Solo texto
         if not sent:
             sent = send_text(
                 settings.evolution_api_url, settings.evolution_api_key,
-                settings.instance_name, g.jid, text,
+                settings.instance_name, g.jid, msg_text,
             )
         log.info("WA broadcast → %s (%s): %s", g.name, g.jid, "ok" if sent else "ERROR")
