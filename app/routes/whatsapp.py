@@ -650,12 +650,29 @@ def _broadcast_whatsapp(
                 settings.evolution_api_url, settings.evolution_api_key,
                 settings.instance_name, g.jid, img_bytes, img_mime, msg_text,
             )
-        # 2. Imagen scrapeada del artículo (URL pública)
+        # 2. Imagen scrapeada del artículo — descargar y enviar como base64
+        #    (evita bloqueos de hotlinking del sitio fuente)
         if not sent and fallback_image_url:
-            sent = send_image(
-                settings.evolution_api_url, settings.evolution_api_key,
-                settings.instance_name, g.jid, fallback_image_url, msg_text,
-            )
+            try:
+                import httpx as _httpx
+                ir = _httpx.get(
+                    fallback_image_url, timeout=15, follow_redirects=True,
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                )
+                ir.raise_for_status()
+                img_mime = ir.headers.get("content-type", "image/jpeg").split(";")[0]
+                sent = send_image_base64(
+                    settings.evolution_api_url, settings.evolution_api_key,
+                    settings.instance_name, g.jid, ir.content, img_mime, msg_text,
+                )
+            except Exception as _exc:
+                log.warning("WA: no se pudo descargar og:image %s: %s", fallback_image_url, _exc)
+            # Último recurso: URL directa
+            if not sent:
+                sent = send_image(
+                    settings.evolution_api_url, settings.evolution_api_key,
+                    settings.instance_name, g.jid, fallback_image_url, msg_text,
+                )
         # 3. Solo texto
         if not sent:
             sent = send_text(

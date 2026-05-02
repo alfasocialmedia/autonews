@@ -143,6 +143,41 @@ def _extract_jsonld_text(soup: BeautifulSoup) -> str:
     return ""
 
 
+def _find_article_body(soup: BeautifulSoup):
+    """Encuentra el contenedor del cuerpo del artículo con selectores progresivos."""
+    # itemprop es el más preciso
+    el = soup.find(attrs={"itemprop": "articleBody"})
+    if el:
+        return el
+
+    # Buscar dentro de <article> primero (evita capturar nav/sidebar)
+    article_tag = soup.find("article")
+    search_in = article_tag if article_tag else soup
+
+    # Clases comunes de temas WordPress y otros CMS de noticias
+    _BODY_CLASSES = re.compile(
+        r"entry[-_]content|post[-_]content|article[-_]content|article[-_]body|"
+        r"post[-_]body|content[-_]body|story[-_]body|article__body|td-post[-_]content|"
+        r"td_block_wrap|tdb-block-inner|mvp-content-main|jeg_content|"
+        r"single[-_]content|nota[-_]cuerpo|cuerpo[-_]nota|news[-_]content",
+        re.I,
+    )
+    el = search_in.find(class_=_BODY_CLASSES)
+    if el:
+        return el
+
+    # Si encontramos <article> úsalo aunque no tenga clase específica
+    if article_tag:
+        return article_tag
+
+    # Último recurso: main o div con clase genérica
+    return (
+        soup.find("main")
+        or soup.find("div", class_=re.compile(r"(content|nota|cuerpo|story|news)", re.I))
+        or soup.find("div", id=re.compile(r"(content|nota|cuerpo|story|news)", re.I))
+    )
+
+
 def scrape_full_article(url: str) -> tuple[str, str | None]:
     """Extrae el texto completo de un artículo y su og:image. Devuelve (texto, imagen_url)."""
     try:
@@ -166,7 +201,9 @@ def scrape_full_article(url: str) -> tuple[str, str | None]:
     jsonld_text = _extract_jsonld_text(soup)
     if jsonld_text:
         lines = [l.strip() for l in jsonld_text.splitlines() if l.strip()]
-        return "\n".join(lines)[:12000], og_image
+        result = "\n".join(lines)[:12000]
+        log.info("scrape JSON-LD ok: %d chars, og_image=%s", len(result), bool(og_image))
+        return result, og_image
 
     # 2. Fallback: scraping HTML tradicional
     for tag in soup(_NOISE_TAGS):
@@ -182,18 +219,16 @@ def scrape_full_article(url: str) -> tuple[str, str | None]:
         if len((a.get_text() or "").strip()) < 4:
             a.decompose()
 
-    article = (
-        soup.find(attrs={"itemprop": "articleBody"})
-        or soup.find("article")
-        or soup.find("main")
-        or soup.find("div", class_=re.compile(r"(article|content|entry|post|nota|cuerpo|body|story)", re.I))
-        or soup.find("div", id=re.compile(r"(article|content|entry|post|nota|cuerpo|body|story)", re.I))
-    )
+    article = _find_article_body(soup)
 
     container = article if article else soup
     text = container.get_text(separator="\n", strip=True)
     lines = [l.strip() for l in text.splitlines() if l.strip()]
-    return "\n".join(lines)[:12000], og_image
+    result = "\n".join(lines)[:12000]
+    log.info("scrape HTML ok: %d chars, container=%s, og_image=%s",
+             len(result), container.name if article else "body", bool(og_image))
+    log.debug("scrape preview: %s", result[:300])
+    return result, og_image
 
 
 def _download_feed(feed_url: str):
