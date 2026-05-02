@@ -24,6 +24,38 @@ MAX_GROUPS = 5
 _URL_RE = re.compile(r'https?://[^\s<>"\']+', re.IGNORECASE)
 _TAG_RE = re.compile(r'<[^>]+>')
 
+
+def _sanitize_text(text: str) -> str:
+    """
+    Elimina caracteres corruptos del texto antes de enviar a IA o a WhatsApp.
+    Resuelve el problema de sitios que devuelven Windows-1252 declarado como UTF-8
+    (aparecen como ◆ U+FFFD en el resultado).
+    """
+    import unicodedata
+
+    # 1. Intentar reparar mojibake (Latin-1 leído como UTF-8)
+    try:
+        repaired = text.encode('latin-1').decode('utf-8')
+        text = repaired
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        pass  # ya estaba bien o no es Latin-1
+
+    # 2. Eliminar U+FFFD (replacement char) y caracteres de control
+    clean = []
+    for ch in text:
+        if ch in ('\n', '\t'):
+            clean.append(ch)
+        elif ch == '\r':
+            clean.append('\n')
+        elif unicodedata.category(ch)[0] == 'C':
+            continue  # control char — descartar
+        else:
+            clean.append(ch)
+
+    result = ''.join(clean)
+    # 3. Normalizar a NFC (elimina duplicados de combinación)
+    return unicodedata.normalize('NFC', result)
+
 # Patrones de ruido típicos del scraping de portales de noticias
 _NOISE_LINE_RE = re.compile(
     r'^\s*('
@@ -511,8 +543,8 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
             from app.services.rss_service import scrape_full_article
             scraped_text, scraped_image_url = scrape_full_article(source_url)
             if scraped_text and len(scraped_text) > 200:
-                # Limpiar ruido del scraping (categorías, fechas, botones sociales)
-                article_body = _clean_scrape_noise(scraped_text)
+                # Limpiar encoding corrupto, luego ruido del scraping
+                article_body = _clean_scrape_noise(_sanitize_text(scraped_text))
                 log.info("WA: artículo scrapeado y limpio (%d chars)", len(article_body))
             else:
                 log.warning("WA: scraping insuficiente, usando texto original")
@@ -583,6 +615,10 @@ def _broadcast_whatsapp(
             site_url = wp_cfg.site_url.rstrip("/")
     except Exception:
         pass
+
+    # Sanitizar encoding antes de enviar (elimina ◆ U+FFFD y chars corruptos)
+    title = _sanitize_text(title)
+    body = _sanitize_text(body)
 
     msg_text = f"*{title}*\n\n{body}"
     if site_url:
