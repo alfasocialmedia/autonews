@@ -510,14 +510,14 @@ def _process_wa_message(payload: dict):
         url_match = _URL_RE.search(final_text)
         source_url = url_match.group().rstrip(".,;)>") if url_match else None
 
-        _publish_whatsapp_news(db, s, final_text, media_data, source_url)
+        _publish_whatsapp_news(db, s, final_text, media_data, source_url, sender_jid=msg["jid"])
     except Exception as exc:
         log.error("_process_wa_message error: %s", exc)
     finally:
         db.close()
 
 
-def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str | None):
+def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str | None, sender_jid: str | None = None):
     """
     Procesa con IA el contenido recibido por WA y difunde a grupos.
     NO publica en WordPress — eso es exclusivo de RSS y Email.
@@ -547,9 +547,24 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
                 article_body = _clean_scrape_noise(_sanitize_text(scraped_text))
                 log.info("WA: artículo scrapeado y limpio (%d chars)", len(article_body))
             else:
-                log.warning("WA: scraping insuficiente, usando texto original")
+                log.warning("WA: scraping insuficiente (%d chars)", len(scraped_text or ""))
+                article_body = ""
         except Exception as exc:
             log.warning("WA: no se pudo scrapear %s: %s", source_url, exc)
+            article_body = ""
+
+        # Si el scraping no dio contenido suficiente, notificar y abortar
+        if len(article_body) < 300:
+            log.warning("WA: contenido insuficiente tras scraping — abortando")
+            if sender_jid:
+                from app.services.whatsapp_service import send_text
+                send_text(
+                    settings.evolution_api_url, settings.evolution_api_key,
+                    settings.instance_name, sender_jid,
+                    "No pude leer ese artículo (el sitio bloquea el scraping o usa JavaScript). "
+                    "Intentá copiar y pegar el texto directamente.",
+                )
+            return
 
     # Procesar con IA
     # Para URLs: subject vacío → la IA genera el título únicamente desde el contenido
@@ -620,9 +635,10 @@ def _broadcast_whatsapp(
     title = _sanitize_text(title)
     body = _sanitize_text(body)
 
+    domain = site_url.replace("https://", "").replace("http://", "").rstrip("/") if site_url else ""
     msg_text = f"*{title}*\n\n{body}"
-    if site_url:
-        msg_text += f"\n\n{site_url}"
+    if domain:
+        msg_text += f"\n\nTodas las noticias en {domain}"
 
     log.info("WA broadcast: enviando a %d grupo(s) — %s", len(groups), title[:60])
     for g in groups:
