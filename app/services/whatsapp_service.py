@@ -241,6 +241,11 @@ def parse_incoming(payload: dict) -> dict | None:
     try:
         data = payload.get("data", {})
         key = data.get("key", {})
+
+        # Ignorar mensajes enviados por nuestra propia instancia
+        if key.get("fromMe"):
+            return None
+
         remote_jid = key.get("remoteJid", "")
         is_group = remote_jid.endswith("@g.us")
         participant = key.get("participant") or data.get("participant") or remote_jid

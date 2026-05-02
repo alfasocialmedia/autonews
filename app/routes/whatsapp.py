@@ -345,19 +345,34 @@ def _process_wa_message(payload: dict):
         audio_transcript = ""
 
         raw_data = msg.get("_raw_data", {})
+        media_dict = msg.get("media") or {}
         msg_type = msg["type"]
 
-        if msg_type == "image" and raw_data:
-            result = get_media_base64(s.evolution_api_url, s.evolution_api_key, s.instance_name, raw_data)
+        import mimetypes as _mt
+
+        if msg_type == "image":
+            # Intento 1: Evolution API base64
+            result = get_media_base64(s.evolution_api_url, s.evolution_api_key, s.instance_name, raw_data) if raw_data else None
+            # Intento 2: URL directa del campo imageMessage
+            if not result and media_dict:
+                from app.services.whatsapp_service import download_media
+                dl = download_media(s.evolution_api_url, s.evolution_api_key, s.instance_name, media_dict)
+                if dl:
+                    raw_b, fname, mime = dl
+                    result = (raw_b, mime)
             if result:
-                import mimetypes as _mt
                 img_bytes, img_mime = result
                 ext = _mt.guess_extension(img_mime) or ".jpg"
                 media_data = (img_bytes, f"wa_image{ext}", img_mime)
                 log.info("WA: imagen descargada (%d bytes, %s)", len(img_bytes), img_mime)
+            else:
+                log.warning("WA: no se pudo descargar la imagen — se continúa sin foto")
+            # Siempre publicar aunque falle la descarga
+            if not text:
+                text = "Foto compartida vía WhatsApp"
 
-        elif msg_type == "audio" and raw_data:
-            result = get_media_base64(s.evolution_api_url, s.evolution_api_key, s.instance_name, raw_data)
+        elif msg_type == "audio":
+            result = get_media_base64(s.evolution_api_url, s.evolution_api_key, s.instance_name, raw_data) if raw_data else None
             if result:
                 audio_bytes, audio_mime = result
                 log.info("WA: audio descargado (%d bytes) — transcribiendo…", len(audio_bytes))
@@ -369,13 +384,12 @@ def _process_wa_message(payload: dict):
                     groq_key = decrypt_value(groq_cfg.encrypted_api_key)
                     audio_transcript = transcribe_audio(groq_key, audio_bytes, audio_mime)
                     log.info("WA: transcripción (%d chars): %s…", len(audio_transcript), audio_transcript[:80])
-                if not audio_transcript:
-                    audio_transcript = "Nota de voz recibida por WhatsApp"
+            if not audio_transcript:
+                audio_transcript = text or "Nota de voz recibida por WhatsApp"
 
-        # Para video/documento: el caption ya viene en msg["text"]
-        # Construir texto final
+        # Video/documento: el caption ya viene en msg["text"]
         final_text = audio_transcript or text
-        if not final_text and not media_data:
+        if not final_text:
             log.info("WA: mensaje sin contenido procesable (%s)", msg_type)
             return
 
