@@ -11,7 +11,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 log = logging.getLogger("whatsapp_service")
 
-TIMEOUT = 20
+TIMEOUT = 60
 VERIFY_SSL = False  # servidor a servidor en el mismo VPS
 
 
