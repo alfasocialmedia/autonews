@@ -382,37 +382,48 @@ def process_rss_with_groq(
 {article_text[:8000]}
 ═══════════════════════════════════════════════════════════════════
 
-⚠ REGLA ABSOLUTA: Basate ÚNICAMENTE en el texto de arriba.
-NO inventes personas, hechos, cifras, declaraciones ni eventos que no estén en ese contenido.
-Si el texto fuente menciona a Passalacqua, escribís sobre Passalacqua.
-Si habla de una aduana, escribís sobre esa aduana. Sin excepciones.
+⚠ REGLAS ABSOLUTAS — LEER ANTES DE ESCRIBIR:
+1. Basate ÚNICAMENTE en el texto de arriba. Sin excepciones.
+2. PRESERVÁ TODOS los datos concretos del texto fuente:
+   - Nombres completos de personas, instituciones, organismos y lugares
+   - Cifras exactas (cantidades, porcentajes, montos, fechas)
+   - Cargos oficiales, números de leyes, nombres de operativos
+   - Declaraciones textuales entre comillas
+   NO los reemplaces por expresiones vagas ("un funcionario", "cierta cantidad", "una zona").
+   Si el texto dice "300 ampollas de Fentanilo en Misiones", escribís exactamente eso.
+3. La nota debe ser COMPLETA y COMPRENSIBLE por sí sola: quien la lea sin ver el original
+   debe entender quién, qué, cuándo, dónde, cómo y por qué.
 
 ╔══════════════════════════════════════════════════════╗
-║  REGLA #1 — TÍTULO VIRAL                            ║
+║  REGLA #1 — TÍTULO CLARO Y ESPECÍFICO               ║
 ╚══════════════════════════════════════════════════════╝
-El título debe tener ENTRE 80 Y 110 CARACTERES y referirse AL TEMA DEL ARTÍCULO FUENTE.
-Estilo Infobae/Clarín — ejemplos de FORMATO (no de tema, el tema lo da el artículo):
-• "[Nombre] [verbo concreto] y [consecuencia directa]: qué significa para [afectados]"
-• "Confirmaron [hecho]: [detalle numérico o temporal] y [reacción/impacto]"
-• "[Institución] anunció [medida]: cuándo entra en vigencia y a quiénes afecta"
+El título DEBE tener ENTRE 80 Y 110 CARACTERES.
+DEBE incluir el dato más concreto de la nota: nombre propio, cifra exacta, lugar o institución.
+Un título vago que no identifica el tema ES INCORRECTO — rehacelo más específico.
+Estilo Infobae/Clarín — claro, directo, con el hecho concreto adelante:
+• Si hay una persona: su nombre y qué hizo
+• Si hay una cifra: esa cifra exacta en el título
+• Si hay un lugar: mencionarlo
 CONTÁ los caracteres. Menos de 75 = INCORRECTO. Sin punto al final. Sin comillas externas.
-Referencia del título original (NO copies): {title}
+Referencia del título original (NO copies literalmente): {title}
 
 INSTRUCCIONES DE REDACCIÓN:
 
-Sos un periodista argentino con 20 años de experiencia. Reescribís con voz activa, frases directas y los datos concretos que están en el texto fuente. El texto debe sonar 100% humano.
+Sos un periodista argentino con 20 años de experiencia. Tu tarea es REESCRIBIR el artículo fuente conservando todos sus datos específicos, con voz activa y frases directas. El lector debe obtener la misma información que en el original, expresada de otra forma.
 
-LEGIBILIDAD: oraciones de 10 a 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas para ritmo natural.
+LEGIBILIDAD: oraciones de 10 a 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas.
 
 PÁRRAFOS: {para_range} párrafos. Cada <p> con UNA sola idea, MÁXIMO 2 oraciones.
-- Primer párrafo: quién, qué, cuándo, dónde — 2 oraciones directas y fuertes.
-- Párrafos del medio: contexto, antecedentes, declaraciones del artículo fuente. Cita textual clave entre comillas con <strong>.
-- Último párrafo: consecuencia o proyección. Sin anunciar que termina.
+- Primer párrafo: quién, qué, cuándo, dónde — con nombres y cifras exactas, 2 oraciones fuertes.
+- Párrafos del medio: desarrollá cada dato del texto fuente. Incluí citas textuales clave entre comillas con <strong>. No omitas información relevante.
+- Último párrafo: consecuencia, contexto legal o proyección. Sin anunciar que termina.
 
 SUBTÍTULOS: {heading_rule}
 
 PROHIBIDO:
+- Generalizar o vaguear datos concretos del texto fuente ("un funcionario", "cierta cantidad")
 - Inventar datos, personas, cifras o eventos que no estén en el texto fuente
+- Omitir datos clave como nombres, cifras, lugares o declaraciones del original
 - <ul>, <ol> ni listas de ningún tipo
 - "En conclusión", "En resumen", "En definitiva", "Para finalizar"
 - "En primer lugar", "A continuación", "Por otro lado", "Cabe destacar"
@@ -426,10 +437,10 @@ Categorías disponibles: {cat_list}
 IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
-  "title": "Título VIRAL entre 80 y 110 caracteres SOBRE EL TEMA DEL ARTÍCULO FUENTE. NUNCA menos de 75 caracteres.",
-  "content": "HTML periodístico. {para_range} párrafos {content_hint}. Cada <p> máximo 2 oraciones. Mínimo {min_words} palabras. Sin listas.",
+  "title": "Título entre 80 y 110 caracteres con nombre, cifra o lugar concreto del artículo. NUNCA vago ni genérico.",
+  "content": "HTML periodístico. {para_range} párrafos {content_hint}. Cada <p> máximo 2 oraciones. Mínimo {min_words} palabras. Con todos los datos específicos del original.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
-  "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder.",
+  "summary": "EXACTAMENTE 20 palabras con el dato más específico de la nota — ni una más ni una menos.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
@@ -506,35 +517,47 @@ def process_email_with_groq(
 {body[:8000]}
 ════════════════════════════════════════════════════════════════════
 
-⚠ REGLA ABSOLUTA: Reescribí ÚNICAMENTE el contenido de arriba.
-NO inventes personas, hechos, cifras, declaraciones ni eventos que no estén en ese texto.
-El hecho principal es: "{first_body_line[:80]}"
+⚠ REGLAS ABSOLUTAS — LEER ANTES DE ESCRIBIR:
+1. Reescribí ÚNICAMENTE el contenido de arriba. Sin excepciones.
+2. PRESERVÁ TODOS los datos concretos del texto fuente:
+   - Nombres completos de personas, instituciones, organismos y lugares
+   - Cifras exactas (cantidades, porcentajes, montos, fechas)
+   - Cargos oficiales, números de leyes, nombres de operativos
+   - Declaraciones textuales entre comillas
+   NO los reemplaces por expresiones vagas ("un funcionario", "cierta cantidad", "una zona").
+3. La nota debe ser COMPLETA y COMPRENSIBLE por sí sola — quien la lea debe entender
+   quién, qué, cuándo, dónde, cómo y por qué sin necesidad de ver el original.
+El hecho principal es: "{first_body_line[:120]}"
 
 ╔══════════════════════════════════════════════════════╗
-║  REGLA #1 — TÍTULO VIRAL                            ║
+║  REGLA #1 — TÍTULO CLARO Y ESPECÍFICO               ║
 ╚══════════════════════════════════════════════════════╝
-El título debe tener ENTRE 80 Y 110 CARACTERES y referirse AL TEMA DEL CONTENIDO FUENTE.
-Estilo Infobae/Clarín — ejemplos de FORMATO (el tema lo da el contenido de arriba):
-• "[Nombre] [verbo concreto] y [consecuencia]: qué significa para [afectados]"
-• "Confirmaron [hecho del texto]: [detalle numérico] y [reacción/impacto]"
-• "[Institución] anunció [medida]: cuándo entra en vigencia y a quiénes afecta"
+El título DEBE tener ENTRE 80 Y 110 CARACTERES.
+DEBE incluir el dato más concreto del contenido: nombre propio, cifra exacta, lugar o institución.
+Un título vago que no identifica el tema ES INCORRECTO — rehacelo más específico.
+Estilo Infobae/Clarín — claro, con el hecho concreto adelante:
+• Si hay una persona: su nombre y qué hizo
+• Si hay una cifra: esa cifra exacta en el título
+• Si hay un lugar: mencionarlo
 CONTÁ los caracteres. Menos de 75 = INCORRECTO. Sin punto al final. Sin comillas externas.
 
 INSTRUCCIONES DE REDACCIÓN:
 
-Sos un periodista argentino con 20 años de experiencia. Reescribís el contenido fuente con voz activa, frases directas y los datos concretos que están en ese texto. No agregues información externa.
+Sos un periodista argentino con 20 años de experiencia. Tu tarea es REESCRIBIR el contenido fuente conservando todos sus datos específicos, con voz activa y frases directas. El lector debe obtener la misma información que en el original, expresada de otra forma.
 
 LEGIBILIDAD: oraciones de 10 a 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas.
 
 PÁRRAFOS: {para_range} párrafos. Cada <p> con UNA sola idea, MÁXIMO 2 oraciones.
-- Primer párrafo: quién, qué, cuándo, dónde — 2 oraciones directas.
-- Párrafos del medio: contexto, antecedentes, declaraciones del texto fuente entre comillas con <strong>.
-- Último párrafo: consecuencia o proyección. Sin anunciar que termina.
+- Primer párrafo: quién, qué, cuándo, dónde — con nombres y cifras exactas, 2 oraciones fuertes.
+- Párrafos del medio: desarrollá cada dato del texto fuente. Incluí citas textuales clave entre comillas con <strong>. No omitas información relevante.
+- Último párrafo: consecuencia, contexto o proyección. Sin anunciar que termina.
 
 SUBTÍTULOS: Si el contenido tiene secciones diferenciadas, convertí cada una en <h2>. Máximo 2.
 
 PROHIBIDO:
+- Generalizar o vaguear datos concretos ("un funcionario", "cierta cantidad", "una zona del país")
 - Inventar datos, personas, cifras o eventos ausentes del texto fuente
+- Omitir datos clave como nombres, cifras, lugares o declaraciones del original
 - <ul>, <ol> ni listas de ningún tipo
 - "En conclusión", "En resumen", "En definitiva", "Para finalizar"
 - "En primer lugar", "A continuación", "Por otro lado", "Cabe destacar"
@@ -546,10 +569,10 @@ Categorías disponibles: {cat_list}
 IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
-  "title": "Título VIRAL entre 80 y 110 caracteres SOBRE EL TEMA DEL CONTENIDO FUENTE. NUNCA menos de 75 caracteres.",
-  "content": "Noticia reescrita en HTML. {para_range} párrafos <p>. Mínimo {min_words} palabras.",
+  "title": "Título entre 80 y 110 caracteres con nombre, cifra o lugar concreto del contenido. NUNCA vago ni genérico.",
+  "content": "Noticia reescrita en HTML. {para_range} párrafos <p>. Mínimo {min_words} palabras. Con todos los datos específicos del original.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
-  "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras.",
+  "summary": "EXACTAMENTE 20 palabras con el dato más específico — ni una más ni una menos.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
