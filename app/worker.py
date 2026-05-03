@@ -233,9 +233,10 @@ def process_emails():
 
                                 # Subir imagen de portada si existe (adjunto o URL en cuerpo)
                                 featured_media_id = None
+                                email_media_url = ""
                                 if mail_data.get("image_data"):
                                     try:
-                                        featured_media_id = upload_media(
+                                        media_result = upload_media(
                                             wp_cfg.site_url,
                                             wp_cfg.api_user,
                                             wp_pwd,
@@ -243,6 +244,8 @@ def process_emails():
                                             mail_data.get("image_filename") or "portada.jpg",
                                             mail_data.get("image_mime") or "image/jpeg",
                                         )
+                                        if media_result:
+                                            featured_media_id, email_media_url = media_result
                                     except Exception as img_exc:
                                         log.warning(f"  No se pudo subir imagen adjunta: {img_exc}")
                                 elif mail_data.get("image_url"):
@@ -256,7 +259,7 @@ def process_emails():
                                         if img_payload:
                                             img_data, img_name, img_mime = img_payload
                                             try:
-                                                featured_media_id = upload_media(
+                                                media_result = upload_media(
                                                     wp_cfg.site_url,
                                                     wp_cfg.api_user,
                                                     wp_pwd,
@@ -264,6 +267,8 @@ def process_emails():
                                                     img_name,
                                                     img_mime,
                                                 )
+                                                if media_result:
+                                                    featured_media_id, email_media_url = media_result
                                             except Exception as img_exc:
                                                 log.warning(f"  No se pudo subir imagen URL: {img_exc}")
 
@@ -278,8 +283,16 @@ def process_emails():
                                     except Exception:
                                         pass
 
-                                # Subir audio y anteponer bloque de reproductor al contenido
+                                # Incrustar imagen destacada al inicio del contenido (tamaño completo)
                                 _email_content = ai_result.get("content", mail_data["body"])
+                                if featured_media_id and email_media_url:
+                                    img_block = (
+                                        f'<!-- wp:image {{"id":{featured_media_id},"sizeSlug":"large","linkDestination":"none"}} -->\n'
+                                        f'<figure class="wp-block-image size-large">'
+                                        f'<img src="{email_media_url}" alt="{ai_result.get("title", "")}" class="wp-image-{featured_media_id}"/>'
+                                        f'</figure>\n<!-- /wp:image -->\n\n'
+                                    )
+                                    _email_content = img_block + _email_content
                                 if _email_audio:
                                     _email_content = _prepend_audio(
                                         wp_cfg.site_url, wp_cfg.api_user, wp_pwd,
@@ -582,18 +595,30 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
                     pass
 
             featured_media_id = None
+            media_source_url = ""
             if img_payload:
                 try:
                     img_data, img_name, img_mime = img_payload
-                    featured_media_id = upload_media(
+                    media_result = upload_media(
                         wp_cfg.site_url, wp_cfg.api_user, wp_pwd,
                         img_data, img_name, img_mime,
                     )
+                    if media_result:
+                        featured_media_id, media_source_url = media_result
                 except Exception as exc:
                     log.warning("No se pudo subir imagen a %s: %s", wp_cfg.name, exc)
 
             # Subir audio y anteponer bloque de reproductor al contenido
             content = ai_result.get("content", "")
+            # Incrustar imagen destacada al inicio del contenido (tamaño completo)
+            if featured_media_id and media_source_url:
+                img_block = (
+                    f'<!-- wp:image {{"id":{featured_media_id},"sizeSlug":"large","linkDestination":"none"}} -->\n'
+                    f'<figure class="wp-block-image size-large">'
+                    f'<img src="{media_source_url}" alt="{ai_result.get("title", "")}" class="wp-image-{featured_media_id}"/>'
+                    f'</figure>\n<!-- /wp:image -->\n\n'
+                )
+                content = img_block + content
             if audio_bytes:
                 content = _prepend_audio(
                     wp_cfg.site_url, wp_cfg.api_user, wp_pwd,

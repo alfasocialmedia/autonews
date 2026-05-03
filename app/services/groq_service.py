@@ -299,11 +299,16 @@ _DEFAULT_CATEGORIES = (
 _CATEGORY_GUIDE = """CATEGORIZACIÓN — elegí la más específica entre las disponibles:
 - Nacionales: hechos ocurridos en Argentina sin categoría más específica
 - Internacionales / Mundo: noticias de otros países
-- Policiales: crímenes, robos, homicidios, detenidos, narcotráfico, violencia, accidentes fatales
+- Policiales: ⚠ PRIORIDAD ALTA — usá esta categoría cuando haya: crímenes, robos, homicidios,
+  detenidos, arrestos, allanamientos, narcotráfico, tráfico ilegal de medicamentos o drogas
+  (fentanilo, cocaína, etc.), incautaciones, operativos de fuerzas de seguridad, violencia,
+  accidentes fatales, contrabando, detenciones policiales. Si hay un delito o una fuerza de
+  seguridad actuando, ES POLICIALES — aunque la sustancia sea un medicamento.
 - Política: gobierno, elecciones, partidos, legisladores, decretos, actos de gobierno
 - Economía: inflación, mercados, empresas, finanzas, dólar, precios, comercio exterior
 - Previsión Social: ANSES, jubilaciones, pensiones, AUH, asignaciones familiares, seguridad social
-- Salud: enfermedades, hospitales, medicamentos, epidemias, salud pública
+- Salud: SOLO si no hay delito involucrado — enfermedades, hospitales, epidemias,
+  campañas de vacunación, salud pública, uso legítimo de medicamentos
 - Educación: escuelas, universidades, docentes, planes educativos, becas
 - Tecnología: software, hardware, IA, telecomunicaciones, internet, innovación digital
 - Deportes: fútbol, rugby, tenis, atletismo, cualquier competencia deportiva

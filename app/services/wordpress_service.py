@@ -37,8 +37,8 @@ def upload_media(
     image_bytes: bytes,
     filename: str,
     mime_type: str,
-) -> int | None:
-    """Sube una imagen a la biblioteca de medios de WordPress y devuelve su ID."""
+) -> tuple[int, str] | None:
+    """Sube una imagen a la biblioteca de medios de WordPress. Devuelve (id, source_url) o None."""
     url = site_url.rstrip("/") + "/wp-json/wp/v2/media"
     creds = base64.b64encode(f"{api_user}:{app_password}".encode()).decode()
     headers = {
@@ -50,7 +50,8 @@ def upload_media(
         with httpx.Client(timeout=30, verify=False) as client:
             resp = client.post(url, content=image_bytes, headers=headers)
         if resp.status_code in (200, 201):
-            return resp.json().get("id")
+            data = resp.json()
+            return data.get("id"), data.get("source_url", "")
     except Exception:
         pass
     return None
