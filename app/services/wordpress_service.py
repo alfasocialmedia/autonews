@@ -2,10 +2,18 @@ from __future__ import annotations
 
 import base64
 import logging
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
 log = logging.getLogger("wordpress_service")
+
+_TZ_AR = timezone(timedelta(hours=-3))  # Argentina UTC-3, sin horario de verano
+
+
+def _now_ar() -> str:
+    """Hora actual argentina en formato ISO 8601 para la API de WordPress."""
+    return datetime.now(_TZ_AR).strftime("%Y-%m-%dT%H:%M:%S")
 
 
 def _headers(api_user: str, app_password: str) -> dict:
@@ -161,7 +169,7 @@ def create_post(
     keyphrase: str = "",
 ) -> dict:
     url = site_url.rstrip("/") + "/wp-json/wp/v2/posts"
-    payload: dict = {"title": title, "content": content, "status": status}
+    payload: dict = {"title": title, "content": content, "status": status, "date": _now_ar()}
     if category_ids:
         payload["categories"] = category_ids
     if featured_media_id:
