@@ -231,8 +231,27 @@ def scrape_full_article(url: str) -> tuple[str, str | None]:
     return result, og_image
 
 
+def _parse_feed_bytes(content: bytes, text: str):
+    """Intenta parsear feed con varias estrategias de encoding."""
+    # Eliminar BOM UTF-8 si está presente
+    raw = content.lstrip(b"\xef\xbb\xbf")
+
+    feed = feedparser.parse(raw)
+    if feed.entries:
+        return feed
+
+    # Intentar con texto ya decodificado por httpx
+    feed2 = feedparser.parse(text)
+    if feed2.entries:
+        return feed2
+
+    # Devolver el primero aunque esté vacío (el caller decide)
+    return feed
+
+
 def _download_feed(feed_url: str):
     """Descarga y parsea un feed RSS con múltiples estrategias ante bloqueos."""
+    last_exc: Exception | None = None
     try:
         resp = httpx.get(
             feed_url,
@@ -243,18 +262,35 @@ def _download_feed(feed_url: str):
         )
         if resp.status_code != 403:
             resp.raise_for_status()
-            return feedparser.parse(resp.content)
+            feed = _parse_feed_bytes(resp.content, resp.text)
+            if feed.entries:
+                return feed
+            # Guardar para posible re-raise si todos los fallbacks fallan
+            if feed.bozo:
+                last_exc = feed.bozo_exception
     except httpx.HTTPStatusError:
         pass
     except Exception as exc:
-        raise ValueError(f"No se pudo descargar el feed: {exc}") from exc
+        last_exc = exc
 
-    # Fallback: feedparser con su propio User-Agent (algunos sitios lo aceptan)
+    # Fallback 1: feedparser descarga directamente con su propio User-Agent
     feed = feedparser.parse(feed_url)
     if feed.entries:
         return feed
 
-    raise ValueError(f"No se pudo descargar el feed: 403 Forbidden para {feed_url}")
+    # Fallback 2: httpx sin headers especiales
+    try:
+        resp2 = httpx.get(feed_url, timeout=15, follow_redirects=True, verify=False)
+        resp2.raise_for_status()
+        feed2 = _parse_feed_bytes(resp2.content, resp2.text)
+        if feed2.entries:
+            return feed2
+    except Exception:
+        pass
+
+    if last_exc:
+        raise ValueError(f"Feed inválido o inaccesible: {last_exc}") from last_exc
+    raise ValueError(f"No se pudo descargar el feed: {feed_url}")
 
 
 def fetch_rss_items(feed_url: str) -> list[dict]:
