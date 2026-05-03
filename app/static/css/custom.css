@@ -259,3 +259,6 @@ body {
 .btn { border-radius: 8px; }
 .badge { border-radius: 6px; }
 .form-control, .form-select { border-radius: 8px; }
+
+/* ── Fetched list picker (grupos / canales WA) ── */
+.fetched-list-scroll { max-height: 200px; overflow-y: auto; }

@@ -315,6 +315,18 @@ async def fetch_groups(request: Request, db: Session = Depends(get_db)):
     return JSONResponse({"groups": groups})
 
 
+@router.get("/settings/whatsapp/fetch-channels")
+async def fetch_channels_route(request: Request, db: Session = Depends(get_db)):
+    user = _require_admin(request, db)
+    if not user:
+        return JSONResponse({"error": "No autorizado"}, status_code=403)
+
+    s = _get_settings(db)
+    from app.services.whatsapp_service import fetch_newsletters
+    channels = fetch_newsletters(s.evolution_api_url, s.evolution_api_key, s.instance_name)
+    return JSONResponse({"channels": channels})
+
+
 @router.post("/settings/whatsapp/groups/add")
 async def add_group(
     request: Request,

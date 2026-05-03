@@ -130,6 +130,24 @@ def fetch_groups(url: str, api_key: str, instance_name: str) -> list[dict]:
         return []
 
 
+def fetch_newsletters(url: str, api_key: str, instance_name: str) -> list[dict]:
+    """Devuelve lista de {'id': jid, 'subject': name} con los canales/newsletters vinculados."""
+    try:
+        r = requests.get(
+            f"{url}/newsletter/findAll/{instance_name}",
+            headers=_headers(api_key),
+            timeout=TIMEOUT, verify=VERIFY_SSL,
+        )
+        r.raise_for_status()
+        data = r.json()
+        if isinstance(data, list):
+            return [{"id": n.get("id", ""), "subject": n.get("name") or n.get("subject", "")} for n in data]
+        return []
+    except Exception as exc:
+        log.warning("fetch_newsletters error: %s", exc)
+        return []
+
+
 # ── Envío de mensajes ──────────────────────────────────────────────────────────
 
 def send_text(url: str, api_key: str, instance_name: str, jid: str, text: str) -> bool:
