@@ -527,7 +527,11 @@ document.getElementById('fetchChannelsBtn')?.addEventListener('click', async fun
 
   if (data.error) { showToast('Error: ' + data.error, 'danger'); return; }
   const channels = data.channels || [];
-  if (!channels.length) { showToast('No se encontraron canales vinculados', 'warning'); return; }
+  if (!channels.length) {
+    showToast('No se encontraron canales. Debug: ' + (data.debug || '—'), 'warning');
+    console.warn('fetch-channels debug:', data.debug);
+    return;
+  }
 
   const panel = document.getElementById('fetchedChannelsPanel');
   const list = document.getElementById('fetchedChannelsList');

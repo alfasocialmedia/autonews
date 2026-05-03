@@ -130,22 +130,39 @@ def fetch_groups(url: str, api_key: str, instance_name: str) -> list[dict]:
         return []
 
 
-def fetch_newsletters(url: str, api_key: str, instance_name: str) -> list[dict]:
-    """Devuelve lista de {'id': jid, 'subject': name} con los canales/newsletters vinculados."""
-    try:
-        r = requests.get(
-            f"{url}/newsletter/findAll/{instance_name}",
-            headers=_headers(api_key),
-            timeout=TIMEOUT, verify=VERIFY_SSL,
-        )
-        r.raise_for_status()
-        data = r.json()
-        if isinstance(data, list):
-            return [{"id": n.get("id", ""), "subject": n.get("name") or n.get("subject", "")} for n in data]
-        return []
-    except Exception as exc:
-        log.warning("fetch_newsletters error: %s", exc)
-        return []
+def fetch_newsletters(url: str, api_key: str, instance_name: str) -> tuple[list[dict], str]:
+    """Devuelve (lista, debug_info) con los canales/newsletters vinculados."""
+    endpoints_tried = []
+    for path in [
+        f"/newsletter/findAll/{instance_name}",
+        f"/channel/findAll/{instance_name}",
+    ]:
+        full_url = f"{url}{path}"
+        endpoints_tried.append(full_url)
+        try:
+            r = requests.get(
+                full_url,
+                headers=_headers(api_key),
+                timeout=TIMEOUT, verify=VERIFY_SSL,
+            )
+            log.info("fetch_newsletters %s → HTTP %d: %s", full_url, r.status_code, r.text[:300])
+            if r.status_code == 404:
+                continue
+            r.raise_for_status()
+            data = r.json()
+            if isinstance(data, list):
+                items = [{"id": n.get("id", ""), "subject": n.get("name") or n.get("subject", n.get("id", ""))} for n in data if n.get("id")]
+                return items, f"OK ({full_url}) — {len(items)} items"
+            # dict con clave newsletters/channels
+            for key in ("newsletters", "channels", "data", "result"):
+                if isinstance(data, dict) and key in data and isinstance(data[key], list):
+                    items = [{"id": n.get("id", ""), "subject": n.get("name") or n.get("subject", n.get("id", ""))} for n in data[key] if n.get("id")]
+                    return items, f"OK via key '{key}' ({full_url}) — {len(items)} items"
+            return [], f"Respuesta inesperada ({full_url}): {str(data)[:200]}"
+        except Exception as exc:
+            log.warning("fetch_newsletters %s error: %s", full_url, exc)
+            endpoints_tried[-1] += f" → {exc}"
+    return [], f"Todos los endpoints fallaron: {endpoints_tried}"
 
 
 # ── Envío de mensajes ──────────────────────────────────────────────────────────

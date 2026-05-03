@@ -323,8 +323,8 @@ async def fetch_channels_route(request: Request, db: Session = Depends(get_db)):
 
     s = _get_settings(db)
     from app.services.whatsapp_service import fetch_newsletters
-    channels = fetch_newsletters(s.evolution_api_url, s.evolution_api_key, s.instance_name)
-    return JSONResponse({"channels": channels})
+    channels, debug = fetch_newsletters(s.evolution_api_url, s.evolution_api_key, s.instance_name)
+    return JSONResponse({"channels": channels, "debug": debug})
 
 
 @router.post("/settings/whatsapp/groups/add")
