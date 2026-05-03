@@ -588,8 +588,8 @@ def _process_wa_message(payload: dict):
 
 def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str | None, sender_jid: str | None = None):
     """
-    Procesa con IA el contenido recibido por WA y difunde a grupos.
-    NO publica en WordPress — eso es exclusivo de RSS y Email.
+    Procesa con IA el contenido recibido por WA, publica en WordPress
+    y difunde a grupos y canales de WhatsApp.
     Si source_url está presente, scrapea el artículo de esa URL.
     """
     from app.models import GroqSettings
