@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import WhatsAppGroup, WhatsAppSettings
+from app.models import WhatsAppChannel, WhatsAppGroup, WhatsAppSettings
 
 log = logging.getLogger("whatsapp_route")
 
@@ -20,6 +20,7 @@ router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
 MAX_GROUPS = 5
+MAX_CHANNELS = 5
 
 _URL_RE = re.compile(r'https?://[^\s<>"\']+', re.IGNORECASE)
 _TAG_RE = re.compile(r'<[^>]+>')
@@ -183,9 +184,14 @@ async def whatsapp_settings(request: Request, db: Session = Depends(get_db)):
 
     settings = _get_settings(db)
     groups = db.query(WhatsAppGroup).order_by(WhatsAppGroup.id).all()
+    channels = db.query(WhatsAppChannel).order_by(WhatsAppChannel.id).all()
     return templates.TemplateResponse(
         "settings_whatsapp.html",
-        {"request": request, "user": user, "s": settings, "groups": groups, "max_groups": MAX_GROUPS},
+        {
+            "request": request, "user": user, "s": settings,
+            "groups": groups, "max_groups": MAX_GROUPS,
+            "channels": channels, "max_channels": MAX_CHANNELS,
+        },
     )
 
 
@@ -361,6 +367,64 @@ async def delete_group(group_id: int, request: Request, db: Session = Depends(ge
     g = db.query(WhatsAppGroup).filter(WhatsAppGroup.id == group_id).first()
     if g:
         db.delete(g)
+        db.commit()
+    return JSONResponse({"ok": True})
+
+
+# ── Canales ───────────────────────────────────────────────────────────────────
+
+@router.post("/settings/whatsapp/channels/add")
+async def add_channel(
+    request: Request,
+    db: Session = Depends(get_db),
+    jid: str = Form(""),
+    name: str = Form(""),
+):
+    user = _require_admin(request, db)
+    if not user:
+        return JSONResponse({"error": "No autorizado"}, status_code=403)
+
+    count = db.query(WhatsAppChannel).count()
+    if count >= MAX_CHANNELS:
+        return JSONResponse({"error": f"Máximo {MAX_CHANNELS} canales permitidos"}, status_code=400)
+
+    if not jid.strip():
+        return JSONResponse({"error": "JID requerido"}, status_code=400)
+
+    existing = db.query(WhatsAppChannel).filter(WhatsAppChannel.jid == jid.strip()).first()
+    if existing:
+        return JSONResponse({"error": "Canal ya agregado"}, status_code=400)
+
+    ch = WhatsAppChannel(jid=jid.strip(), name=name.strip() or jid.strip())
+    db.add(ch)
+    db.commit()
+    db.refresh(ch)
+    return JSONResponse({"ok": True, "id": ch.id, "jid": ch.jid, "name": ch.name})
+
+
+@router.post("/settings/whatsapp/channels/{channel_id}/toggle")
+async def toggle_channel(channel_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _require_admin(request, db)
+    if not user:
+        return JSONResponse({"error": "No autorizado"}, status_code=403)
+
+    ch = db.query(WhatsAppChannel).filter(WhatsAppChannel.id == channel_id).first()
+    if not ch:
+        return JSONResponse({"error": "No encontrado"}, status_code=404)
+    ch.enabled = not ch.enabled
+    db.commit()
+    return JSONResponse({"ok": True, "enabled": ch.enabled})
+
+
+@router.post("/settings/whatsapp/channels/{channel_id}/delete")
+async def delete_channel(channel_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _require_admin(request, db)
+    if not user:
+        return JSONResponse({"error": "No autorizado"}, status_code=403)
+
+    ch = db.query(WhatsAppChannel).filter(WhatsAppChannel.id == channel_id).first()
+    if ch:
+        db.delete(ch)
         db.commit()
     return JSONResponse({"ok": True})
 
@@ -597,7 +661,21 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
 
     log.info("WA: IA generó — %s", ai_result.get("title", "")[:80])
 
-    # Difundir a grupos (sin link externo — el cierre usa la URL del sitio WordPress)
+    # Publicar en WordPress (sin el texto de cierre de WA)
+    try:
+        from app.worker import _publish_ai_result
+        from app.models import WordPressSettings as _WPSettings
+        wp_sites = db.query(_WPSettings).filter(_WPSettings.is_active == True).all()
+        if wp_sites:
+            count = _publish_ai_result(db, ai_result, wp_sites,
+                                       image_url=scraped_image_url, source_name="WhatsApp")
+            log.info("WA → WordPress: publicado en %d sitio(s)", count)
+        else:
+            log.info("WA → WordPress: sin sitios activos configurados")
+    except Exception as _exc:
+        log.warning("WA → WordPress error: %s", _exc)
+
+    # Difundir a grupos y canales (el cierre usa la URL del sitio WordPress)
     _broadcast_whatsapp(db, settings, ai_result, media_data, scraped_image_url)
 
 
@@ -645,43 +723,58 @@ def _broadcast_whatsapp(
     if domain:
         msg_text += f"\n\nTodas las noticias en {domain}"
 
-    log.info("WA broadcast: enviando a %d grupo(s) — %s", len(groups), title[:60])
-    for g in groups:
+    # Descargar imagen scrapeada una sola vez para reutilizarla en grupos y canales
+    scraped_img_bytes: bytes | None = None
+    scraped_img_mime: str = "image/jpeg"
+    if fallback_image_url:
+        try:
+            import httpx as _httpx
+            ir = _httpx.get(
+                fallback_image_url, timeout=15, follow_redirects=True,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            )
+            ir.raise_for_status()
+            scraped_img_bytes = ir.content
+            scraped_img_mime = ir.headers.get("content-type", "image/jpeg").split(";")[0]
+        except Exception as _exc:
+            log.warning("WA: no se pudo descargar og:image %s: %s", fallback_image_url, _exc)
+
+    def _send_to_jid(jid: str, label: str):
         sent = False
         # 1. Imagen adjunta recibida (bytes)
         if img_payload:
             img_bytes, _img_name, img_mime = img_payload
             sent = send_image_base64(
                 settings.evolution_api_url, settings.evolution_api_key,
-                settings.instance_name, g.jid, img_bytes, img_mime, msg_text,
+                settings.instance_name, jid, img_bytes, img_mime, msg_text,
             )
-        # 2. Imagen scrapeada del artículo — descargar y enviar como base64
-        #    (evita bloqueos de hotlinking del sitio fuente)
+        # 2. Imagen scrapeada (descargada una vez arriba)
+        if not sent and scraped_img_bytes:
+            sent = send_image_base64(
+                settings.evolution_api_url, settings.evolution_api_key,
+                settings.instance_name, jid, scraped_img_bytes, scraped_img_mime, msg_text,
+            )
+        # 3. Imagen por URL directa (último recurso)
         if not sent and fallback_image_url:
-            try:
-                import httpx as _httpx
-                ir = _httpx.get(
-                    fallback_image_url, timeout=15, follow_redirects=True,
-                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
-                )
-                ir.raise_for_status()
-                img_mime = ir.headers.get("content-type", "image/jpeg").split(";")[0]
-                sent = send_image_base64(
-                    settings.evolution_api_url, settings.evolution_api_key,
-                    settings.instance_name, g.jid, ir.content, img_mime, msg_text,
-                )
-            except Exception as _exc:
-                log.warning("WA: no se pudo descargar og:image %s: %s", fallback_image_url, _exc)
-            # Último recurso: URL directa
-            if not sent:
-                sent = send_image(
-                    settings.evolution_api_url, settings.evolution_api_key,
-                    settings.instance_name, g.jid, fallback_image_url, msg_text,
-                )
-        # 3. Solo texto
+            sent = send_image(
+                settings.evolution_api_url, settings.evolution_api_key,
+                settings.instance_name, jid, fallback_image_url, msg_text,
+            )
+        # 4. Solo texto
         if not sent:
             sent = send_text(
                 settings.evolution_api_url, settings.evolution_api_key,
-                settings.instance_name, g.jid, msg_text,
+                settings.instance_name, jid, msg_text,
             )
-        log.info("WA broadcast → %s (%s): %s", g.name, g.jid, "ok" if sent else "ERROR")
+        log.info("WA broadcast → %s (%s): %s", label, jid, "ok" if sent else "ERROR")
+
+    log.info("WA broadcast: enviando a %d grupo(s) — %s", len(groups), title[:60])
+    for g in groups:
+        _send_to_jid(g.jid, g.name)
+
+    # Difundir a canales de WhatsApp configurados
+    channels = db.query(WhatsAppChannel).filter(WhatsAppChannel.enabled == True).all()
+    if channels:
+        log.info("WA broadcast: enviando a %d canal(es)", len(channels))
+        for ch in channels:
+            _send_to_jid(ch.jid, ch.name)

@@ -32,6 +32,22 @@ def _create_default_admin():
         db.close()
 
 
+def _migrate_wa_channels():
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        if "whatsapp_channels" not in inspector.get_table_names():
+            conn.execute(text("""
+                CREATE TABLE whatsapp_channels (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    jid VARCHAR(200) NOT NULL UNIQUE,
+                    name VARCHAR(200) NOT NULL,
+                    enabled BOOLEAN DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+
+
 def _migrate_whatsapp():
     from sqlalchemy import inspect, text
     inspector = inspect(engine)
@@ -131,6 +147,7 @@ async def lifespan(app: FastAPI):
     pathlib.Path("/app/data").mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
     _migrate_whatsapp()
+    _migrate_wa_channels()
     _migrate_elevenlabs()
     _migrate_edge_tts()
     _migrate_columns()

@@ -226,3 +226,13 @@ class WhatsAppGroup(Base):
     name = Column(String(200), nullable=False)
     enabled = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class WhatsAppChannel(Base):
+    __tablename__ = "whatsapp_channels"
+
+    id = Column(Integer, primary_key=True, index=True)
+    jid = Column(String(200), unique=True, nullable=False)   # 120363XXXXXXXXXX@newsletter
+    name = Column(String(200), nullable=False)
+    enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

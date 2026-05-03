@@ -193,6 +193,78 @@
       </div>
     </div>
 
+    <!-- Canales destino -->
+    <div class="card border-0 shadow-sm mt-4">
+      <div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-megaphone me-2 text-primary"></i>Canales de WhatsApp
+          <span class="badge bg-secondary ms-1">{{ channels|length }}/{{ max_channels }}</span>
+        </h6>
+      </div>
+      <div class="card-body">
+        <p class="small text-muted mb-3">
+          Publicá también en canales de WhatsApp vinculados al número conectado.
+          El JID tiene el formato <code>120363XXXXXXXXXX@newsletter</code>.
+        </p>
+
+        <!-- Lista de canales guardados -->
+        <div id="savedChannels">
+          {% if channels %}
+          <table class="table table-sm mb-3">
+            <thead><tr><th>Nombre</th><th>JID</th><th>Estado</th><th><span class="visually-hidden">Acciones</span></th></tr></thead>
+            <tbody>
+            {% for ch in channels %}
+            <tr id="chrow-{{ ch.id }}">
+              <td class="fw-semibold">{{ ch.name }}</td>
+              <td class="font-monospace small text-muted">{{ ch.jid }}</td>
+              <td>
+                <button type="button" class="btn btn-xs btn-outline-{% if ch.enabled %}success{% else %}secondary{% endif %} ch-toggle-btn"
+                        data-id="{{ ch.id }}">
+                  {% if ch.enabled %}Activo{% else %}Inactivo{% endif %}
+                </button>
+              </td>
+              <td>
+                <button type="button" class="btn btn-xs btn-outline-danger ch-delete-btn"
+                        data-id="{{ ch.id }}" title="Eliminar canal">
+                  <i class="bi bi-trash" aria-hidden="true"></i>
+                  <span class="visually-hidden">Eliminar</span>
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <p class="text-muted small mb-3">Sin canales configurados.</p>
+          {% endif %}
+        </div>
+
+        <!-- Agregar canal manual -->
+        {% if channels|length < max_channels %}
+        <div class="border rounded p-3 bg-light">
+          <p class="small fw-semibold mb-2">Agregar canal manualmente</p>
+          <div class="row g-2">
+            <div class="col">
+              <input type="text" id="newChannelJid" class="form-control form-control-sm font-monospace"
+                     placeholder="120363XXXXXXXXXX@newsletter">
+            </div>
+            <div class="col">
+              <input type="text" id="newChannelName" class="form-control form-control-sm"
+                     placeholder="Nombre del canal">
+            </div>
+            <div class="col-auto">
+              <button type="button" class="btn btn-sm btn-primary" id="addChannelBtn" title="Agregar canal">
+                <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                <span class="visually-hidden">Agregar</span>
+              </button>
+            </div>
+          </div>
+          <div class="form-text">El JID lo encontrás en la información del canal en Evolution API.</div>
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+
   </div>
 
   <!-- ── Columna derecha ── -->
@@ -432,6 +504,45 @@ document.querySelectorAll('.delete-btn').forEach(btn => {
     const resp = await fetch(`/settings/whatsapp/groups/${id}/delete`, { method: 'POST' });
     const data = await resp.json();
     if (data.ok) document.getElementById('row-' + id)?.remove();
+  });
+});
+
+// ── Canales ─────────────────────────────────────────────────────────────────────
+document.getElementById('addChannelBtn')?.addEventListener('click', async function () {
+  const jid = document.getElementById('newChannelJid').value.trim();
+  const name = document.getElementById('newChannelName').value.trim();
+  if (!jid) { showToast('JID requerido', 'warning'); return; }
+
+  const form = new FormData();
+  form.append('jid', jid);
+  form.append('name', name || jid);
+  const resp = await fetch('/settings/whatsapp/channels/add', { method: 'POST', body: form });
+  const data = await resp.json();
+
+  if (data.error) { showToast(data.error, 'danger'); return; }
+  showToast('Canal agregado', 'success');
+  setTimeout(() => location.reload(), 800);
+});
+
+document.querySelectorAll('.ch-toggle-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const id = this.dataset.id;
+    const resp = await fetch(`/settings/whatsapp/channels/${id}/toggle`, { method: 'POST' });
+    const data = await resp.json();
+    if (data.ok) {
+      this.className = `btn btn-xs btn-outline-${data.enabled ? 'success' : 'secondary'} ch-toggle-btn`;
+      this.textContent = data.enabled ? 'Activo' : 'Inactivo';
+    }
+  });
+});
+
+document.querySelectorAll('.ch-delete-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    if (!confirm('¿Eliminar este canal?')) return;
+    const id = this.dataset.id;
+    const resp = await fetch(`/settings/whatsapp/channels/${id}/delete`, { method: 'POST' });
+    const data = await resp.json();
+    if (data.ok) document.getElementById('chrow-' + id)?.remove();
   });
 });
 
