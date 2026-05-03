@@ -99,12 +99,10 @@ def set_webhook(url: str, api_key: str, instance_name: str, webhook_url: str) ->
                     "webhookBase64": False,
                     "events": [
                         "MESSAGES_UPSERT",
-                        "CONNECTION_UPDATE",
                         "MESSAGES_UPDATE",
-                        "NEWSLETTER_UPSERT",
-                        "NEWSLETTER_UPDATE",
-                        "newsletter.upsert",
-                        "newsletter.update",
+                        "CONNECTION_UPDATE",
+                        "CHATS_UPSERT",
+                        "CHATS_UPDATE",
                     ],
                 }
             },
