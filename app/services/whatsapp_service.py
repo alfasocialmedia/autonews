@@ -132,39 +132,25 @@ def fetch_groups(url: str, api_key: str, instance_name: str) -> list[dict]:
 
 def fetch_newsletters(url: str, api_key: str, instance_name: str) -> tuple[list[dict], str]:
     """Devuelve (lista, debug_info) con los canales/newsletters vinculados."""
-    results = []
-    for path in [
-        f"/newsletter/findAll/{instance_name}",
-        f"/channel/findAll/{instance_name}",
-        f"/newsletter/fetchAllNewsletters/{instance_name}",
-        f"/{instance_name}/newsletter/findAll",
-    ]:
-        full_url = f"{url}{path}"
-        try:
-            r = requests.get(
-                full_url,
-                headers=_headers(api_key),
-                timeout=TIMEOUT, verify=VERIFY_SSL,
-            )
-            log.info("fetch_newsletters %s → HTTP %d: %.300s", full_url, r.status_code, r.text)
-            status = r.status_code
-            results.append(f"{path} → {status}")
-            if status in (404, 405):
-                continue
-            r.raise_for_status()
-            data = r.json()
-            if isinstance(data, list):
-                items = [{"id": n.get("id", ""), "subject": n.get("name") or n.get("subject", n.get("id", ""))} for n in data if n.get("id")]
-                return items, f"OK {path} — {len(items)} canal(es)"
-            for key in ("newsletters", "channels", "data", "result"):
-                if isinstance(data, dict) and key in data and isinstance(data[key], list):
-                    items = [{"id": n.get("id", ""), "subject": n.get("name") or n.get("subject", n.get("id", ""))} for n in data[key] if n.get("id")]
-                    return items, f"OK {path}['{key}'] — {len(items)} canal(es)"
-            return [], f"Respuesta inesperada {path}: {str(data)[:300]}"
-        except Exception as exc:
-            log.warning("fetch_newsletters %s error: %s", full_url, exc)
-            results.append(f"{path} → exc: {exc}")
-    return [], "Sin endpoint válido. Resultados: " + " | ".join(results)
+    path = f"/newsletter/findAll/{instance_name}"
+    full_url = f"{url}{path}"
+    try:
+        r = requests.get(full_url, headers=_headers(api_key), timeout=TIMEOUT, verify=VERIFY_SSL)
+        if r.status_code == 404:
+            return [], "not_supported"
+        r.raise_for_status()
+        data = r.json()
+        if isinstance(data, list):
+            items = [{"id": n.get("id", ""), "subject": n.get("name") or n.get("subject", n.get("id", ""))} for n in data if n.get("id")]
+            return items, "ok"
+        for key in ("newsletters", "channels", "data", "result"):
+            if isinstance(data, dict) and key in data and isinstance(data[key], list):
+                items = [{"id": n.get("id", ""), "subject": n.get("name") or n.get("subject", n.get("id", ""))} for n in data[key] if n.get("id")]
+                return items, "ok"
+        return [], "ok_empty"
+    except Exception as exc:
+        log.warning("fetch_newsletters error: %s", exc)
+        return [], "error"
 
 
 # ── Envío de mensajes ──────────────────────────────────────────────────────────

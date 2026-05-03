@@ -526,12 +526,12 @@ document.getElementById('fetchChannelsBtn')?.addEventListener('click', async fun
   this.disabled = false;
 
   if (data.error) { showToast('Error: ' + data.error, 'danger'); return; }
-  const channels = data.channels || [];
-  if (!channels.length) {
-    showToast('No se encontraron canales. Debug: ' + (data.debug || '—'), 'warning');
-    console.warn('fetch-channels debug:', data.debug);
+  if (data.status === 'not_supported') {
+    showToast('Tu versión de Evolution API no soporta canales. Ingresá el JID manualmente.', 'warning');
     return;
   }
+  const channels = data.channels || [];
+  if (!channels.length) { showToast('No se encontraron canales vinculados al número', 'warning'); return; }
 
   const panel = document.getElementById('fetchedChannelsPanel');
   const list = document.getElementById('fetchedChannelsList');
