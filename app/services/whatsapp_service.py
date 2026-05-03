@@ -131,26 +131,44 @@ def fetch_groups(url: str, api_key: str, instance_name: str) -> list[dict]:
 
 
 def fetch_newsletters(url: str, api_key: str, instance_name: str) -> tuple[list[dict], str]:
-    """Devuelve (lista, debug_info) con los canales/newsletters vinculados."""
-    path = f"/newsletter/findAll/{instance_name}"
-    full_url = f"{url}{path}"
+    """Devuelve (lista, status) con los canales/newsletters vinculados.
+    Intenta el endpoint nativo de newsletters y, como fallback,
+    busca JIDs @newsletter en la lista de chats."""
+    # 1. Endpoint nativo de newsletters (Evolution API v2 reciente)
     try:
-        r = requests.get(full_url, headers=_headers(api_key), timeout=TIMEOUT, verify=VERIFY_SSL)
-        if r.status_code == 404:
-            return [], "not_supported"
+        r = requests.get(
+            f"{url}/newsletter/findAll/{instance_name}",
+            headers=_headers(api_key), timeout=TIMEOUT, verify=VERIFY_SSL,
+        )
+        if r.status_code not in (404, 405):
+            r.raise_for_status()
+            data = r.json()
+            rows = data if isinstance(data, list) else data.get("newsletters") or data.get("channels") or []
+            items = [{"id": n.get("id", ""), "subject": n.get("name") or n.get("subject", n.get("id", ""))} for n in rows if n.get("id")]
+            return items, "ok"
+    except Exception as exc:
+        log.warning("fetch_newsletters (native) error: %s", exc)
+
+    # 2. Fallback: filtrar @newsletter de la lista de chats
+    try:
+        r = requests.get(
+            f"{url}/chat/findChats/{instance_name}",
+            headers=_headers(api_key), timeout=TIMEOUT, verify=VERIFY_SSL,
+        )
         r.raise_for_status()
         data = r.json()
-        if isinstance(data, list):
-            items = [{"id": n.get("id", ""), "subject": n.get("name") or n.get("subject", n.get("id", ""))} for n in data if n.get("id")]
-            return items, "ok"
-        for key in ("newsletters", "channels", "data", "result"):
-            if isinstance(data, dict) and key in data and isinstance(data[key], list):
-                items = [{"id": n.get("id", ""), "subject": n.get("name") or n.get("subject", n.get("id", ""))} for n in data[key] if n.get("id")]
-                return items, "ok"
-        return [], "ok_empty"
+        chats = data if isinstance(data, list) else data.get("chats") or []
+        items = [
+            {"id": c.get("id", ""), "subject": c.get("name") or c.get("subject") or c.get("id", "")}
+            for c in chats
+            if isinstance(c.get("id"), str) and c["id"].endswith("@newsletter")
+        ]
+        log.info("fetch_newsletters via chats: %d canal(es) encontrado(s)", len(items))
+        return items, "ok"
     except Exception as exc:
-        log.warning("fetch_newsletters error: %s", exc)
-        return [], "error"
+        log.warning("fetch_newsletters (chats fallback) error: %s", exc)
+
+    return [], "not_supported"
 
 
 # ── Envío de mensajes ──────────────────────────────────────────────────────────
