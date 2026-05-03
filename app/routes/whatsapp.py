@@ -479,6 +479,18 @@ async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"ok": False})
 
     event = payload.get("event", "")
+
+    # Loguear cualquier JID @newsletter que aparezca en el payload (ayuda a configurar canales)
+    try:
+        import json as _json
+        raw = _json.dumps(payload)
+        import re as _re
+        newsletter_jids = list(set(_re.findall(r'[\w\-]+@newsletter', raw)))
+        if newsletter_jids:
+            log.info("WA CANAL detectado en webhook — JID(s): %s", newsletter_jids)
+    except Exception:
+        pass
+
     if event not in ("messages.upsert", "MESSAGES_UPSERT"):
         return JSONResponse({"ok": True})
 
