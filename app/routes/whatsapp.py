@@ -480,14 +480,16 @@ async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
 
     event = payload.get("event", "")
 
-    # Loguear cualquier JID @newsletter que aparezca en el payload (ayuda a configurar canales)
+    # Loguear TODOS los eventos para diagnóstico de canales
     try:
         import json as _json
         raw = _json.dumps(payload)
         import re as _re
         newsletter_jids = list(set(_re.findall(r'[\w\-]+@newsletter', raw)))
         if newsletter_jids:
-            log.info("WA CANAL detectado en webhook — JID(s): %s", newsletter_jids)
+            log.info("WA CANAL detectado — evento=%s JID(s): %s", event, newsletter_jids)
+        elif event not in ("messages.upsert", "MESSAGES_UPSERT", "CONNECTION_UPDATE"):
+            log.info("WA webhook evento desconocido: %s — payload: %.400s", event, raw)
     except Exception:
         pass
 
