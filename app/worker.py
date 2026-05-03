@@ -283,16 +283,7 @@ def process_emails():
                                     except Exception:
                                         pass
 
-                                # Incrustar imagen destacada al inicio del contenido (tamaño completo)
                                 _email_content = ai_result.get("content", mail_data["body"])
-                                if featured_media_id and email_media_url:
-                                    img_block = (
-                                        f'<!-- wp:image {{"id":{featured_media_id},"sizeSlug":"large","linkDestination":"none"}} -->\n'
-                                        f'<figure class="wp-block-image size-large">'
-                                        f'<img src="{email_media_url}" alt="{ai_result.get("title", "")}" class="wp-image-{featured_media_id}"/>'
-                                        f'</figure>\n<!-- /wp:image -->\n\n'
-                                    )
-                                    _email_content = img_block + _email_content
                                 if _email_audio:
                                     _email_content = _prepend_audio(
                                         wp_cfg.site_url, wp_cfg.api_user, wp_pwd,
@@ -610,15 +601,6 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
 
             # Subir audio y anteponer bloque de reproductor al contenido
             content = ai_result.get("content", "")
-            # Incrustar imagen destacada al inicio del contenido (tamaño completo)
-            if featured_media_id and media_source_url:
-                img_block = (
-                    f'<!-- wp:image {{"id":{featured_media_id},"sizeSlug":"large","linkDestination":"none"}} -->\n'
-                    f'<figure class="wp-block-image size-large">'
-                    f'<img src="{media_source_url}" alt="{ai_result.get("title", "")}" class="wp-image-{featured_media_id}"/>'
-                    f'</figure>\n<!-- /wp:image -->\n\n'
-                )
-                content = img_block + content
             if audio_bytes:
                 content = _prepend_audio(
                     wp_cfg.site_url, wp_cfg.api_user, wp_pwd,
