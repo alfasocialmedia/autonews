@@ -510,6 +510,11 @@ def _process_wa_message(payload: dict):
         url_match = _URL_RE.search(final_text)
         source_url = url_match.group().rstrip(".,;)>") if url_match else None
 
+        # Mensajes de texto sin URL muy cortos no tienen suficiente contenido para una nota
+        if not source_url and msg_type == "text" and len(final_text) < 80:
+            log.info("WA: mensaje de texto muy corto sin URL (%d chars) — ignorado", len(final_text))
+            return
+
         _publish_whatsapp_news(db, s, final_text, media_data, source_url, sender_jid=msg["jid"])
     except Exception as exc:
         log.error("_process_wa_message error: %s", exc)

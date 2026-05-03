@@ -373,38 +373,41 @@ def process_rss_with_groq(
 
     prompt = f"""{base_prompt}
 
-╔══════════════════════════════════════════════════════╗
-║  REGLA #1 — TÍTULO VIRAL  (leer antes que todo)     ║
-╚══════════════════════════════════════════════════════╝
-El título es lo más importante de la nota. Debe tener ENTRE 80 Y 110 CARACTERES.
-Inspirate en Infobae, Clarín y La Nación. Ejemplos reales del estilo requerido:
-• "Un comerciante brasileño cruzó la frontera, comparó los precios y no podía creer lo que veía"
-• "Reveló que los precios en Argentina son 50% más baratos que en Brasil y el video se hizo viral"
-• "¿Por qué cientos de brasileños cruzan la frontera solo para hacer las compras en Argentina?"
-• "\"En Brasil vale el doble\": el comerciante que viajó y volvió con el changuito desbordado"
-• "Fue a inaugurar una obra pública, encontró irregularidades graves y el Gobierno ya tiene que responder"
-• "Confirmaron los 40 despidos en la planta de Córdoba: los trabajadores cortaron la ruta principal"
-CONTÁ los caracteres antes de responder. Si tu título tiene menos de 75 caracteres, ES INCORRECTO — rehacelo más largo y específico. Sin punto al final. Sin comillas que envuelvan todo el título.
-
-Título original (solo referencia, NO copies): {title}
-
-Contenido del artículo:
+══════════════ ARTÍCULO FUENTE — REESCRIBÍ SOLO ESTO ══════════════
 {article_text[:8000]}
+═══════════════════════════════════════════════════════════════════
+
+⚠ REGLA ABSOLUTA: Basate ÚNICAMENTE en el texto de arriba.
+NO inventes personas, hechos, cifras, declaraciones ni eventos que no estén en ese contenido.
+Si el texto fuente menciona a Passalacqua, escribís sobre Passalacqua.
+Si habla de una aduana, escribís sobre esa aduana. Sin excepciones.
+
+╔══════════════════════════════════════════════════════╗
+║  REGLA #1 — TÍTULO VIRAL                            ║
+╚══════════════════════════════════════════════════════╝
+El título debe tener ENTRE 80 Y 110 CARACTERES y referirse AL TEMA DEL ARTÍCULO FUENTE.
+Estilo Infobae/Clarín — ejemplos de FORMATO (no de tema, el tema lo da el artículo):
+• "[Nombre] [verbo concreto] y [consecuencia directa]: qué significa para [afectados]"
+• "Confirmaron [hecho]: [detalle numérico o temporal] y [reacción/impacto]"
+• "[Institución] anunció [medida]: cuándo entra en vigencia y a quiénes afecta"
+CONTÁ los caracteres. Menos de 75 = INCORRECTO. Sin punto al final. Sin comillas externas.
+Referencia del título original (NO copies): {title}
 
 INSTRUCCIONES DE REDACCIÓN:
 
-Sos un periodista argentino con 20 años de experiencia en diarios nacionales. Escribís con voz activa, frases directas y datos concretos. El texto debe pasar cualquier detector de IA como escrito por humano.
+Sos un periodista argentino con 20 años de experiencia. Reescribís con voz activa, frases directas y los datos concretos que están en el texto fuente. El texto debe sonar 100% humano.
 
-LEGIBILIDAD: oraciones de entre 10 y 18 palabras. Vocabulario cotidiano, sin tecnicismos. Alternás oraciones cortas con algunas más largas para ritmo natural. Apuntás a 95% de legibilidad Flesch.
+LEGIBILIDAD: oraciones de 10 a 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas para ritmo natural.
 
-PÁRRAFOS: {para_range} párrafos en total. Cada <p> contiene UNA sola idea concreta, con MÁXIMO 2 oraciones. Párrafos cortos, directos y bien separados entre sí. NUNCA más de 2 oraciones por párrafo.
-- Primer párrafo: quién, qué, cuándo, dónde en 2 oraciones directas y fuertes.
-- Párrafos del medio: contexto, antecedentes, declaraciones. Una cita textual clave va entre comillas con <strong> solo en la frase citada.
-- Último párrafo: consecuencia, dato de cierre o proyección. Sin anunciar que termina.
+PÁRRAFOS: {para_range} párrafos. Cada <p> con UNA sola idea, MÁXIMO 2 oraciones.
+- Primer párrafo: quién, qué, cuándo, dónde — 2 oraciones directas y fuertes.
+- Párrafos del medio: contexto, antecedentes, declaraciones del artículo fuente. Cita textual clave entre comillas con <strong>.
+- Último párrafo: consecuencia o proyección. Sin anunciar que termina.
 
 SUBTÍTULOS: {heading_rule}
 
 PROHIBIDO:
+- Inventar datos, personas, cifras o eventos que no estén en el texto fuente
 - <ul>, <ol> ni listas de ningún tipo
 - "En conclusión", "En resumen", "En definitiva", "Para finalizar"
 - "En primer lugar", "A continuación", "Por otro lado", "Cabe destacar"
@@ -418,10 +421,10 @@ Categorías disponibles: {cat_list}
 IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
-  "title": "Título VIRAL entre 80 y 110 caracteres, estilo Infobae/Clarín. NUNCA menos de 75 caracteres. Con nombre, cifra o detalle concreto.",
+  "title": "Título VIRAL entre 80 y 110 caracteres SOBRE EL TEMA DEL ARTÍCULO FUENTE. NUNCA menos de 75 caracteres.",
   "content": "HTML periodístico. {para_range} párrafos {content_hint}. Cada <p> máximo 2 oraciones. Mínimo {min_words} palabras. Sin listas.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
-  "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder. Genera curiosidad e incluye la palabra clave.",
+  "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras antes de responder.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
@@ -494,38 +497,39 @@ def process_email_with_groq(
 
     prompt = f"""{base_prompt}
 
-╔══════════════════════════════════════════════════════╗
-║  REGLA #1 — TÍTULO VIRAL  (leer antes que todo)     ║
-╚══════════════════════════════════════════════════════╝
-El título es lo más importante de la nota. Debe tener ENTRE 80 Y 110 CARACTERES.
-Inspirate en Infobae, Clarín y La Nación. Ejemplos reales del estilo requerido:
-• "Un comerciante brasileño cruzó la frontera, comparó los precios y no podía creer lo que veía"
-• "Reveló que los precios en Argentina son 50% más baratos que en Brasil y el video se hizo viral"
-• "¿Por qué cientos de brasileños cruzan la frontera solo para hacer las compras en Argentina?"
-• "Confirmaron los 40 despidos en la planta de Córdoba: los trabajadores cortaron la ruta principal"
-• "Fue a inaugurar una obra pública, encontró irregularidades graves y el Gobierno ya tiene que responder"
-• "Sube 20% la tarifa de luz en todo el país: cuánto vas a pagar de más a partir del mes que viene"
-El hecho principal del contenido es: "{first_body_line[:80]}" — reescribilo con ese estilo viral.
-CONTÁ los caracteres antes de responder. Si tu título tiene menos de 75 caracteres, ES INCORRECTO — rehacelo más largo. NUNCA copies el asunto del correo. Sin punto al final.
-
-CONTENIDO A TRANSFORMAR EN NOTICIA:
+══════════════ CONTENIDO FUENTE — REESCRIBÍ SOLO ESTO ══════════════
 {body[:8000]}
+════════════════════════════════════════════════════════════════════
+
+⚠ REGLA ABSOLUTA: Reescribí ÚNICAMENTE el contenido de arriba.
+NO inventes personas, hechos, cifras, declaraciones ni eventos que no estén en ese texto.
+El hecho principal es: "{first_body_line[:80]}"
+
+╔══════════════════════════════════════════════════════╗
+║  REGLA #1 — TÍTULO VIRAL                            ║
+╚══════════════════════════════════════════════════════╝
+El título debe tener ENTRE 80 Y 110 CARACTERES y referirse AL TEMA DEL CONTENIDO FUENTE.
+Estilo Infobae/Clarín — ejemplos de FORMATO (el tema lo da el contenido de arriba):
+• "[Nombre] [verbo concreto] y [consecuencia]: qué significa para [afectados]"
+• "Confirmaron [hecho del texto]: [detalle numérico] y [reacción/impacto]"
+• "[Institución] anunció [medida]: cuándo entra en vigencia y a quiénes afecta"
+CONTÁ los caracteres. Menos de 75 = INCORRECTO. Sin punto al final. Sin comillas externas.
 
 INSTRUCCIONES DE REDACCIÓN:
 
-Sos un periodista argentino con 20 años de experiencia en diarios nacionales. Tu tarea es REESCRIBIR completamente el contenido anterior como una noticia periodística. NO copies frases textuales — reformulá cada idea con voz propia, activa y directa. El texto debe sonar 100% humano.
+Sos un periodista argentino con 20 años de experiencia. Reescribís el contenido fuente con voz activa, frases directas y los datos concretos que están en ese texto. No agregues información externa.
 
-LEGIBILIDAD: oraciones de entre 10 y 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas para ritmo natural. Apuntás a 95% de legibilidad Flesch.
+LEGIBILIDAD: oraciones de 10 a 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas.
 
-PÁRRAFOS: {para_range} párrafos en total. Cada <p> con UNA sola idea, MÁXIMO 2 oraciones.
-- Primer párrafo: quién, qué, cuándo, dónde — 2 oraciones directas y fuertes.
-- Párrafos del medio: contexto, antecedentes, declaraciones textuales entre comillas con <strong>.
+PÁRRAFOS: {para_range} párrafos. Cada <p> con UNA sola idea, MÁXIMO 2 oraciones.
+- Primer párrafo: quién, qué, cuándo, dónde — 2 oraciones directas.
+- Párrafos del medio: contexto, antecedentes, declaraciones del texto fuente entre comillas con <strong>.
 - Último párrafo: consecuencia o proyección. Sin anunciar que termina.
 
-SUBTÍTULOS: Si el contenido original tiene secciones claramente diferenciadas con títulos propios, convertí cada una en un <h2>. Máximo 2 subtítulos.
+SUBTÍTULOS: Si el contenido tiene secciones diferenciadas, convertí cada una en <h2>. Máximo 2.
 
 PROHIBIDO:
-- Copiar líneas textuales del original sin reescribir
+- Inventar datos, personas, cifras o eventos ausentes del texto fuente
 - <ul>, <ol> ni listas de ningún tipo
 - "En conclusión", "En resumen", "En definitiva", "Para finalizar"
 - "En primer lugar", "A continuación", "Por otro lado", "Cabe destacar"
@@ -537,10 +541,10 @@ Categorías disponibles: {cat_list}
 IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
-  "title": "Título VIRAL entre 80 y 110 caracteres, estilo Infobae/Clarín. NUNCA menos de 75 caracteres. Con nombre, cifra o detalle concreto.",
-  "content": "Noticia reescrita en HTML. {para_range} párrafos <p>. Mínimo {min_words} palabras. <h2> para secciones del original si las hay.",
+  "title": "Título VIRAL entre 80 y 110 caracteres SOBRE EL TEMA DEL CONTENIDO FUENTE. NUNCA menos de 75 caracteres.",
+  "content": "Noticia reescrita en HTML. {para_range} párrafos <p>. Mínimo {min_words} palabras.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
-  "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras. Genera curiosidad e incluye la palabra clave.",
+  "summary": "EXACTAMENTE 20 palabras — ni una más ni una menos. Contá las palabras.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
