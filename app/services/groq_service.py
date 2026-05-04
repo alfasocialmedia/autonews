@@ -397,7 +397,7 @@ def process_rss_with_groq(
     prompt = f"""{base_prompt}
 
 ══════════════ ARTÍCULO FUENTE — REESCRIBÍ SOLO ESTO ══════════════
-{article_text[:8000]}
+{article_text[:15000]}
 ═══════════════════════════════════════════════════════════════════
 
 ⚠ REGLAS ABSOLUTAS — LEER ANTES DE ESCRIBIR:
@@ -532,7 +532,7 @@ def process_email_with_groq(
     prompt = f"""{base_prompt}
 
 ══════════════ CONTENIDO FUENTE — REESCRIBÍ SOLO ESTO ══════════════
-{body[:8000]}
+{body[:15000]}
 ════════════════════════════════════════════════════════════════════
 
 ⚠ REGLAS ABSOLUTAS — LEER ANTES DE ESCRIBIR:
