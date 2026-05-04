@@ -353,6 +353,24 @@ def _article_scale(char_count: int) -> tuple[str, int, int]:
         return "9 a 12", 900, 8000
 
 
+def _chat_with_token_fallback(client, model: str, messages: list, max_tokens: int, **kwargs):
+    """Llama a chat.completions.create y reintenta con menos tokens si OpenRouter devuelve 402."""
+    try:
+        return client.chat.completions.create(
+            model=model, messages=messages, max_tokens=max_tokens, **kwargs
+        )
+    except Exception as exc:
+        err_str = str(exc)
+        m = re.search(r'can only afford (\d+)', err_str)
+        if m and '402' in err_str:
+            affordable = int(m.group(1))
+            log.warning("OpenRouter 402: reduciendo max_tokens %d → %d", max_tokens, affordable)
+            return client.chat.completions.create(
+                model=model, messages=messages, max_tokens=affordable, **kwargs
+            )
+        raise
+
+
 def process_rss_with_groq(
     api_key: str,
     model: str,
@@ -449,10 +467,10 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
         raw = _call_anthropic_text(api_key, model, prompt, max_tokens)
     else:
         client = _get_client(api_key, provider, api_base_url)
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=max_tokens,
+        resp = _chat_with_token_fallback(
+            client, model,
+            [{"role": "user", "content": prompt}],
+            max_tokens,
             temperature=0.85,
         )
         raw = resp.choices[0].message.content.strip()
@@ -581,10 +599,10 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
         raw = _call_anthropic_text(api_key, model, prompt, max_tokens)
     else:
         client = _get_client(api_key, provider, api_base_url)
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=max_tokens,
+        resp = _chat_with_token_fallback(
+            client, model,
+            [{"role": "user", "content": prompt}],
+            max_tokens,
             temperature=0.85,
         )
         raw = resp.choices[0].message.content.strip()
