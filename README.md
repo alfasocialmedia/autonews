@@ -1,7 +1,9 @@
 # AutoNews — Sistema automático de noticias
 
-Panel de administración web + worker automático que monitorea cuentas de correo IMAP,
-procesa el contenido con Groq IA y publica borradores en WordPress.
+Panel de administración web + worker automático que monitorea cuentas de correo IMAP y feeds RSS,
+procesa el contenido con Groq IA y publica en WordPress con imágenes, audio TTS y difusión por WhatsApp.
+
+> **Documentación completa de funcionalidades**: [docs/funcionalidades.md](docs/funcionalidades.md)
 
 ## Arquitectura
 
