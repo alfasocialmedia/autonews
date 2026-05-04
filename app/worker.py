@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from datetime import datetime
 
@@ -531,6 +532,103 @@ def _generate_tts_audio(db, ai_result: dict) -> bytes | None:
     return None
 
 
+def _embed_html_to_wp_block(embed_html: str) -> str | None:
+    """Convierte un elemento embed HTML a bloque wp:embed de Gutenberg."""
+    # YouTube iframe
+    yt = re.search(r'youtube(?:-nocookie)?\.com/embed/([A-Za-z0-9_-]+)', embed_html)
+    if yt:
+        url = f"https://www.youtube.com/watch?v={yt.group(1)}"
+        return (
+            f'<!-- wp:embed {{"url":"{url}","type":"video","providerNameSlug":"youtube","responsive":true}} -->\n'
+            f'<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube">'
+            f'<div class="wp-block-embed__wrapper">\n{url}\n</div></figure>\n'
+            f'<!-- /wp:embed -->'
+        )
+    # Twitter/X blockquote
+    if "twitter-tweet" in embed_html:
+        tw = re.search(r'https?://(?:twitter|x)\.com/\S+/status/\d+', embed_html)
+        if tw:
+            url = tw.group(0).rstrip('/?')
+            return (
+                f'<!-- wp:embed {{"url":"{url}","type":"rich","providerNameSlug":"twitter","responsive":true}} -->\n'
+                f'<figure class="wp-block-embed is-type-rich is-provider-twitter wp-block-embed-twitter">'
+                f'<div class="wp-block-embed__wrapper">\n{url}\n</div></figure>\n'
+                f'<!-- /wp:embed -->'
+            )
+    # Instagram blockquote
+    if "instagram-media" in embed_html:
+        ig = re.search(r'https?://www\.instagram\.com/p/([A-Za-z0-9_-]+)', embed_html)
+        if ig:
+            url = f"https://www.instagram.com/p/{ig.group(1)}/"
+            return (
+                f'<!-- wp:embed {{"url":"{url}","type":"rich","providerNameSlug":"instagram","responsive":true}} -->\n'
+                f'<figure class="wp-block-embed is-type-rich is-provider-instagram wp-block-embed-instagram">'
+                f'<div class="wp-block-embed__wrapper">\n{url}\n</div></figure>\n'
+                f'<!-- /wp:embed -->'
+            )
+    # Facebook plugin iframe
+    if "facebook.com/plugins/" in embed_html or "facebook.com/video/embed" in embed_html:
+        href = re.search(r'href=([^&"\'>\s]+)', embed_html)
+        if href:
+            import urllib.parse
+            fb_url = urllib.parse.unquote(href.group(1))
+            if fb_url.startswith("http"):
+                return (
+                    f'<!-- wp:embed {{"url":"{fb_url}","type":"rich","providerNameSlug":"facebook","responsive":true}} -->\n'
+                    f'<figure class="wp-block-embed is-type-rich is-provider-facebook wp-block-embed-facebook">'
+                    f'<div class="wp-block-embed__wrapper">\n{fb_url}\n</div></figure>\n'
+                    f'<!-- /wp:embed -->'
+                )
+    return None
+
+
+def _embeds_to_wp_blocks(embeds: list[str]) -> str:
+    """Convierte una lista de embeds HTML a bloques Gutenberg concatenados."""
+    blocks = [b for e in embeds if (b := _embed_html_to_wp_block(e))]
+    return "\n\n".join(blocks)
+
+
+def _inject_images_into_content(content: str, image_urls: list[str]) -> str:
+    """Inyecta imágenes inline como bloques wp:image distribuidos entre párrafos."""
+    if not image_urls or not content:
+        return content
+
+    parts = re.split(r'(</p>)', content)
+    # Reconstituir párrafos completos: parte_texto + </p>
+    paragraphs: list[str] = []
+    i = 0
+    while i < len(parts) - 1:
+        paragraphs.append(parts[i] + parts[i + 1])
+        i += 2
+    remainder = parts[-1] if len(parts) % 2 == 1 else ""
+
+    total = len(paragraphs)
+    if total < 2:
+        blocks = "".join(
+            f'\n<!-- wp:image {{"sizeSlug":"large"}} -->\n'
+            f'<figure class="wp-block-image size-large"><img src="{u}" alt=""/></figure>\n'
+            f'<!-- /wp:image -->\n'
+            for u in image_urls
+        )
+        return content + blocks
+
+    step = max(1, total // (len(image_urls) + 1))
+    insert_at = {step * (k + 1) for k in range(len(image_urls))}
+
+    result: list[str] = []
+    img_queue = list(image_urls)
+    for idx, para in enumerate(paragraphs):
+        result.append(para)
+        if idx + 1 in insert_at and img_queue:
+            url = img_queue.pop(0)
+            result.append(
+                f'\n<!-- wp:image {{"sizeSlug":"large"}} -->\n'
+                f'<figure class="wp-block-image size-large"><img src="{url}" alt=""/></figure>\n'
+                f'<!-- /wp:image -->\n'
+            )
+    return "".join(result) + remainder
+
+
 def _prepend_audio(
     site_url: str, api_user: str, wp_pwd: str,
     audio_bytes: bytes, title: str, content: str,
@@ -554,7 +652,7 @@ def _prepend_audio(
     return content
 
 
-def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = None, source_name: str | None = None):
+def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = None, source_name: str | None = None, inline_images: list | None = None, embeds: list | None = None):
     """Publica un resultado de Groq en todos los sitios WP activos. Devuelve cantidad publicada."""
     published_count = 0
 
@@ -601,6 +699,12 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
 
             # Subir audio y anteponer bloque de reproductor al contenido
             content = ai_result.get("content", "")
+            if inline_images:
+                content = _inject_images_into_content(content, list(inline_images))
+            if embeds:
+                embed_blocks = _embeds_to_wp_blocks(embeds)
+                if embed_blocks:
+                    content += "\n\n" + embed_blocks
             if audio_bytes:
                 content = _prepend_audio(
                     wp_cfg.site_url, wp_cfg.api_user, wp_pwd,
@@ -785,11 +889,13 @@ def process_rss_feeds():
                     try:
                         body = item["body"]
                         image_url = item.get("image_url")
+                        inline_images: list[str] = []
+                        embeds: list[str] = []
 
                         # Si el RSS solo trae un excerpt corto, scrapear el artículo completo
                         if item.get("needs_scraping") and item["link"]:
                             log.info("  🔍 Scrapeando artículo completo: %s", item["link"][:80])
-                            scraped_text, scraped_img = scrape_full_article(item["link"])
+                            scraped_text, scraped_img, inline_images, embeds = scrape_full_article(item["link"])
                             if scraped_text:
                                 body = scraped_text
                                 # Re-verificar filtro con el texto completo del artículo
@@ -804,7 +910,7 @@ def process_rss_feeds():
                         elif item["link"]:
                             # Aunque el contenido sea completo, la og:image del artículo
                             # siempre es de mayor resolución que el thumbnail del feed RSS
-                            _, scraped_img = scrape_full_article(item["link"])
+                            _, scraped_img, inline_images, embeds = scrape_full_article(item["link"])
                             if scraped_img:
                                 image_url = scraped_img
                                 log.info("  🖼 og:image scrapeada: %s", scraped_img[:80])
@@ -837,7 +943,7 @@ def process_rss_feeds():
                         rss_item.status = "processed"
                         db.commit()
 
-                        count = _publish_ai_result(db, ai_result, wp_sites, image_url=image_url, source_name=feed.name)
+                        count = _publish_ai_result(db, ai_result, wp_sites, image_url=image_url, source_name=feed.name, inline_images=inline_images, embeds=embeds)
                         rss_item.status = "published" if count > 0 else "error"
                         db.commit()
 
@@ -882,16 +988,18 @@ def publish_rss_item_now(db, feed: RssFeed, item: dict) -> dict:
 
     body = item["body"]
     image_url = item.get("image_url")
+    inline_images: list[str] = []
+    embeds: list[str] = []
 
     if item.get("needs_scraping") and item["link"]:
         log.info("[manual] Scrapeando artículo: %s", item["link"][:80])
-        scraped_text, scraped_img = scrape_full_article(item["link"])
+        scraped_text, scraped_img, inline_images, embeds = scrape_full_article(item["link"])
         if scraped_text:
             body = scraped_text
         if scraped_img:
             image_url = scraped_img
     elif item["link"]:
-        _, scraped_img = scrape_full_article(item["link"])
+        _, scraped_img, inline_images, embeds = scrape_full_article(item["link"])
         if scraped_img:
             image_url = scraped_img
 
@@ -930,7 +1038,7 @@ def publish_rss_item_now(db, feed: RssFeed, item: dict) -> dict:
         db.commit()
         db.refresh(rss_item)
 
-    count = _publish_ai_result(db, ai_result, wp_sites, image_url=image_url, source_name=feed.name)
+    count = _publish_ai_result(db, ai_result, wp_sites, image_url=image_url, source_name=feed.name, inline_images=inline_images, embeds=embeds)
 
     if count > 0:
         rss_item.status = "published"

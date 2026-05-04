@@ -636,7 +636,7 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
         log.info("WA: URL detectada — scrapeando %s", source_url)
         try:
             from app.services.rss_service import scrape_full_article
-            scraped_text, scraped_image_url = scrape_full_article(source_url)
+            scraped_text, scraped_image_url, _, _ = scrape_full_article(source_url)
             if scraped_text and len(scraped_text) > 200:
                 # Limpiar encoding corrupto, luego ruido del scraping
                 article_body = _clean_scrape_noise(_sanitize_text(scraped_text))

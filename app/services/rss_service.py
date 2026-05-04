@@ -90,6 +90,53 @@ def _extract_og_image(soup: BeautifulSoup) -> str | None:
     return None
 
 
+_IMG_SKIP = ("logo", "icon", "avatar", "pixel", "tracking", "spinner", "btn", "arrow", "spacer", "badge", "placeholder")
+
+
+def _extract_inline_images(container, og_image: str | None) -> list[str]:
+    """Extrae URLs de imágenes editoriales dentro del artículo (hasta 3, excluye la og:image)."""
+    seen: set[str] = {og_image} if og_image else set()
+    images: list[str] = []
+    for img in container.find_all("img", src=True):
+        src = img.get("src", "").strip()
+        if not src.startswith("http"):
+            continue
+        if src in seen:
+            continue
+        if any(x in src.lower() for x in _IMG_SKIP):
+            continue
+        try:
+            w = int(img.get("width") or 0)
+            h = int(img.get("height") or 0)
+            if w and w < 250:
+                continue
+            if h and h < 150:
+                continue
+        except (ValueError, TypeError):
+            pass
+        seen.add(src)
+        images.append(src)
+        if len(images) >= 3:
+            break
+    return images
+
+
+def _extract_social_embeds(container) -> list[str]:
+    """Extrae iframes de YouTube/Facebook y blockquotes de Twitter/Instagram del artículo."""
+    embeds: list[str] = []
+    for iframe in container.find_all("iframe", src=True):
+        src = iframe.get("src", "")
+        if "youtube.com/embed/" in src or "youtube-nocookie.com/embed/" in src:
+            embeds.append(str(iframe))
+        elif "facebook.com/plugins/" in src or "facebook.com/video/embed" in src:
+            embeds.append(str(iframe))
+    for bq in container.find_all("blockquote", class_=True):
+        classes = " ".join(bq.get("class", []))
+        if "twitter-tweet" in classes or "instagram-media" in classes:
+            embeds.append(str(bq))
+    return embeds
+
+
 _SCRAPE_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -178,8 +225,10 @@ def _find_article_body(soup: BeautifulSoup):
     )
 
 
-def scrape_full_article(url: str) -> tuple[str, str | None]:
-    """Extrae el texto completo de un artículo y su og:image. Devuelve (texto, imagen_url)."""
+def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]]:
+    """Extrae texto, og:image, imágenes inline y embeds de un artículo.
+    Devuelve (texto, imagen_url, inline_images, embeds).
+    """
     try:
         resp = httpx.get(
             url,
@@ -190,20 +239,28 @@ def scrape_full_article(url: str) -> tuple[str, str | None]:
         resp.raise_for_status()
     except Exception as exc:
         log.warning("No se pudo scrapear %s: %s", url, exc)
-        return "", None
+        return "", None, [], []
 
     # Pasar bytes crudos para que BeautifulSoup detecte el charset real del HTML
-    # (evita errores cuando el sitio declara UTF-8 en el header pero sirve Windows-1252)
     soup = BeautifulSoup(resp.content, "html.parser")
     og_image = _extract_og_image(soup)
+
+    # Localizar el contenedor del artículo antes de cualquier modificación
+    pre_article = _find_article_body(soup)
+    pre_container = pre_article if pre_article else soup
+
+    # Extraer multimedia ANTES de eliminar ruido (iframes y figures se pierden después)
+    inline_images = _extract_inline_images(pre_container, og_image)
+    embeds = _extract_social_embeds(pre_container)
 
     # 1. Preferir JSON-LD: contiene el artículo completo sin paywall ni JS
     jsonld_text = _extract_jsonld_text(soup)
     if jsonld_text:
         lines = [l.strip() for l in jsonld_text.splitlines() if l.strip()]
         result = "\n".join(lines)[:12000]
-        log.info("scrape JSON-LD ok: %d chars, og_image=%s", len(result), bool(og_image))
-        return result, og_image
+        log.info("scrape JSON-LD ok: %d chars, og_image=%s, images=%d, embeds=%d",
+                 len(result), bool(og_image), len(inline_images), len(embeds))
+        return result, og_image, inline_images, embeds
 
     # 2. Fallback: scraping HTML tradicional
     for tag in soup(_NOISE_TAGS):
@@ -225,10 +282,11 @@ def scrape_full_article(url: str) -> tuple[str, str | None]:
     text = container.get_text(separator="\n", strip=True)
     lines = [l.strip() for l in text.splitlines() if l.strip()]
     result = "\n".join(lines)[:12000]
-    log.info("scrape HTML ok: %d chars, container=%s, og_image=%s",
-             len(result), container.name if article else "body", bool(og_image))
+    log.info("scrape HTML ok: %d chars, container=%s, og_image=%s, images=%d, embeds=%d",
+             len(result), container.name if article else "body",
+             bool(og_image), len(inline_images), len(embeds))
     log.debug("scrape preview: %s", result[:300])
-    return result, og_image
+    return result, og_image, inline_images, embeds
 
 
 def _parse_feed_bytes(content: bytes, text: str):
