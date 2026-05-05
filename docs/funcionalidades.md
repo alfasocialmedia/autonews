@@ -13,9 +13,10 @@ Referencia completa de todas las capacidades del sistema. Se actualiza con cada 
 5. [Audio TTS](#5-audio-tts)
 6. [Publicación en WordPress](#6-publicación-en-wordpress)
 7. [Difusión por WhatsApp](#7-difusión-por-whatsapp)
-8. [Filtros y control de flujo](#8-filtros-y-control-de-flujo)
-9. [Panel de administración](#9-panel-de-administración)
-10. [Seguridad y cifrado](#10-seguridad-y-cifrado)
+8. [Publicación en Instagram](#8-publicación-en-instagram)
+9. [Filtros y control de flujo](#9-filtros-y-control-de-flujo)
+10. [Panel de administración](#10-panel-de-administración)
+11. [Seguridad y cifrado](#11-seguridad-y-cifrado)
 
 ---
 
@@ -221,9 +222,23 @@ Tras publicar exitosamente en WordPress (primer sitio), se envía una notificaci
 
 ---
 
-## 8. Filtros y control de flujo
+## 8. Publicación en Instagram
 
-### 8.1 Filtro de palabras clave (RSS)
+> **Estado:** En desarrollo. Ver [docs/instagram-graph-api.md](instagram-graph-api.md) para la guía de configuración de credenciales.
+
+Tras publicar en WordPress, AutoNews publicará automáticamente en Instagram una imagen con plantilla propia.
+
+- **Imagen generada con Pillow**: plantilla con estilo visual propio, superpone el título y la categoría de la noticia. Formato 4:5 (1080×1350 px) para mayor presencia en el feed.
+- **Copy generado por IA**: Groq genera el caption con tono periodístico + 5 hashtags virales según el tema de la noticia.
+- **Integración con Instagram Graph API**: requiere cuenta Business o Creator vinculada a una Página de Facebook y una App en Meta for Developers.
+- **Token de larga duración**: Access Token de 60 días renovado automáticamente por el worker antes de que expire.
+- **Límite de Meta**: 25 posts automáticos por día vía API.
+
+---
+
+## 9. Filtros y control de flujo
+
+### 9.1 Filtro de palabras clave (RSS)
 
 Cada feed puede tener un filtro de palabras clave separadas por comas. El artículo se publica solo si el título o el cuerpo contienen **alguna** de esas palabras (case-insensitive).
 
@@ -233,18 +248,18 @@ El filtro se aplica en dos momentos:
 
 Los artículos descartados se marcan como `skipped` en la base de datos para no revisarlos nuevamente.
 
-### 8.2 Deduplicación
+### 9.2 Deduplicación
 
 Cada artículo RSS se identifica por su `guid`. Si ya existe en la base de datos, se omite sin reprocesar.
 
-### 8.3 Límites de publicación
+### 9.3 Límites de publicación
 
 - **Máximo diario por feed**: configurable; al alcanzarlo, el feed se omite hasta el día siguiente.
 - **Artículos por ciclo**: cuántos artículos procesar por cada revisión del feed.
 
 ---
 
-## 9. Panel de administración
+## 10. Panel de administración
 
 Aplicación web FastAPI + Jinja2 + Bootstrap 5.
 
@@ -270,7 +285,7 @@ Desde la sección RSS se puede forzar la publicación inmediata de cualquier art
 
 ---
 
-## 10. Seguridad y cifrado
+## 11. Seguridad y cifrado
 
 - **Contraseñas de correo, API keys y app passwords**: cifradas en base de datos con **Fernet** (AES-128-CBC). La clave de cifrado (`ENCRYPTION_KEY`) vive solo en el `.env`.
 - **Contraseñas de usuarios**: hash **bcrypt** via passlib.
@@ -284,6 +299,7 @@ Desde la sección RSS se puede forzar la publicación inmediata de cualquier art
 
 | Fecha | Cambio |
 |-------|--------|
+| 2026-05-05 | Documentación de configuración de Instagram Graph API (`docs/instagram-graph-api.md`) |
 | 2026-05-04 | Soporte para imágenes inline y embeds de YouTube/Twitter/Instagram/Facebook extraídos del artículo scrapeado e inyectados como bloques Gutenberg |
 | 2026-05 | Reintentar con tokens asequibles cuando OpenRouter devuelve error 402 |
 | 2026-05 | Aumentar límite de texto fuente de 8.000 a 12.000 caracteres |
