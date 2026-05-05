@@ -502,6 +502,19 @@ async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
     return JSONResponse({"ok": True})
 
 
+def _log_db(db, level: str, message: str):
+    """Guarda un log en la base de datos para que aparezca en el panel."""
+    try:
+        from app.models import Log
+        db.add(Log(level=level, message=message, source="whatsapp"))
+        db.commit()
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
 def _process_wa_message(payload: dict):
     """Procesa un mensaje de WhatsApp entrante y publica en WordPress si corresponde."""
     from app.database import SessionLocal
@@ -520,8 +533,10 @@ def _process_wa_message(payload: dict):
         authorized = [re.sub(r"[^0-9]", "", n) for n in (s.authorized_numbers or "").split(",") if n.strip()]
         if authorized and msg["from"] not in authorized:
             log.info("WA: número no autorizado %s (autorizados: %s)", msg["from"], authorized)
+            _log_db(db, "WARNING", f"[WA] Mensaje de número no autorizado: {msg['from']} (autorizados: {authorized})")
             return
         log.info("WA: número autorizado %s — procesando mensaje tipo=%s", msg["from"], msg.get("type"))
+        _log_db(db, "INFO", f"[WA] Mensaje recibido de {msg['from']} — tipo: {msg.get('type')}")
 
         # Ignorar mensajes de grupos (solo procesar DMs)
         if msg["is_group"]:
@@ -604,11 +619,16 @@ def _process_wa_message(payload: dict):
         # Mensajes de texto sin URL muy cortos no tienen suficiente contenido para una nota
         if not source_url and msg_type == "text" and len(final_text) < 80:
             log.info("WA: mensaje de texto muy corto sin URL (%d chars) — ignorado", len(final_text))
+            _log_db(db, "WARNING", f"[WA] Mensaje ignorado: texto muy corto ({len(final_text)} chars) y sin URL")
             return
 
         _publish_whatsapp_news(db, s, final_text, media_data, source_url, sender_jid=msg["jid"])
     except Exception as exc:
         log.error("_process_wa_message error: %s", exc)
+        try:
+            _log_db(db, "ERROR", f"[WA] Error procesando mensaje: {exc}")
+        except Exception:
+            pass
     finally:
         db.close()
 
@@ -694,7 +714,9 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
             api_base_url=groq_cfg.api_base_url,
         )
 
-    log.info("WA: IA generó — %s", ai_result.get("title", "")[:80])
+    titulo = ai_result.get("title", "")[:80]
+    log.info("WA: IA generó — %s", titulo)
+    _log_db(db, "INFO", f"[WA] IA procesó: {titulo}")
 
     # Publicar en WordPress (sin el texto de cierre de WA)
     try:
@@ -706,10 +728,16 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
                                        image_url=scraped_image_url, source_name="WhatsApp",
                                        image_bytes_payload=media_data)
             log.info("WA → WordPress: publicado en %d sitio(s)", count)
+            if count > 0:
+                _log_db(db, "INFO", f"[WA] Publicado en WordPress: {titulo}")
+            else:
+                _log_db(db, "WARNING", f"[WA] No se pudo publicar en WordPress: {titulo}")
         else:
             log.info("WA → WordPress: sin sitios activos configurados")
+            _log_db(db, "WARNING", "[WA] No hay sitios WordPress activos configurados")
     except Exception as _exc:
         log.warning("WA → WordPress error: %s", _exc)
+        _log_db(db, "ERROR", f"[WA] Error publicando en WordPress: {_exc}")
 
     # Difundir a grupos y canales (el cierre usa la URL del sitio WordPress)
     _broadcast_whatsapp(db, settings, ai_result, media_data, scraped_image_url)
@@ -723,11 +751,13 @@ def _broadcast_whatsapp(
     """Envía la noticia completa a los grupos de WA. Cierra con el sitio WordPress."""
     if not settings.broadcast_enabled:
         log.info("WA broadcast: difusión deshabilitada")
+        _log_db(db, "WARNING", "[WA] Broadcast deshabilitado — activalo en Configuración → WhatsApp")
         return
 
     groups = db.query(WhatsAppGroup).filter(WhatsAppGroup.enabled == True).all()
     if not groups:
         log.info("WA broadcast: no hay grupos activos configurados")
+        _log_db(db, "WARNING", "[WA] No hay grupos activos — agregá grupos en Configuración → WhatsApp")
         return
 
     from app.services.whatsapp_service import send_text, send_image_base64, send_image
@@ -803,8 +833,11 @@ def _broadcast_whatsapp(
                 settings.instance_name, jid, msg_text,
             )
         log.info("WA broadcast → %s (%s): %s", label, jid, "ok" if sent else "ERROR")
+        if not sent:
+            _log_db(db, "ERROR", f"[WA] Falló el envío a {label} ({jid})")
 
     log.info("WA broadcast: enviando a %d grupo(s) — %s", len(groups), title[:60])
+    _log_db(db, "INFO", f"[WA] Difundiendo a {len(groups)} grupo(s): {title[:60]}")
     for g in groups:
         _send_to_jid(g.jid, g.name)
 
