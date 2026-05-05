@@ -652,14 +652,17 @@ def _prepend_audio(
     return content
 
 
-def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = None, source_name: str | None = None, inline_images: list | None = None, embeds: list | None = None):
+def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = None, source_name: str | None = None, inline_images: list | None = None, embeds: list | None = None, image_bytes_payload: tuple | None = None):
     """Publica un resultado de Groq en todos los sitios WP activos. Devuelve cantidad publicada."""
     published_count = 0
 
     # Descargar imagen una sola vez para todos los sitios
+    # image_bytes_payload = (bytes, filename, mimetype) usado cuando ya tenemos la imagen en memoria (ej: WhatsApp)
     img_payload = None
     if image_url:
         img_payload = _download_image(image_url)
+    elif image_bytes_payload:
+        img_payload = image_bytes_payload
 
     # Generar audio TTS una sola vez para todos los sitios (evita facturar dos veces)
     audio_bytes = _generate_tts_audio(db, ai_result)

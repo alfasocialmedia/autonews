@@ -516,11 +516,12 @@ def _process_wa_message(payload: dict):
         if not s or not s.enabled:
             return
 
-        # Verificar número autorizado (soporta CSV)
-        authorized = [n.strip() for n in (s.authorized_numbers or "").split(",") if n.strip()]
+        # Verificar número autorizado — normalizar a solo dígitos para comparar
+        authorized = [re.sub(r"[^0-9]", "", n) for n in (s.authorized_numbers or "").split(",") if n.strip()]
         if authorized and msg["from"] not in authorized:
-            log.info("WA: mensaje de número no autorizado %s", msg["from"])
+            log.info("WA: número no autorizado %s (autorizados: %s)", msg["from"], authorized)
             return
+        log.info("WA: número autorizado %s — procesando mensaje tipo=%s", msg["from"], msg.get("type"))
 
         # Ignorar mensajes de grupos (solo procesar DMs)
         if msg["is_group"]:
@@ -694,7 +695,8 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
         wp_sites = db.query(_WPSettings).filter(_WPSettings.is_active == True).all()
         if wp_sites:
             count = _publish_ai_result(db, ai_result, wp_sites,
-                                       image_url=scraped_image_url, source_name="WhatsApp")
+                                       image_url=scraped_image_url, source_name="WhatsApp",
+                                       image_bytes_payload=media_data)
             log.info("WA → WordPress: publicado en %d sitio(s)", count)
         else:
             log.info("WA → WordPress: sin sitios activos configurados")
