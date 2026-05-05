@@ -629,6 +629,12 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
 
     api_key = decrypt_value(groq_cfg.encrypted_api_key)
 
+    # Obtener categorías reales de WordPress para que la IA elija la correcta
+    from app.models import WordPressSettings as _WPSettings
+    from app.worker import _fetch_wp_category_names
+    wp_sites_for_cats = db.query(_WPSettings).filter(_WPSettings.is_active == True).all()
+    wp_categories = _fetch_wp_category_names(wp_sites_for_cats)
+
     article_body = text
     scraped_image_url = None
 
@@ -674,6 +680,7 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
         ai_result = process_rss_with_groq(
             api_key, groq_cfg.model, groq_cfg.base_prompt,
             subject, article_body,
+            available_categories=wp_categories or None,
             provider=groq_cfg.provider,
             api_base_url=groq_cfg.api_base_url,
         )
@@ -682,6 +689,7 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
         ai_result = process_email_with_groq(
             api_key, groq_cfg.model, groq_cfg.base_prompt,
             subject, article_body,
+            available_categories=wp_categories or None,
             provider=groq_cfg.provider,
             api_base_url=groq_cfg.api_base_url,
         )
