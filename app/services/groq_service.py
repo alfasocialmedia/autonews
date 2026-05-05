@@ -346,10 +346,11 @@ def _detect_headings(text: str) -> bool:
     return bool(re.search(r'<h[2-4][^>]*>', text, re.IGNORECASE))
 
 
-def _article_scale(char_count: int) -> tuple[str, int, int]:
-    """Devuelve (rango_párrafos, palabras_mínimas, max_tokens) según largo de la fuente."""
+def _article_scale(char_count: int) -> tuple[str, int | None, int]:
+    """Devuelve (rango_párrafos, palabras_mínimas_o_None, max_tokens) según largo de la fuente.
+    None en palabras_mínimas = fuente corta, párrafos breves sin mínimo impuesto."""
     if char_count < 600:
-        return "2 a 3", 150, 3000   # Fuente muy corta: OCR de foto, caption breve
+        return "3 a 5", None, 3000   # Fuente muy corta: sin mínimo, párrafos de 1 oración
     elif char_count < 1500:
         return "4 a 5", 400, 5000
     elif char_count < 3000:
@@ -396,10 +397,17 @@ def process_rss_with_groq(
 
     if source_has_headings:
         heading_rule = "Usá 1 o 2 <h2> para separar secciones temáticas distintas si el contenido lo justifica."
-        content_hint = f"<p> bien separados, con <h2> donde corresponda"
+        content_hint = "<p> bien separados, con <h2> donde corresponda"
     else:
         heading_rule = "NO uses <h2> ni ningún subtítulo. El artículo fuente no tiene subtítulos."
         content_hint = "<p> bien separados, sin subtítulos"
+
+    if min_words:
+        word_count_rule = f"Mínimo {min_words} palabras."
+        para_size_rule = "Cada <p> con UNA sola idea, MÁXIMO 2 oraciones."
+    else:
+        word_count_rule = "Sin mínimo de palabras — el artículo puede ser corto. No rellenes ni inventes para alargar."
+        para_size_rule = "Cada <p> con 1 oración precisa y directa. Sin relleno."
 
     prompt = f"""{base_prompt}
 
@@ -438,7 +446,7 @@ Sos un periodista argentino con 20 años de experiencia. Tu tarea es REESCRIBIR 
 
 LEGIBILIDAD: oraciones de 10 a 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas.
 
-PÁRRAFOS: {para_range} párrafos. Cada <p> con UNA sola idea, MÁXIMO 2 oraciones.
+PÁRRAFOS: {para_range} párrafos. {para_size_rule}
 - Primer párrafo: quién, qué, cuándo, dónde — con nombres y cifras exactas, 2 oraciones fuertes.
 - Párrafos del medio: desarrollá cada dato del texto fuente. Incluí citas textuales clave entre comillas con <strong>. No omitas información relevante.
 - Último párrafo: consecuencia, contexto legal o proyección. Sin anunciar que termina.
@@ -463,7 +471,7 @@ IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título entre 80 y 110 caracteres con nombre, cifra o lugar concreto del artículo. NUNCA vago ni genérico.",
-  "content": "HTML periodístico. {para_range} párrafos {content_hint}. Cada <p> máximo 2 oraciones. Mínimo {min_words} palabras. Con todos los datos específicos del original.",
+  "content": "HTML periodístico. {para_range} párrafos {content_hint}. {para_size_rule} {word_count_rule} Con todos los datos específicos del original.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
   "summary": "EXACTAMENTE 20 palabras con el dato más específico de la nota — ni una más ni una menos.",
   "keyphrase": "frase clave de 2 a 4 palabras",
@@ -530,6 +538,13 @@ def process_email_with_groq(
     body_len = len(body)
     para_range, min_words, max_tokens = _article_scale(body_len)
 
+    if min_words:
+        word_count_rule = f"Mínimo {min_words} palabras."
+        para_size_rule = "Cada <p> con UNA sola idea, MÁXIMO 2 oraciones."
+    else:
+        word_count_rule = "Sin mínimo de palabras — el artículo puede ser corto. No rellenes ni inventes para alargar."
+        para_size_rule = "Cada <p> con 1 oración precisa y directa. Sin relleno."
+
     # Extraer la primera línea significativa del cuerpo como pista de titular
     first_body_line = next(
         (l.strip() for l in body.splitlines() if len(l.strip()) > 15),
@@ -572,7 +587,7 @@ Sos un periodista argentino con 20 años de experiencia. Tu tarea es REESCRIBIR 
 
 LEGIBILIDAD: oraciones de 10 a 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas.
 
-PÁRRAFOS: {para_range} párrafos. Cada <p> con UNA sola idea, MÁXIMO 2 oraciones.
+PÁRRAFOS: {para_range} párrafos. {para_size_rule}
 - Primer párrafo: quién, qué, cuándo, dónde — con nombres y cifras exactas, 2 oraciones fuertes.
 - Párrafos del medio: desarrollá cada dato del texto fuente. Incluí citas textuales clave entre comillas con <strong>. No omitas información relevante.
 - Último párrafo: consecuencia, contexto o proyección. Sin anunciar que termina.
@@ -595,7 +610,7 @@ IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título entre 80 y 110 caracteres con nombre, cifra o lugar concreto del contenido. NUNCA vago ni genérico.",
-  "content": "Noticia reescrita en HTML. {para_range} párrafos <p>. Mínimo {min_words} palabras. Con todos los datos específicos del original.",
+  "content": "Noticia reescrita en HTML. {para_range} párrafos <p>. {para_size_rule} {word_count_rule} Con todos los datos específicos del original.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
   "summary": "EXACTAMENTE 20 palabras con el dato más específico — ni una más ni una menos.",
   "keyphrase": "frase clave de 2 a 4 palabras",
