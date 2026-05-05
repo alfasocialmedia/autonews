@@ -689,11 +689,19 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
             return
 
     # Procesar con IA
-    # Para URLs: subject vacío → la IA genera el título únicamente desde el contenido
+    # Para URLs: subject vacío → la IA genera el título desde el contenido
     if source_url:
         subject = ""
     else:
-        subject = article_body[:100] if article_body else "Noticia por WhatsApp"
+        # Usar la primera línea significativa del contenido como hint de título.
+        # Evita que caption cortos ("Mirá esto") o metadata de OCR ("La imagen muestra...")
+        # contaminen el título generado.
+        first_line = next(
+            (l.strip() for l in article_body.splitlines()
+             if len(l.strip()) > 20 and not l.strip().lower().startswith(("la imagen", "el texto", "en la imagen"))),
+            ""
+        )
+        subject = first_line[:120] if first_line else (article_body[:100] if article_body else "Noticia por WhatsApp")
 
     if source_url and len(article_body) > 300:
         from app.services.groq_service import process_rss_with_groq

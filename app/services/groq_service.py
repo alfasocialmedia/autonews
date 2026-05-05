@@ -142,10 +142,15 @@ def extract_image_text(
         vision_model = _VISION_MODELS["groq"]
 
     prompt_text = (
-        "Describí esta imagen en español de forma concisa y directa. "
-        "Si contiene texto (captura de pantalla, imagen de noticia, cartel, documento, tweet), "
-        "transcribí el texto completo y exacto. "
-        "Si no hay texto, describí el acontecimiento o escena principal."
+        "Extraé el contenido de esta imagen en español.\n"
+        "- Si es una noticia, tweet, screenshot o imagen con texto: transcribí el texto tal como aparece. "
+        "Primera línea: el titular o headline. Líneas siguientes: el cuerpo del texto.\n"
+        "- Ignorá elementos de interfaz: botones, íconos de 'Me gusta', 'Compartir', fechas de publicación, "
+        "nombres de usuario '@', pie de página, marcas de agua.\n"
+        "- Si la imagen no tiene texto relevante (es una fotografía de escena), "
+        "describí el acontecimiento principal en una oración directa.\n"
+        "- Respondé SOLO con el texto extraído. Sin introducción, sin frases como "
+        "'La imagen muestra...', 'El texto dice...', 'En la imagen se puede ver...'."
     )
 
     try:
@@ -343,7 +348,9 @@ def _detect_headings(text: str) -> bool:
 
 def _article_scale(char_count: int) -> tuple[str, int, int]:
     """Devuelve (rango_párrafos, palabras_mínimas, max_tokens) según largo de la fuente."""
-    if char_count < 1500:
+    if char_count < 600:
+        return "2 a 3", 150, 3000   # Fuente muy corta: OCR de foto, caption breve
+    elif char_count < 1500:
         return "4 a 5", 400, 5000
     elif char_count < 3000:
         return "5 a 7", 550, 6000
