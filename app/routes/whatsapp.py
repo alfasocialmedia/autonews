@@ -4,6 +4,7 @@ import html as _html_mod
 import logging
 import re
 import threading
+import time
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -515,6 +516,119 @@ def _log_db(db, level: str, message: str):
             pass
 
 
+# ── Buffer de mensajes multi-parte (texto + foto separados) ────────────────────
+# Cuando el usuario envía texto e imagen como mensajes separados, acumulamos
+# ambos durante BUFFER_SECS segundos y los procesamos juntos.
+
+_BUFFER_SECS = 15  # ventana de espera para combinar mensajes del mismo remitente
+
+# {sender_number: {"text": str, "media_data": tuple|None, "source_url": str|None,
+#                  "jid": str, "timer": Timer, "ts": float}}
+_wa_buffers: dict[str, dict] = {}
+_wa_buf_lock = threading.Lock()
+
+
+def _flush_wa_buffer(sender: str):
+    """Procesa el buffer acumulado de un remitente (llamado por el timer o al llegar nuevo mensaje completo)."""
+    with _wa_buf_lock:
+        buf = _wa_buffers.pop(sender, None)
+    if not buf:
+        return
+
+    text = buf["text"]
+    media_data = buf["media_data"]
+    source_url = buf["source_url"]
+    jid = buf["jid"]
+
+    if not text and not media_data:
+        return
+
+    from app.database import SessionLocal
+    db = SessionLocal()
+    try:
+        s = db.query(WhatsAppSettings).first()
+        if s:
+            _publish_whatsapp_news(db, s, text or "Foto compartida vía WhatsApp",
+                                   media_data, source_url, sender_jid=jid)
+    except Exception as exc:
+        log.error("_flush_wa_buffer error: %s", exc)
+    finally:
+        db.close()
+
+
+def _buffer_wa_content(sender: str, jid: str, text: str, media_data, source_url: str | None):
+    """
+    Acumula contenido en el buffer del remitente y (re)inicia el timer.
+    Si el buffer ya tiene texto y llega imagen (o viceversa), el timer se
+    cancela y el procesamiento ocurre de inmediato.
+    """
+    with _wa_buf_lock:
+        existing = _wa_buffers.get(sender)
+
+        if existing:
+            # Cancelar timer previo
+            existing["timer"].cancel()
+
+            # Combinar: texto de quien lo tenga, imagen de quien la tenga
+            combined_text = existing["text"] or text
+            # Si ambos tienen texto, concatenar (ej: dos textos seguidos)
+            if existing["text"] and text and text != existing["text"]:
+                combined_text = existing["text"] + "\n\n" + text
+            combined_media = existing["media_data"] or media_data
+            combined_url = existing["source_url"] or source_url
+
+            # Si ya tenemos tanto texto como imagen, procesar inmediatamente
+            has_text = bool(combined_text and combined_text.strip())
+            has_media = combined_media is not None
+            if has_text and has_media:
+                del _wa_buffers[sender]
+                log.info("WA buffer: texto + imagen listos — procesando de inmediato (%s)", sender)
+                t = threading.Thread(
+                    target=_flush_immediately,
+                    args=(sender, jid, combined_text, combined_media, combined_url),
+                    daemon=True,
+                )
+                t.start()
+                return
+
+            # Actualizar buffer y reiniciar timer
+            existing.update({"text": combined_text, "media_data": combined_media,
+                             "source_url": combined_url, "ts": time.time()})
+            timer = threading.Timer(_BUFFER_SECS, _flush_wa_buffer, args=[sender])
+            timer.daemon = True
+            existing["timer"] = timer
+            timer.start()
+        else:
+            # Primer mensaje de este remitente: crear buffer
+            timer = threading.Timer(_BUFFER_SECS, _flush_wa_buffer, args=[sender])
+            timer.daemon = True
+            _wa_buffers[sender] = {
+                "text": text, "media_data": media_data,
+                "source_url": source_url, "jid": jid,
+                "timer": timer, "ts": time.time(),
+            }
+            timer.start()
+            log.info("WA buffer: iniciado para %s (espera %ds más mensajes)", sender, _BUFFER_SECS)
+
+
+def _flush_immediately(sender: str, jid: str, text: str, media_data, source_url: str | None):
+    """Procesa contenido combinado sin pasar por el buffer (cuando ya tenemos todo)."""
+    from app.database import SessionLocal
+    db = SessionLocal()
+    try:
+        s = db.query(WhatsAppSettings).first()
+        if s:
+            _publish_whatsapp_news(db, s, text or "Foto compartida vía WhatsApp",
+                                   media_data, source_url, sender_jid=jid)
+    except Exception as exc:
+        log.error("_flush_immediately error: %s", exc)
+    finally:
+        db.close()
+
+
+# ── Procesamiento del webhook ──────────────────────────────────────────────────
+
+
 def _process_wa_message(payload: dict):
     """Procesa un mensaje de WhatsApp entrante y publica en WordPress si corresponde."""
     from app.database import SessionLocal
@@ -587,10 +701,9 @@ def _process_wa_message(payload: dict):
                             log.info("WA: OCR extraído (%d chars)", len(ocr))
             else:
                 log.warning("WA: no se pudo descargar la imagen — se continúa sin foto")
-            if not text:
-                text = "Foto compartida vía WhatsApp"
 
         elif msg_type == "audio":
+            # Audio: transcribir y procesar de inmediato (no requiere buffer)
             result = get_media_base64(s.evolution_api_url, s.evolution_api_key, s.instance_name, raw_data) if raw_data else None
             if result:
                 audio_bytes, audio_mime = result
@@ -606,23 +719,34 @@ def _process_wa_message(payload: dict):
             if not audio_transcript:
                 audio_transcript = text or "Nota de voz recibida por WhatsApp"
 
+            # Audio no se bufferiza — publicar de inmediato
+            _publish_whatsapp_news(db, s, audio_transcript, None, None, sender_jid=msg["jid"])
+            return
+
         # Video/documento: el caption ya viene en msg["text"]
-        final_text = audio_transcript or text
-        if not final_text:
+        final_text = text
+        if not final_text and not media_data:
             log.info("WA: mensaje sin contenido procesable (%s)", msg_type)
             return
 
-        # Detectar si el mensaje contiene una URL para scrapear
-        url_match = _URL_RE.search(final_text)
+        # Detectar URL para scrapear
+        url_match = _URL_RE.search(final_text) if final_text else None
         source_url = url_match.group().rstrip(".,;)>") if url_match else None
 
-        # Mensajes de texto sin URL muy cortos no tienen suficiente contenido para una nota
-        if not source_url and msg_type == "text" and len(final_text) < 80:
+        # Mensajes de texto sin URL muy cortos: ignorar (no bufferizar, no publicar)
+        if not source_url and not media_data and msg_type == "text" and len(final_text) < 80:
             log.info("WA: mensaje de texto muy corto sin URL (%d chars) — ignorado", len(final_text))
             _log_db(db, "WARNING", f"[WA] Mensaje ignorado: texto muy corto ({len(final_text)} chars) y sin URL")
             return
 
-        _publish_whatsapp_news(db, s, final_text, media_data, source_url, sender_jid=msg["jid"])
+        # URLs: procesar de inmediato sin esperar más mensajes
+        if source_url:
+            _publish_whatsapp_news(db, s, final_text, media_data, source_url, sender_jid=msg["jid"])
+            return
+
+        # Texto y/o imagen: acumular en buffer para combinar con mensajes del mismo remitente
+        _buffer_wa_content(msg["from"], msg["jid"], final_text, media_data, source_url)
+
     except Exception as exc:
         log.error("_process_wa_message error: %s", exc)
         try:
