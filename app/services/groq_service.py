@@ -296,12 +296,30 @@ def _repair_truncated_json(text: str) -> dict | None:
 
 
 def _normalize_summary(summary: str, title: str = "") -> str:
-    words = summary.strip().split()
-    if len(words) >= 18:
-        return " ".join(words[:22])
-    extra = [w for w in title.split() if w.lower() not in summary.lower()]
-    words = words + extra
-    return " ".join(words[:20])
+    """Devuelve UNA sola oración completa terminada en punto, máximo 30 palabras."""
+    text = summary.strip()
+
+    # Si hay varias oraciones, quedarse solo con la primera completa
+    m = re.search(r'\.(?:\s|$)', text)
+    if m:
+        first = text[:m.start() + 1].strip()
+        words = first.split()
+        # Oración razonable: entre 8 y 30 palabras
+        if 8 <= len(words) <= 30:
+            return first
+        # Demasiado larga: truncar en 28 palabras y cerrar con punto
+        if len(words) > 30:
+            return " ".join(words[:28]).rstrip(",;:") + "."
+
+    # Sin punto claro: cortar en 25 palabras y completar si es muy corta
+    words = text.split()
+    if len(words) < 8:
+        extra = [w for w in title.split() if w.lower() not in text.lower()]
+        words = words + extra
+    truncated = " ".join(words[:25]).rstrip(",;:")
+    if not truncated.endswith("."):
+        truncated += "."
+    return truncated
 
 
 def _clean_content(content: str) -> str:
@@ -527,7 +545,7 @@ Las comillas dentro del HTML van como &quot; o con barra invertida \". Atributos
   "title": "Título entre 80 y 110 caracteres con nombre, cifra o lugar concreto. NUNCA vago.",
   "content": "<p>Párrafo 1 completo con todos los datos.</p><p>Párrafo 2.</p><p>Párrafo 3.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule}",
   "category": "Exactamente una de estas: {cat_list}",
-  "summary": "Máximo 20 palabras: quién hizo qué y dónde. Sin adjetivos.",
+  "summary": "UNA sola oración completa que termina en punto. Máximo 25 palabras. El hecho principal: quién, qué y dónde. Sin segunda oración. Sin cortarse a mitad.",
   "keyphrase": "frase clave 2-4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
@@ -697,7 +715,7 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
   "title": "Título entre 80 y 110 caracteres con nombre, cifra o lugar concreto del contenido. NUNCA vago ni genérico.",
   "content": "<p>Párrafo 1 completo con todos los datos.</p><p>Párrafo 2.</p><p>Párrafo 3.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule}",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
-  "summary": "Una oración de MÁXIMO 20 palabras que resuma el hecho más concreto (quién, qué, dónde). Sin adjetivos vacíos.",
+  "summary": "UNA sola oración completa que termina en punto. Máximo 25 palabras. El hecho principal: quién, qué y dónde. Sin segunda oración. Sin cortarse a mitad.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
