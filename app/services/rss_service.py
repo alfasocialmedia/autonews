@@ -31,6 +31,18 @@ _NOISE_SELECTORS = [
 
 
 _MIN_IMAGE_WIDTH = 400  # px mínimos para aceptar una imagen del feed
+_GARBLED_THRESHOLD = 0.04  # >4 % de chars no imprimibles → contenido binario/PDF
+
+
+def _is_garbled(text: str) -> bool:
+    """True si el texto contiene datos binarios/PDF mal decodificados (ej: edictos en Misiones Online)."""
+    if not text or len(text) < 80:
+        return False
+    bad = sum(
+        1 for c in text
+        if (ord(c) < 32 and c not in "\n\r\t") or ord(c) == 0xFFFD
+    )
+    return (bad / len(text)) > _GARBLED_THRESHOLD
 
 
 def _extract_image_url(entry) -> str | None:
@@ -201,12 +213,18 @@ def _find_article_body(soup: BeautifulSoup):
     article_tag = soup.find("article")
     search_in = article_tag if article_tag else soup
 
-    # Clases comunes de temas WordPress y otros CMS de noticias
+    # Clases comunes de temas WordPress y otros CMS de noticias (incl. Crónica, Misiones Online, etc.)
     _BODY_CLASSES = re.compile(
         r"entry[-_]content|post[-_]content|article[-_]content|article[-_]body|"
         r"post[-_]body|content[-_]body|story[-_]body|article__body|td-post[-_]content|"
         r"td_block_wrap|tdb-block-inner|mvp-content-main|jeg_content|"
-        r"single[-_]content|nota[-_]cuerpo|cuerpo[-_]nota|news[-_]content",
+        r"single[-_]content|nota[-_]cuerpo|cuerpo[-_]nota|news[-_]content|"
+        # Crónica y sitios argentinos
+        r"cronica[-_]content|nota[-_]content|contenido[-_]nota|cuerpo[-_]articulo|"
+        r"article[-_]text|nota[-_]texto|texto[-_]nota|bajada|volanta|"
+        # Genérico ampliado
+        r"article__content|article__body|articulo[-_]cuerpo|post__content|"
+        r"single__content|main[-_]content|page[-_]content|richtext",
         re.I,
     )
     el = search_in.find(class_=_BODY_CLASSES)
@@ -217,11 +235,11 @@ def _find_article_body(soup: BeautifulSoup):
     if article_tag:
         return article_tag
 
-    # Último recurso: main o div con clase genérica
+    # Último recurso: main o div/section con clase/id genérico
     return (
         soup.find("main")
-        or soup.find("div", class_=re.compile(r"(content|nota|cuerpo|story|news)", re.I))
-        or soup.find("div", id=re.compile(r"(content|nota|cuerpo|story|news)", re.I))
+        or soup.find(["div", "section"], class_=re.compile(r"(content|nota|cuerpo|story|news|article|texto|articulo)", re.I))
+        or soup.find(["div", "section"], id=re.compile(r"(content|nota|cuerpo|story|news|article|texto|articulo)", re.I))
     )
 
 
@@ -279,9 +297,20 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
     article = _find_article_body(soup)
 
     container = article if article else soup
-    text = container.get_text(separator="\n", strip=True)
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
-    result = "\n".join(lines)[:12000]
+
+    # Extraer párrafos respetando la estructura <p> para conservar separación real
+    paras = [p.get_text(strip=True) for p in container.find_all("p") if p.get_text(strip=True)]
+    if paras:
+        result = "\n\n".join(paras)[:12000]
+    else:
+        text = container.get_text(separator="\n", strip=True)
+        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        result = "\n".join(lines)[:12000]
+
+    if _is_garbled(result):
+        log.warning("scrape: contenido binario/ilegible descartado: %s", url)
+        return "", og_image, inline_images, embeds
+
     log.info("scrape HTML ok: %d chars, container=%s, og_image=%s, images=%d, embeds=%d",
              len(result), container.name if article else "body",
              bool(og_image), len(inline_images), len(embeds))
@@ -382,6 +411,12 @@ def fetch_rss_items(feed_url: str) -> list[dict]:
             except Exception:
                 pass
 
+        # Si el cuerpo del RSS trae datos binarios/PDF, limpiarlo y forzar scraping
+        body_garbled = _is_garbled(content)
+        if body_garbled:
+            log.info("RSS body binario/ilegible en '%s' — se forzará scraping", entry.get("title", "")[:60])
+            content = ""
+
         items.append({
             "guid": guid,
             "title": entry.get("title", "").strip(),
@@ -389,7 +424,7 @@ def fetch_rss_items(feed_url: str) -> list[dict]:
             "body": content,
             "published_at": published_at,
             "image_url": _extract_image_url(entry),
-            "needs_scraping": len(content) < _MIN_BODY_LENGTH,
+            "needs_scraping": len(content) < _MIN_BODY_LENGTH or body_garbled,
         })
 
     return items

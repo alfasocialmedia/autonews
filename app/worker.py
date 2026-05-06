@@ -895,7 +895,7 @@ def process_rss_feeds():
                         inline_images: list[str] = []
                         embeds: list[str] = []
 
-                        # Si el RSS solo trae un excerpt corto, scrapear el artículo completo
+                        # Si el RSS solo trae un excerpt corto o contenido binario, scrapear el artículo completo
                         if item.get("needs_scraping") and item["link"]:
                             log.info("  🔍 Scrapeando artículo completo: %s", item["link"][:80])
                             scraped_text, scraped_img, inline_images, embeds = scrape_full_article(item["link"])
@@ -907,6 +907,13 @@ def process_rss_feeds():
                                     rss_item.status = "skipped"
                                     db.commit()
                                     continue
+                            elif not body:
+                                # Ni el RSS ni el scraping tienen contenido legible (ej: PDF embebido)
+                                log.warning("  ⏭ Sin contenido legible (PDF/binario): %s", item["title"][:80])
+                                _log_db(db, "WARN", f"[RSS] {feed.name}: sin contenido legible — {item['title'][:120]}", source="rss")
+                                rss_item.status = "skipped"
+                                db.commit()
+                                continue
                             # og:image del artículo siempre es mejor que el thumbnail del RSS
                             if scraped_img:
                                 image_url = scraped_img
