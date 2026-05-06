@@ -259,6 +259,42 @@ def _extract_first_json(text: str) -> dict | None:
     return None
 
 
+def _repair_truncated_json(text: str) -> dict | None:
+    """Extrae campos individuales de un JSON truncado/malformado via regex.
+    Devuelve dict parcial si recupera al menos title o content."""
+    result: dict = {}
+
+    m = re.search(r'"title"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+    if m:
+        result["title"] = m.group(1).replace('\\"', '"')
+
+    m = re.search(r'"content"\s*:\s*"((?:[^"\\]|\\.)*)', text)
+    if m:
+        content = m.group(1).replace('\\"', '"')
+        last_p = content.rfind("</p>")
+        if last_p > 0:
+            content = content[:last_p + 4]
+        elif content and not content.strip().startswith("<p>"):
+            content = f"<p>{content.strip()}</p>"
+        result["content"] = content
+
+    m = re.search(r'"summary"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+    if m:
+        result["summary"] = m.group(1).replace('\\"', '"')
+
+    m = re.search(r'"category"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+    if m:
+        result["category"] = m.group(1).replace('\\"', '"')
+
+    m = re.search(r'"keyphrase"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+    if m:
+        result["keyphrase"] = m.group(1).replace('\\"', '"')
+
+    if "title" in result or "content" in result:
+        return result
+    return None
+
+
 def _normalize_summary(summary: str, title: str = "") -> str:
     words = summary.strip().split()
     if len(words) >= 18:
@@ -448,35 +484,39 @@ Sos un periodista argentino con 20 años de experiencia. Tu tarea es REESCRIBIR 
 
 LEGIBILIDAD: oraciones de 10 a 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas.
 
-PÁRRAFOS: {para_range} párrafos. {para_size_rule}
-- Primer párrafo: quién, qué, cuándo, dónde — con nombres y cifras exactas, 2 oraciones fuertes.
-- Párrafos del medio: desarrollá cada dato del texto fuente. Incluí citas textuales clave entre comillas con <strong>. No omitas información relevante.
-- Último párrafo: consecuencia, contexto legal o proyección. Sin anunciar que termina.
+PÁRRAFOS — FORMATO HTML OBLIGATORIO:
+Cada párrafo DEBE estar entre <p> y </p>. SIN EXCEPCIÓN.
+Ejemplo correcto:  <p>Primer párrafo.</p><p>Segundo párrafo.</p><p>Tercer párrafo.</p>
+Ejemplo INCORRECTO: Primer párrafo. Segundo párrafo. (sin etiquetas = RECHAZADO)
+{para_range} párrafos en total. {para_size_rule}
+- Párrafo 1: quién, qué, cuándo, dónde — nombres y cifras exactas, 2 oraciones.
+- Párrafos 2 a N-1: un dato concreto del original por párrafo. Citas textuales entre <strong>"..."</strong>.
+- Último párrafo: consecuencia, estado judicial o proyección.
 
 SUBTÍTULOS: {heading_rule}
 
 PROHIBIDO:
-- Generalizar o vaguear datos concretos del texto fuente ("un funcionario", "cierta cantidad")
-- Inventar datos, personas, cifras o eventos que no estén en el texto fuente
-- Omitir datos clave como nombres, cifras, lugares o declaraciones del original
-- <ul>, <ol> ni listas de ningún tipo
-- "En conclusión", "En resumen", "En definitiva", "Para finalizar"
-- "En primer lugar", "A continuación", "Por otro lado", "Cabe destacar"
-- Mencionar fuente, medio original, URLs ni sitios externos
-- "Fuente:", "Según informó...", "El portal X indicó que..."
+- Texto sin etiquetas <p> — TODO el contenido va dentro de <p>...</p>
+- Mezclar varios párrafos dentro de un solo <p>
+- Generalizar datos concretos ("un funcionario", "cierta cantidad", "una zona")
+- Inventar datos, personas, cifras o eventos ausentes del texto fuente
+- Omitir nombres, cifras, lugares o declaraciones del original
+- <ul>, <ol> ni listas
+- "En conclusión", "En resumen", "Para finalizar", "En primer lugar", "Cabe destacar"
+- Mencionar el medio original, URLs ni sitios externos
 - Más de 2 usos de <strong>
 
 {_CATEGORY_GUIDE}
 Categorías disponibles: {cat_list}
 
 IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
-Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
+Las comillas dentro del HTML van como &quot; o con barra invertida \". Atributos HTML con comillas simples.
 {{
-  "title": "Título entre 80 y 110 caracteres con nombre, cifra o lugar concreto del artículo. NUNCA vago ni genérico.",
-  "content": "HTML periodístico. {para_range} párrafos {content_hint}. {para_size_rule} {word_count_rule} Con todos los datos específicos del original.",
-  "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
-  "summary": "Una oración de MÁXIMO 20 palabras que resuma el hecho más concreto (quién, qué, dónde). Sin adjetivos vacíos.",
-  "keyphrase": "frase clave de 2 a 4 palabras",
+  "title": "Título entre 80 y 110 caracteres con nombre, cifra o lugar concreto. NUNCA vago.",
+  "content": "<p>Párrafo 1 completo con todos los datos.</p><p>Párrafo 2.</p><p>Párrafo 3.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule}",
+  "category": "Exactamente una de estas: {cat_list}",
+  "summary": "Máximo 20 palabras: quién hizo qué y dónde. Sin adjetivos.",
+  "keyphrase": "frase clave 2-4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
 
@@ -509,7 +549,20 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
         return result
 
     log.warning("No se pudo parsear JSON RSS. Raw (200): %s", raw[:200])
-    # Fallback: usar primera línea larga del artículo como título (no el hint vacío o de dominio)
+
+    # Intento de reparación: extraer campos de JSON truncado
+    repaired = _repair_truncated_json(text)
+    if repaired and repaired.get("content"):
+        log.info("JSON RSS reparado parcialmente: title=%s, content=%d chars",
+                 bool(repaired.get("title")), len(repaired.get("content", "")))
+        if "title" in repaired:
+            repaired["title"] = _clean_subject(repaired["title"])
+        if "summary" in repaired:
+            repaired["summary"] = _normalize_summary(repaired["summary"], repaired.get("title", title))
+        repaired.setdefault("title", title)
+        repaired.setdefault("category", "General")
+        return repaired
+
     fallback_title = title
     if not fallback_title or len(fallback_title) < 10:
         fallback_title = next(
@@ -589,14 +642,20 @@ Sos un periodista argentino con 20 años de experiencia. Tu tarea es REESCRIBIR 
 
 LEGIBILIDAD: oraciones de 10 a 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas.
 
-PÁRRAFOS: {para_range} párrafos. {para_size_rule}
-- Primer párrafo: quién, qué, cuándo, dónde — con nombres y cifras exactas, 2 oraciones fuertes.
-- Párrafos del medio: desarrollá cada dato del texto fuente. Incluí citas textuales clave entre comillas con <strong>. No omitas información relevante.
+PÁRRAFOS — FORMATO HTML OBLIGATORIO:
+Cada párrafo DEBE estar entre <p> y </p>. SIN EXCEPCIÓN.
+Ejemplo correcto:  <p>Primer párrafo.</p><p>Segundo párrafo.</p><p>Tercer párrafo.</p>
+Ejemplo INCORRECTO: Primer párrafo. Segundo párrafo. (sin etiquetas = RECHAZADO)
+{para_range} párrafos en total. {para_size_rule}
+- Párrafo 1: quién, qué, cuándo, dónde — nombres y cifras exactas, 2 oraciones.
+- Párrafos 2 a N-1: un dato concreto del original por párrafo. Citas textuales entre <strong>"..."</strong>.
 - Último párrafo: consecuencia, contexto o proyección. Sin anunciar que termina.
 
 SUBTÍTULOS: Si el contenido tiene secciones diferenciadas, convertí cada una en <h2>. Máximo 2.
 
 PROHIBIDO:
+- Texto sin etiquetas <p> — TODO el contenido va dentro de <p>...</p>
+- Mezclar varios párrafos dentro de un solo <p>
 - Generalizar o vaguear datos concretos ("un funcionario", "cierta cantidad", "una zona del país")
 - Inventar datos, personas, cifras o eventos ausentes del texto fuente
 - Omitir datos clave como nombres, cifras, lugares o declaraciones del original
@@ -612,7 +671,7 @@ IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título entre 80 y 110 caracteres con nombre, cifra o lugar concreto del contenido. NUNCA vago ni genérico.",
-  "content": "Noticia reescrita en HTML. {para_range} párrafos <p>. {para_size_rule} {word_count_rule} Con todos los datos específicos del original.",
+  "content": "<p>Párrafo 1 completo con todos los datos.</p><p>Párrafo 2.</p><p>Párrafo 3.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule}",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
   "summary": "Una oración de MÁXIMO 20 palabras que resuma el hecho más concreto (quién, qué, dónde). Sin adjetivos vacíos.",
   "keyphrase": "frase clave de 2 a 4 palabras",
@@ -648,6 +707,19 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
         return result
 
     log.warning("No se pudo parsear JSON de IA. Raw (200): %s", raw[:200])
+
+    repaired = _repair_truncated_json(text)
+    if repaired and repaired.get("content"):
+        log.info("JSON email reparado parcialmente: title=%s, content=%d chars",
+                 bool(repaired.get("title")), len(repaired.get("content", "")))
+        if "title" in repaired:
+            repaired["title"] = _clean_subject(repaired["title"])
+        if "summary" in repaired:
+            repaired["summary"] = _normalize_summary(repaired["summary"], repaired.get("title", clean_subject))
+        repaired.setdefault("title", first_body_line[:65] if first_body_line else clean_subject)
+        repaired.setdefault("category", "General")
+        return repaired
+
     fallback_title = first_body_line[:65] if first_body_line else clean_subject
     return {
         "title": fallback_title,

@@ -585,7 +585,7 @@ def _try_wp_rest_api(base_url: str, category_url: str, max_items: int = 10) -> l
             "body": body,
             "published_at": published_at,
             "image_url": image_url,
-            "needs_scraping": len(body) < _MIN_BODY_LENGTH,
+            "needs_scraping": True,
         })
 
     log.info("WP REST API ok: %d artículos desde %s", len(items), base_url)
