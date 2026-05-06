@@ -259,6 +259,35 @@
   </div>
 </div>
 
+<!-- Preview Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#1a1a2e;color:#fff">
+        <div>
+          <h5 class="modal-title mb-0"><i class="bi bi-eye me-2"></i>Vista previa — revisá antes de publicar</h5>
+          <small class="opacity-75">El contenido fue generado por IA. Revisá título, cuerpo y metadescripción.</small>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0" id="previewModalBody">
+        <div class="d-flex align-items-center justify-content-center py-5">
+          <span class="spinner-border text-primary me-2"></span> Generando contenido con IA...
+        </div>
+      </div>
+      <div class="modal-footer gap-2">
+        <small class="text-muted me-auto"><i class="bi bi-info-circle me-1"></i>Si el contenido está bien, confirmá la publicación.</small>
+        <button type="button" class="btn btn-outline-secondary" id="btnPreviewBack">
+          <i class="bi bi-arrow-left me-1"></i>Volver
+        </button>
+        <button type="button" class="btn btn-success" id="btnConfirmPublish">
+          <i class="bi bi-send me-1"></i>Confirmar y publicar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Add Modal -->
 <div class="modal fade" id="addModal" tabindex="-1">
   <div class="modal-dialog">
@@ -368,7 +397,82 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+.preview-article-content p { margin-bottom: 1rem; line-height: 1.75; font-size: 1.05rem; }
+.preview-article-content h2 { font-size: 1.2rem; font-weight: 700; margin: 1.5rem 0 .75rem; }
+.preview-article-content strong { font-weight: 600; }
+.preview-cover { border-radius: 0; }
+</style>
 <script>
+// ── Estado preview modal ────────────────────────────────────────────────────
+let _previewToken = null;
+let _previewGuid = null;
+let _previewPubBtn = null;
+let _previewListItem = null;
+
+// Confirmar publicación
+document.getElementById('btnConfirmPublish').addEventListener('click', async function () {
+  if (!_previewToken || !_previewGuid) return;
+  const origHtml = this.innerHTML;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Publicando...';
+  this.disabled = true;
+  document.getElementById('btnPreviewBack').disabled = true;
+
+  try {
+    const resp = await fetch(`/settings/rss/${_testFeedId}/confirm-publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guid: _previewGuid, token: _previewToken }),
+      signal: AbortSignal.timeout(60000),
+    });
+    const data = await resp.json();
+
+    this.innerHTML = origHtml;
+    this.disabled = false;
+    document.getElementById('btnPreviewBack').disabled = false;
+
+    if (data.success) {
+      bootstrap.Modal.getInstance(document.getElementById('previewModal'))?.hide();
+
+      if (_previewPubBtn) {
+        _previewPubBtn.className = 'btn btn-sm btn-success flex-shrink-0';
+        _previewPubBtn.innerHTML = '<i class="bi bi-check me-1"></i>Publicado';
+        _previewPubBtn.disabled = true;
+      }
+      if (_previewListItem) {
+        const badge = _previewListItem.querySelector('.badge');
+        if (badge) { badge.className = 'badge bg-success'; badge.textContent = 'Publicado'; }
+      }
+
+      let msg = `Publicado: ${data.title}`;
+      if (data.wp_link) msg += ` — <a href="${data.wp_link}" target="_blank">Ver en WordPress</a>`;
+      showToast(msg, 'success');
+
+      _previewToken = null;
+      _previewGuid = null;
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('testModal')).show();
+    } else {
+      showToast(data.message || 'Error al publicar', 'danger');
+    }
+  } catch (e) {
+    this.innerHTML = origHtml;
+    this.disabled = false;
+    document.getElementById('btnPreviewBack').disabled = false;
+    showToast('Error de conexión o timeout', 'danger');
+  }
+});
+
+// Volver al test modal desde preview
+document.getElementById('btnPreviewBack').addEventListener('click', function () {
+  bootstrap.Modal.getInstance(document.getElementById('previewModal'))?.hide();
+  _previewToken = null;
+  _previewGuid = null;
+  if (_previewPubBtn) {
+    _previewPubBtn.disabled = false;
+  }
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('testModal')).show();
+});
+
 // Toggle feed activo/inactivo
 document.querySelectorAll('.toggle-feed').forEach(toggle => {
   toggle.addEventListener('change', async function () {
@@ -438,40 +542,83 @@ document.querySelectorAll('.test-feed').forEach(btn => {
 
       document.getElementById('testModalBody').innerHTML = html;
 
-      // Wiring publish buttons
+      // Wiring publish buttons — abre preview antes de publicar
       document.querySelectorAll('#testModalBody .btn-publish-now').forEach(pubBtn => {
         pubBtn.addEventListener('click', async function () {
+          if (this.disabled) return;
           const guid = this.dataset.guid;
+          _previewGuid = guid;
+          _previewPubBtn = this;
+          _previewListItem = this.closest('.list-group-item');
+
           const origHtml = this.innerHTML;
-          this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+          this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generando...';
           this.disabled = true;
 
+          // Mostrar preview modal con spinner mientras carga
+          document.getElementById('previewModalBody').innerHTML = `
+            <div class="d-flex align-items-center justify-content-center py-5 text-muted">
+              <span class="spinner-border me-2"></span> Generando contenido con IA, un momento...
+            </div>`;
+          document.getElementById('btnConfirmPublish').disabled = true;
+          bootstrap.Modal.getInstance(document.getElementById('testModal'))?.hide();
+          bootstrap.Modal.getOrCreateInstance(document.getElementById('previewModal')).show();
+
           try {
-            const pr = await fetch(`/settings/rss/${_testFeedId}/publish-now`, {
+            const resp = await fetch(`/settings/rss/${_testFeedId}/generate-preview`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ guid }),
               signal: AbortSignal.timeout(120000),
             });
-            const pd = await pr.json();
+            const data = await resp.json();
 
-            if (pd.success) {
-              this.className = 'btn btn-sm btn-success flex-shrink-0 btn-publish-now';
-              this.innerHTML = '<i class="bi bi-check me-1"></i>Publicado';
-              // Update badge
-              const badgeEl = this.closest('.list-group-item').querySelector('.badge');
-              if (badgeEl) { badgeEl.className = 'badge bg-success'; badgeEl.textContent = 'Publicado'; }
-              let msg = `Publicado: ${pd.title}`;
-              if (pd.wp_link) msg += ` — <a href="${pd.wp_link}" target="_blank">Ver en WordPress</a>`;
-              showToast(msg, 'success');
-            } else {
-              this.innerHTML = origHtml;
-              this.disabled = false;
-              showToast(pd.message || 'Error al publicar', 'danger');
+            this.innerHTML = origHtml;
+            this.disabled = false;
+
+            if (!data.success) {
+              bootstrap.Modal.getInstance(document.getElementById('previewModal'))?.hide();
+              bootstrap.Modal.getOrCreateInstance(document.getElementById('testModal')).show();
+              showToast(data.message || 'Error al generar preview', 'danger');
+              return;
             }
+
+            _previewToken = data.token;
+
+            // Construir el HTML de la vista previa
+            const imgHtml = data.image_url
+              ? `<div class="preview-cover" style="background:url('${data.image_url.replace(/'/g,"\\'")}') center/cover no-repeat;height:260px;"></div>`
+              : '';
+            const tagsHtml = (data.tags || []).slice(0, 5)
+              .map(t => `<span class="badge bg-secondary me-1">${t}</span>`).join('');
+
+            document.getElementById('previewModalBody').innerHTML = `
+              ${imgHtml}
+              <div class="p-4">
+                <div class="mb-2">
+                  ${data.category ? `<span class="badge bg-primary me-1 fs-7">${data.category}</span>` : ''}
+                  ${tagsHtml}
+                </div>
+                <h3 class="fw-bold lh-sm mb-3">${data.title}</h3>
+                ${data.summary ? `
+                  <div class="alert alert-info d-flex align-items-start gap-2 py-2 mb-3">
+                    <i class="bi bi-chat-quote-fill mt-1 flex-shrink-0"></i>
+                    <div>
+                      <div class="small fw-semibold text-muted mb-1">METADESCRIPCIÓN</div>
+                      <span class="fst-italic">${data.summary}</span>
+                    </div>
+                  </div>` : ''}
+                <hr class="my-3">
+                <div class="preview-article-content">${data.content}</div>
+              </div>`;
+
+            document.getElementById('btnConfirmPublish').disabled = false;
+
           } catch (e) {
             this.innerHTML = origHtml;
             this.disabled = false;
+            bootstrap.Modal.getInstance(document.getElementById('previewModal'))?.hide();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('testModal')).show();
             showToast('Error de conexión o timeout', 'danger');
           }
         });

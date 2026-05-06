@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+
+# Cache en memoria: token → {ai_result, image_url, inline_images, embeds, item}
+_preview_cache: dict[str, dict] = {}
 
 from app.auth import get_current_user
 from app.database import get_db
@@ -247,6 +252,101 @@ async def publish_now(
     try:
         from app.worker import publish_rss_item_now
         result = publish_rss_item_now(db, feed, item)
+        return JSONResponse({"success": True, **result})
+    except Exception as exc:
+        return JSONResponse({"success": False, "message": str(exc)})
+
+
+class GeneratePreviewRequest(BaseModel):
+    guid: str
+
+
+class ConfirmPublishRequest(BaseModel):
+    guid: str
+    token: str
+
+
+@router.post("/{feed_id}/generate-preview")
+async def generate_preview(
+    feed_id: int,
+    payload: GeneratePreviewRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    feed = db.query(RssFeed).filter(RssFeed.id == feed_id).first()
+    if not feed:
+        return JSONResponse({"success": False, "message": "Feed no encontrado"})
+
+    try:
+        if (feed.feed_type or "rss") == "web":
+            items = scrape_category_page(feed.url)
+        else:
+            items = fetch_rss_items(feed.url)
+    except Exception as exc:
+        return JSONResponse({"success": False, "message": f"No se pudo obtener artículos: {exc}"})
+
+    item = next((it for it in items if it["guid"] == payload.guid), None)
+    if not item:
+        return JSONResponse({"success": False, "message": "Artículo no encontrado en el feed"})
+
+    try:
+        from app.worker import generate_rss_preview
+        preview = generate_rss_preview(db, feed, item)
+
+        token = str(uuid.uuid4())
+        _preview_cache[token] = {
+            "ai_result": preview["_ai_result"],
+            "image_url": preview["image_url"],
+            "inline_images": preview["_inline_images"],
+            "embeds": preview["_embeds"],
+            "item": {
+                "guid": item["guid"],
+                "title": item["title"],
+                "link": item["link"],
+                "published_at": item.get("published_at"),
+            },
+        }
+
+        return JSONResponse({
+            "success": True,
+            "token": token,
+            "title": preview["title"],
+            "content": preview["content"],
+            "summary": preview["summary"],
+            "category": preview["category"],
+            "tags": preview.get("tags", []),
+            "image_url": preview["image_url"],
+        })
+    except Exception as exc:
+        return JSONResponse({"success": False, "message": str(exc)})
+
+
+@router.post("/{feed_id}/confirm-publish")
+async def confirm_publish(
+    feed_id: int,
+    payload: ConfirmPublishRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = get_current_user(request, db)
+    if not user or user.role != "admin":
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    cached = _preview_cache.pop(payload.token, None)
+    if not cached:
+        return JSONResponse({"success": False, "message": "Vista previa expirada — generá el preview nuevamente"})
+
+    feed = db.query(RssFeed).filter(RssFeed.id == feed_id).first()
+    if not feed:
+        return JSONResponse({"success": False, "message": "Feed no encontrado"})
+
+    try:
+        from app.worker import confirm_publish_rss_item
+        result = confirm_publish_rss_item(db, feed, cached)
         return JSONResponse({"success": True, **result})
     except Exception as exc:
         return JSONResponse({"success": False, "message": str(exc)})

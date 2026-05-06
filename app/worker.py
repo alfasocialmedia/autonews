@@ -997,6 +997,112 @@ def process_rss_feeds():
     log.info("⏹ Feeds RSS procesados")
 
 
+def generate_rss_preview(db, feed: RssFeed, item: dict) -> dict:
+    """Genera el contenido AI sin publicar a WordPress. Para vista previa antes de publicar."""
+    groq_cfg = db.query(GroqSettings).filter(GroqSettings.is_active == True).first()
+    wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).all()
+    if not groq_cfg:
+        raise ValueError("Groq no configurado — actívalo en Configuración → Groq IA")
+
+    groq_key = decrypt_value(groq_cfg.encrypted_api_key)
+    wp_categories = _fetch_wp_category_names(wp_sites)
+
+    body = item["body"]
+    image_url = item.get("image_url")
+    inline_images: list[str] = []
+    embeds: list[str] = []
+
+    if item.get("needs_scraping") and item["link"]:
+        log.info("[preview] Scrapeando artículo: %s", item["link"][:80])
+        scraped_text, scraped_img, inline_images, embeds = scrape_full_article(item["link"])
+        if scraped_text:
+            body = scraped_text
+        if scraped_img:
+            image_url = scraped_img
+    elif item["link"]:
+        _, scraped_img, inline_images, embeds = scrape_full_article(item["link"])
+        if scraped_img:
+            image_url = scraped_img
+
+    ai_result = process_rss_with_groq(
+        groq_key, groq_cfg.model, groq_cfg.base_prompt,
+        item["title"], body,
+        available_categories=wp_categories or None,
+        provider=groq_cfg.provider or "groq",
+        api_base_url=groq_cfg.api_base_url,
+    )
+
+    if feed.wp_category_id:
+        ai_result["_forced_category_id"] = feed.wp_category_id
+        ai_result["_forced_category_name"] = feed.wp_category_name or ""
+    elif feed.wp_category_name and not feed.wp_category_id:
+        ai_result["category"] = feed.wp_category_name
+
+    if not image_url:
+        image_url = _generate_fallback_image(
+            ai_result.get("title", item["title"]),
+            ai_result.get("category", ""),
+        )
+
+    return {
+        "title": ai_result.get("title", item["title"]),
+        "content": ai_result.get("content", ""),
+        "summary": ai_result.get("summary", ""),
+        "category": ai_result.get("category", ""),
+        "tags": ai_result.get("tags", []),
+        "image_url": image_url or "",
+        "_ai_result": ai_result,
+        "_inline_images": inline_images,
+        "_embeds": embeds,
+    }
+
+
+def confirm_publish_rss_item(db, feed: RssFeed, cached: dict) -> dict:
+    """Publica a WordPress usando el contenido ya generado en generate_rss_preview."""
+    wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).all()
+    if not wp_sites:
+        raise ValueError("WordPress no configurado — agrega un sitio en Configuración → WordPress")
+
+    ai_result = cached["ai_result"]
+    image_url = cached["image_url"]
+    inline_images = cached.get("inline_images", [])
+    embeds = cached.get("embeds", [])
+    item_data = cached["item"]
+
+    rss_item = db.query(ProcessedRssItem).filter(ProcessedRssItem.guid == item_data["guid"]).first()
+    if not rss_item:
+        rss_item = ProcessedRssItem(
+            rss_feed_id=feed.id,
+            guid=item_data["guid"],
+            title=item_data["title"],
+            link=item_data["link"],
+            published_at=item_data.get("published_at"),
+            status="received",
+        )
+        db.add(rss_item)
+        db.commit()
+        db.refresh(rss_item)
+
+    count = _publish_ai_result(
+        db, ai_result, wp_sites,
+        image_url=image_url, source_name=feed.name,
+        inline_images=inline_images, embeds=embeds,
+    )
+
+    if count > 0:
+        rss_item.status = "published"
+        db.commit()
+        post = db.query(Post).filter(Post.source_name == feed.name).order_by(Post.id.desc()).first()
+        return {
+            "title": ai_result.get("title", item_data["title"]),
+            "wp_link": post.wp_link if post else "",
+        }
+
+    rss_item.status = "error"
+    db.commit()
+    raise ValueError("No se pudo publicar en ningún sitio WordPress")
+
+
 def publish_rss_item_now(db, feed: RssFeed, item: dict) -> dict:
     """Publica un ítem RSS específico de inmediato desde el panel de administración.
     Devuelve {'title': ..., 'wp_link': ...} o lanza ValueError."""
