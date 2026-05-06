@@ -32,7 +32,7 @@ from app.models import (
 )
 from app.services.email_service import fetch_unread_emails
 from app.services.groq_service import process_email_with_groq, process_rss_with_groq
-from app.services.rss_service import fetch_rss_items, scrape_full_article, _is_garbled
+from app.services.rss_service import fetch_rss_items, scrape_full_article, scrape_category_page, _is_garbled
 from app.services.wordpress_service import create_post, find_category_by_name, get_categories, get_or_create_category, get_or_create_tags, upload_audio, upload_media
 
 logging.basicConfig(
@@ -835,8 +835,11 @@ def process_rss_feeds():
                     log.info("Feed '%s': límite diario alcanzado (%d/%d)", feed.name, published_today, feed.max_articles_per_day)
                     continue
 
-                log.info("📡 Revisando feed: %s", feed.name)
-                items = fetch_rss_items(feed.url)
+                log.info("📡 Revisando feed: %s (tipo=%s)", feed.name, feed.feed_type or "rss")
+                if (feed.feed_type or "rss") == "web":
+                    items = scrape_category_page(feed.url)
+                else:
+                    items = fetch_rss_items(feed.url)
 
                 published_this_check = 0
                 articles_per_check = feed.articles_per_check or 1

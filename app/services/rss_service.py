@@ -464,3 +464,246 @@ def test_rss_feed(url: str) -> tuple[bool, str]:
         return True, f"Feed válido — {len(items)} artículos encontrados."
     except Exception as exc:
         return False, str(exc)
+
+
+# ── Scraper de páginas de categoría (fuentes web sin RSS) ─────────────────────
+
+_WEB_TIMEOUT = 20
+
+
+def _fetch_html(url: str) -> bytes | None:
+    """Descarga HTML usando cloudscraper (Cloudflare) o httpx como fallback."""
+    # 1. Intentar con cloudscraper (maneja desafíos JS de Cloudflare)
+    try:
+        import cloudscraper
+        scraper = cloudscraper.create_scraper(browser={"browser": "chrome", "platform": "windows"})
+        resp = scraper.get(url, timeout=_WEB_TIMEOUT)
+        if resp.status_code == 200 and len(resp.content) > 500:
+            log.info("_fetch_html cloudscraper ok: %d bytes", len(resp.content))
+            return resp.content
+    except Exception as exc:
+        log.debug("cloudscraper falló, intentando httpx: %s", exc)
+
+    # 2. Fallback con httpx
+    try:
+        resp = httpx.get(url, timeout=_WEB_TIMEOUT, follow_redirects=True, headers=_SCRAPE_HEADERS, verify=False)
+        if resp.status_code == 200:
+            return resp.content
+    except Exception as exc:
+        log.warning("_fetch_html httpx error: %s", exc)
+
+    return None
+
+
+def _try_wp_rest_api(base_url: str, category_url: str, max_items: int = 10) -> list[dict]:
+    """Intenta obtener artículos via WordPress REST API. Devuelve [] si el sitio no es WP o falla."""
+    from urllib.parse import urlparse, urlencode
+
+    parsed = urlparse(category_url)
+    # Extraer slugs de la ruta: /tema/policiales-judiciales/policiales/ → ["tema", "policiales-judiciales", "policiales"]
+    path_parts = [p for p in parsed.path.strip("/").split("/") if p]
+
+    api_base = f"{base_url}/wp-json/wp/v2"
+
+    # Intentar cada parte del path como slug de categoría (de más específica a más general)
+    cat_id = None
+    for slug in reversed(path_parts):
+        try:
+            r = httpx.get(
+                f"{api_base}/categories",
+                params={"slug": slug, "per_page": 1},
+                timeout=10, verify=False,
+                headers={"User-Agent": _SCRAPE_HEADERS["User-Agent"]},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                if data and isinstance(data, list) and data[0].get("id"):
+                    cat_id = data[0]["id"]
+                    log.info("WP REST API: categoría '%s' → ID %s", slug, cat_id)
+                    break
+        except Exception:
+            pass
+
+    if not cat_id:
+        # Sin slug de categoría, intentar obtener los últimos posts del sitio
+        pass
+
+    try:
+        params: dict = {"per_page": max_items, "_embed": 1, "orderby": "date", "order": "desc"}
+        if cat_id:
+            params["categories"] = cat_id
+
+        r = httpx.get(
+            f"{api_base}/posts",
+            params=params,
+            timeout=15, verify=False,
+            headers={"User-Agent": _SCRAPE_HEADERS["User-Agent"]},
+        )
+        if r.status_code != 200:
+            return []
+
+        posts = r.json()
+        if not isinstance(posts, list):
+            return []
+
+        items = []
+        for post in posts:
+            link = post.get("link", "")
+            title = BeautifulSoup(post.get("title", {}).get("rendered", ""), "html.parser").get_text()
+            body = BeautifulSoup(post.get("excerpt", {}).get("rendered", ""), "html.parser").get_text(strip=True)
+
+            # Imagen desde _embedded
+            image_url = None
+            embedded = post.get("_embedded", {})
+            media = embedded.get("wp:featuredmedia", [{}])
+            if media and isinstance(media, list) and media[0].get("source_url"):
+                image_url = media[0]["source_url"]
+
+            # Fecha
+            published_at = None
+            date_str = post.get("date_gmt") or post.get("date")
+            if date_str:
+                try:
+                    published_at = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                except Exception:
+                    pass
+
+            if not link or not title:
+                continue
+
+            items.append({
+                "guid": link,
+                "title": title.strip(),
+                "link": link,
+                "body": body,
+                "published_at": published_at,
+                "image_url": image_url,
+                "needs_scraping": len(body) < _MIN_BODY_LENGTH,
+            })
+
+        log.info("WP REST API ok: %d artículos desde %s", len(items), base_url)
+        return items
+
+    except Exception as exc:
+        log.debug("WP REST API error: %s", exc)
+        return []
+
+
+# Selectores genéricos para encontrar artículos en páginas de categoría
+_ARTICLE_CONTAINERS = re.compile(
+    r"article[-_]card|post[-_]card|news[-_]card|nota[-_]card|"
+    r"entry[-_]preview|post[-_]preview|article[-_]item|post[-_]item|"
+    r"article[-_]thumb|tdb-block-inner|td_module|mvp-blog-story",
+    re.I,
+)
+
+
+def _scrape_category_html(url: str, max_items: int = 10) -> list[dict]:
+    """Extrae artículos de una página de categoría parseando el HTML."""
+    html = _fetch_html(url)
+    if not html:
+        log.warning("_scrape_category_html: no se pudo descargar %s", url)
+        return []
+
+    from urllib.parse import urlparse, urljoin
+    base = f"{urlparse(url).scheme}://{urlparse(url).netloc}"
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Quitar nav, footer, aside y publicidad
+    for tag in soup(["nav", "footer", "aside", "script", "style"]):
+        tag.decompose()
+
+    candidates: list[dict] = []
+
+    # Estrategia 1: <article> tags
+    for art in soup.find_all("article"):
+        a = art.find("a", href=True)
+        heading = art.find(re.compile(r"^h[1-4]$"))
+        if not a:
+            continue
+        href = urljoin(base, a["href"])
+        title = (heading.get_text(strip=True) if heading else a.get_text(strip=True))[:200]
+        img = art.find("img")
+        img_url = _upgrade_wp_thumbnail(img["src"]) if img and img.get("src") else None
+        if title and href and href.startswith("http"):
+            candidates.append({"title": title, "link": href, "image_url": img_url})
+
+    # Estrategia 2: contenedores con clases de card
+    if not candidates:
+        for div in soup.find_all(class_=_ARTICLE_CONTAINERS):
+            a = div.find("a", href=True)
+            heading = div.find(re.compile(r"^h[1-5]$"))
+            if not a:
+                continue
+            href = urljoin(base, a["href"])
+            title = (heading.get_text(strip=True) if heading else a.get_text(strip=True))[:200]
+            img = div.find("img")
+            img_url = _upgrade_wp_thumbnail(img["src"]) if img and img.get("src") else None
+            if title and href and href.startswith("http"):
+                candidates.append({"title": title, "link": href, "image_url": img_url})
+
+    # Estrategia 3: h2/h3 con links dentro del main
+    if not candidates:
+        main = soup.find(["main", "div"], id=re.compile(r"main|content|primary", re.I)) or soup
+        for tag in main.find_all(re.compile(r"^h[2-4]$")):
+            a = tag.find("a", href=True)
+            if not a:
+                continue
+            href = urljoin(base, a["href"])
+            title = tag.get_text(strip=True)[:200]
+            if title and href and href.startswith("http") and href != url:
+                candidates.append({"title": title, "link": href, "image_url": None})
+
+    # Deduplicar por URL y limitar
+    seen: set[str] = set()
+    items = []
+    for c in candidates:
+        if c["link"] in seen or c["link"] == url:
+            continue
+        seen.add(c["link"])
+        items.append({
+            "guid": c["link"],
+            "title": c["title"],
+            "link": c["link"],
+            "body": "",
+            "published_at": None,
+            "image_url": c["image_url"],
+            "needs_scraping": True,  # siempre scrapear el artículo completo
+        })
+        if len(items) >= max_items:
+            break
+
+    log.info("_scrape_category_html: %d artículos desde %s", len(items), url)
+    return items
+
+
+def scrape_category_page(url: str) -> list[dict]:
+    """Extrae los últimos artículos de una página de categoría web.
+
+    Estrategias (en orden de preferencia):
+    1. WordPress REST API (sin Cloudflare, datos completos)
+    2. Scraping HTML con cloudscraper (Cloudflare) o httpx
+    """
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    base_url = f"{parsed.scheme}://{parsed.netloc}"
+
+    # 1. Intentar WordPress REST API
+    items = _try_wp_rest_api(base_url, url)
+    if items:
+        return items
+
+    # 2. HTML scraping
+    return _scrape_category_html(url)
+
+
+def test_web_source(url: str) -> tuple[bool, str]:
+    """Prueba una URL de categoría web. Devuelve (ok, mensaje)."""
+    try:
+        items = scrape_category_page(url)
+        if not items:
+            return False, "No se encontraron artículos en esa URL."
+        return True, f"Fuente válida — {len(items)} artículos encontrados."
+    except Exception as exc:
+        return False, str(exc)

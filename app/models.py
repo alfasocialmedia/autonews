@@ -148,6 +148,7 @@ class RssFeed(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     url = Column(String(500), nullable=False)
+    feed_type = Column(String(20), default="rss")   # "rss" | "web"
     is_active = Column(Boolean, default=True)
     check_interval_minutes = Column(Integer, default=60)
     articles_per_check = Column(Integer, default=1)
