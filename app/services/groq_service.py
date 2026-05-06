@@ -471,81 +471,131 @@ def process_rss_with_groq(
 {article_text[:15000]}
 ═══════════════════════════════════════════════════════════════════
 
-⚠ REGLAS ABSOLUTAS — LEER ANTES DE ESCRIBIR:
-1. Basate ÚNICAMENTE en el texto de arriba. Sin excepciones.
-2. PRESERVÁ TODOS los datos concretos del texto fuente:
-   - UBICACIÓN GEOGRÁFICA (OBLIGATORIO): ciudad, provincia, barrio, localidad o país.
-     Si el texto dice "Posadas" → escribís "Posadas". Si dice "Misiones" → escribís "Misiones".
-     NUNCA reemplaces por "una ciudad", "la provincia" o "la zona". El lugar va siempre nombrado.
-   - Nombres completos de personas, instituciones y organismos
-   - Cifras exactas (cantidades, porcentajes, montos, fechas, edades)
-   - Cargos oficiales, números de leyes, nombres de operativos
-   - Declaraciones textuales entre comillas
-   NO los reemplaces por expresiones vagas ("un funcionario", "cierta cantidad", "una zona").
-   Si el texto dice "300 ampollas de Fentanilo en Misiones", escribís exactamente eso.
-3. La nota debe ser COMPLETA y COMPRENSIBLE por sí sola: quien la lea sin ver el original
-   debe entender quién, qué, cuándo, dónde, cómo y por qué.
+OBJETIVO PRINCIPAL:
+No hagas un resumen corto. Convertí la información recibida en una nota periodística bien redactada, con enfoque digital, pensada para que el lector haga clic, entre a leer y se mantenga interesado, sin caer en plagio, sensacionalismo falso ni datos inventados.
 
-╔══════════════════════════════════════════════════════╗
-║  REGLA #1 — TÍTULO CLARO Y ESPECÍFICO               ║
-╚══════════════════════════════════════════════════════╝
-El título DEBE tener ENTRE 80 Y 110 CARACTERES.
-DEBE incluir el dato más concreto de la nota: nombre propio, cifra exacta, lugar o institución.
-Un título vago que no identifica el tema ES INCORRECTO — rehacelo más específico.
-Estilo Infobae/Clarín — claro, directo, con el hecho concreto adelante:
-• Si hay una persona: su nombre y qué hizo
-• Si hay una cifra: esa cifra exacta en el título
-• Si hay un lugar: mencionarlo
-CONTÁ los caracteres. Menos de 75 = INCORRECTO. Sin punto al final. Sin comillas externas.
+REGLAS FUNDAMENTALES:
+- Usá toda la información útil del contenido recibido.
+- No copies frases completas del texto original, salvo declaraciones textuales entre comillas.
+- No inventes datos, nombres, cifras, causas, fechas ni consecuencias.
+- No agregues información que no esté en el contenido.
+- No repitas ideas innecesariamente.
+- No hagas párrafos largos.
+- No uses lenguaje robótico.
+- No escribas como comunicado institucional, salvo que el contenido lo requiera.
+- La noticia debe sonar natural, profesional y humana.
+- UBICACIÓN GEOGRÁFICA (OBLIGATORIO): nombrar siempre ciudad, provincia, barrio o localidad.
+  Si el texto dice "Posadas" → escribís "Posadas". Si dice "Misiones" → escribís "Misiones".
+  NUNCA reemplaces por "una ciudad", "la provincia" o "la zona".
+
+ESTILO PERIODÍSTICO:
+- Voz activa.
+- Frases claras, directas y concretas.
+- Párrafos cortos de 2 a 4 líneas como máximo.
+- Lectura ágil, con alta legibilidad.
+- Separación clara entre ideas.
+- Tono informativo, pero con gancho.
+- Priorizá siempre el hecho principal desde el primer párrafo: qué pasó, quiénes participaron, cuándo, dónde y por qué importa.
+
+ENFOQUE SEGÚN EL TIPO DE NOTICIA:
+Adaptá el tono según el tema recibido:
+
+1. Policiales:
+Usá un tono firme, directo y con tensión informativa, sin morbo ni exageraciones. Destacá el hecho, el lugar, los involucrados, el operativo, las consecuencias y los datos que generen interés público.
+
+2. Política:
+Usá un tono que invite al debate, mostrando el conflicto, la decisión, las posturas, el impacto o la discusión pública. No tomes partido. Presentá los hechos de forma equilibrada.
+
+3. Sociedad:
+Dale un enfoque humano y cercano. Resaltá cómo afecta a vecinos, familias, instituciones o la comunidad.
+
+4. Economía:
+Enfocá la noticia en el impacto concreto: bolsillo, precios, empleo, comercio, producción, beneficios o perjuicios.
+
+5. Clima o alertas:
+Usá un tono preventivo y claro. Destacá zonas afectadas, horarios, riesgos y recomendaciones si están en el contenido.
+
+6. Deportes:
+Usá un tono dinámico, con emoción y contexto competitivo, sin exagerar resultados o hechos que no estén confirmados.
+
+7. Municipales o institucionales:
+Redactá de forma profesional y cercana, evitando que parezca una gacetilla. Resaltá el impacto real para la comunidad.
+
+TÍTULO:
+Creá un título periodístico atractivo, claro y con gancho.
+Debe generar interés para hacer clic, pero sin mentir ni exagerar.
+Evitá títulos planos o genéricos.
+No uses clickbait falso.
+El título debe reflejar el hecho más fuerte de la noticia.
+LONGITUD OBLIGATORIA: entre 80 y 110 caracteres. Sin punto al final. Sin comillas externas.
 Referencia del título original (NO copies literalmente): {title}
 
-INSTRUCCIONES DE REDACCIÓN:
+BAJADA:
+Escribí una bajada breve de 1 línea.
+Debe ampliar el título y resumir lo más importante de la noticia, dejando motivo para seguir leyendo.
+UNA sola oración completa que termina en punto. Máximo 25 palabras.
 
-Sos un periodista argentino con 20 años de experiencia. Tu tarea es REESCRIBIR el artículo fuente con tus propias palabras, conservando todos sus datos específicos. El lector debe obtener la misma información que en el original, expresada de forma completamente distinta.
+CUERPO DE LA NOTA:
+- Primer párrafo: contar el hecho principal de manera fuerte y clara.
+- Segundo párrafo: sumar datos importantes, contexto o protagonistas.
+- Desarrollo: ordenar la información de mayor a menor importancia.
+- Incluir detalles relevantes del contenido recibido.
+- Si hay declaraciones textuales importantes, usarlas entre comillas con atribución clara.
+- Si hay conflicto, debate o impacto social, destacarlo de manera objetiva.
+- Cierre: terminar con un dato relevante, una consecuencia, una continuidad del caso o el contexto disponible.
 
-REESCRITURA ANTI-PLAGIO — REGLAS CLAVE:
-• Ninguna oración puede copiarse textualmente del original. Cada idea se reformula con estructura diferente.
-• Cambiá el orden de la información dentro de cada oración cuando sea posible.
-• Usá sinónimos para verbos y adjetivos: "dijo" → "afirmó / señaló / indicó / explicó / sostuvo"; "realizó" → "llevó a cabo / concretó / ejecutó"; "gran" → "importante / significativo / considerable".
-• Los únicos elementos que van EXACTOS son: nombres propios, cargos, cifras, fechas, ciudades, provincias y citas textuales entre comillas.
-• El tono es periodístico neutro, sin adjetivos valorativos que no estén en la fuente.
-
-LEGIBILIDAD: oraciones de 10 a 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas.
-
-PÁRRAFOS — FORMATO HTML OBLIGATORIO:
+FORMATO HTML OBLIGATORIO DEL CUERPO:
 Cada párrafo DEBE estar entre <p> y </p>. SIN EXCEPCIÓN.
 Ejemplo correcto:  <p>Primer párrafo.</p><p>Segundo párrafo.</p><p>Tercer párrafo.</p>
 Ejemplo INCORRECTO: Primer párrafo. Segundo párrafo. (sin etiquetas = RECHAZADO)
 {para_range} párrafos en total. {para_size_rule}
-- Párrafo 1: quién, qué, cuándo, dónde — nombres y cifras exactas, 2 oraciones.
-- Párrafos 2 a N-1: un dato concreto del original por párrafo. Citas textuales entre <strong>"..."</strong>.
-- Último párrafo: consecuencia, estado judicial o proyección.
-
 SUBTÍTULOS: {heading_rule}
+PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>.
 
-PROHIBIDO:
-- Texto sin etiquetas <p> — TODO el contenido va dentro de <p>...</p>
-- Mezclar varios párrafos dentro de un solo <p>
-- Omitir o vaguear la ubicación geográfica: ciudad, provincia y localidad van SIEMPRE nombradas
-- Reemplazar "Posadas" por "la ciudad" o "Misiones" por "la provincia" — ESO ES INCORRECTO
-- Generalizar datos concretos ("un funcionario", "cierta cantidad", "una zona")
-- Inventar datos, personas, cifras o eventos ausentes del texto fuente
-- Omitir nombres, cifras, lugares o declaraciones del original
-- <ul>, <ol> ni listas
-- "En conclusión", "En resumen", "Para finalizar", "En primer lugar", "Cabe destacar"
-- Mencionar el medio original, URLs ni sitios externos
-- Más de 2 usos de <strong>
+ORIGINALIDAD:
+Reescribí completamente la noticia con palabras propias.
+Podés cambiar el orden de la información para mejorar la lectura.
+Mantené los datos reales, pero evitá que el texto parezca copiado del medio original.
+
+EXTENSIÓN:
+- {word_count_rule}
+- Si el contenido es breve, desarrollá lo máximo posible sin inventar.
+- No rellenes con frases vacías.
+- No termines la nota de forma abrupta.
+
+LEGIBILIDAD:
+- Párrafos cortos.
+- Oraciones claras.
+- Evitá bloques densos.
+- No uses palabras difíciles si no son necesarias.
+- La lectura debe ser simple, fluida y entendible para cualquier lector.
+
+INTERACCIÓN Y CLICS:
+La nota debe despertar interés real.
+Buscá el ángulo más fuerte de la información:
+conflicto, impacto, sorpresa, consecuencia, cercanía con la comunidad, debate público, alerta, dato relevante.
+Pero siempre respetando la verdad del contenido recibido.
 
 {_CATEGORY_GUIDE}
 Categorías disponibles: {cat_list}
 
-IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
-Las comillas dentro del HTML van como &quot; o con barra invertida \". Atributos HTML con comillas simples.
+ANTES DE ENTREGAR — Verificá internamente que:
+- No haya datos inventados.
+- No haya plagio.
+- Se haya usado toda la información relevante.
+- El título tenga gancho real y entre 80 y 110 caracteres.
+- Los párrafos sean cortos y estén correctamente envueltos en <p>...</p>.
+- La nota no sea un resumen.
+- El texto esté listo para publicar en un medio digital argentino.
+- La ubicación geográfica (ciudad, provincia) esté nombrada explícitamente.
+
+IMPORTANTE: Respondé ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
+Las comillas dentro del HTML van con barra invertida \" o como &quot;. Atributos HTML con comillas simples.
 {{
-  "title": "Título entre 80 y 110 caracteres con nombre, cifra o lugar concreto. NUNCA vago.",
-  "content": "<p>Párrafo 1 completo con todos los datos.</p><p>Párrafo 2.</p><p>Párrafo 3.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule}",
+  "title": "Título periodístico atractivo entre 80 y 110 caracteres. Con gancho. Sin punto al final.",
+  "content": "<p>Primer párrafo con hecho principal.</p><p>Segundo párrafo.</p><p>Tercer párrafo.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule}",
   "category": "Exactamente una de estas: {cat_list}",
-  "summary": "UNA sola oración completa que termina en punto. Máximo 25 palabras. El hecho principal: quién, qué y dónde. Sin segunda oración. Sin cortarse a mitad.",
+  "summary": "UNA sola oración completa que termina en punto. Máximo 25 palabras. El hecho principal: quién, qué y dónde. Sin segunda oración.",
   "keyphrase": "frase clave 2-4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
@@ -642,80 +692,131 @@ def process_email_with_groq(
 {body[:15000]}
 ════════════════════════════════════════════════════════════════════
 
-⚠ REGLAS ABSOLUTAS — LEER ANTES DE ESCRIBIR:
-1. Reescribí ÚNICAMENTE el contenido de arriba. Sin excepciones.
-2. PRESERVÁ TODOS los datos concretos del texto fuente:
-   - UBICACIÓN GEOGRÁFICA (OBLIGATORIO): ciudad, provincia, barrio, localidad o país.
-     Si el texto dice "Posadas" → escribís "Posadas". Si dice "Misiones" → escribís "Misiones".
-     NUNCA reemplaces por "una ciudad", "la provincia" o "la zona". El lugar va siempre nombrado.
-   - Nombres completos de personas, instituciones y organismos
-   - Cifras exactas (cantidades, porcentajes, montos, fechas, edades)
-   - Cargos oficiales, números de leyes, nombres de operativos
-   - Declaraciones textuales entre comillas
-   NO los reemplaces por expresiones vagas ("un funcionario", "cierta cantidad", "una zona").
-3. La nota debe ser COMPLETA y COMPRENSIBLE por sí sola — quien la lea debe entender
-   quién, qué, cuándo, dónde, cómo y por qué sin necesidad de ver el original.
+OBJETIVO PRINCIPAL:
+No hagas un resumen corto. Convertí la información recibida en una nota periodística bien redactada, con enfoque digital, pensada para que el lector haga clic, entre a leer y se mantenga interesado, sin caer en plagio, sensacionalismo falso ni datos inventados.
+
+REGLAS FUNDAMENTALES:
+- Usá toda la información útil del contenido recibido.
+- No copies frases completas del texto original, salvo declaraciones textuales entre comillas.
+- No inventes datos, nombres, cifras, causas, fechas ni consecuencias.
+- No agregues información que no esté en el contenido.
+- No repitas ideas innecesariamente.
+- No hagas párrafos largos.
+- No uses lenguaje robótico.
+- No escribas como comunicado institucional, salvo que el contenido lo requiera.
+- La noticia debe sonar natural, profesional y humana.
+- UBICACIÓN GEOGRÁFICA (OBLIGATORIO): nombrar siempre ciudad, provincia, barrio o localidad.
+  Si el texto dice "Posadas" → escribís "Posadas". Si dice "Misiones" → escribís "Misiones".
+  NUNCA reemplaces por "una ciudad", "la provincia" o "la zona".
 El hecho principal es: "{first_body_line[:120]}"
 
-╔══════════════════════════════════════════════════════╗
-║  REGLA #1 — TÍTULO CLARO Y ESPECÍFICO               ║
-╚══════════════════════════════════════════════════════╝
-El título DEBE tener ENTRE 80 Y 110 CARACTERES.
-DEBE incluir el dato más concreto del contenido: nombre propio, cifra exacta, lugar o institución.
-Un título vago que no identifica el tema ES INCORRECTO — rehacelo más específico.
-Estilo Infobae/Clarín — claro, con el hecho concreto adelante:
-• Si hay una persona: su nombre y qué hizo
-• Si hay una cifra: esa cifra exacta en el título
-• Si hay un lugar: mencionarlo
-CONTÁ los caracteres. Menos de 75 = INCORRECTO. Sin punto al final. Sin comillas externas.
+ESTILO PERIODÍSTICO:
+- Voz activa.
+- Frases claras, directas y concretas.
+- Párrafos cortos de 2 a 4 líneas como máximo.
+- Lectura ágil, con alta legibilidad.
+- Separación clara entre ideas.
+- Tono informativo, pero con gancho.
+- Priorizá siempre el hecho principal desde el primer párrafo: qué pasó, quiénes participaron, cuándo, dónde y por qué importa.
 
-INSTRUCCIONES DE REDACCIÓN:
+ENFOQUE SEGÚN EL TIPO DE NOTICIA:
+Adaptá el tono según el tema recibido:
 
-Sos un periodista argentino con 20 años de experiencia. Tu tarea es REESCRIBIR el contenido fuente con tus propias palabras, conservando todos sus datos específicos. El lector debe obtener la misma información que en el original, expresada de forma completamente distinta.
+1. Policiales:
+Usá un tono firme, directo y con tensión informativa, sin morbo ni exageraciones. Destacá el hecho, el lugar, los involucrados, el operativo, las consecuencias y los datos que generen interés público.
 
-REESCRITURA ANTI-PLAGIO — REGLAS CLAVE:
-• Ninguna oración puede copiarse textualmente del original. Cada idea se reformula con estructura diferente.
-• Cambiá el orden de la información dentro de cada oración cuando sea posible.
-• Usá sinónimos para verbos y adjetivos: "dijo" → "afirmó / señaló / indicó / explicó / sostuvo"; "realizó" → "llevó a cabo / concretó / ejecutó"; "gran" → "importante / significativo / considerable".
-• Los únicos elementos que van EXACTOS son: nombres propios, cargos, cifras, fechas, ciudades, provincias y citas textuales entre comillas.
-• El tono es periodístico neutro, sin adjetivos valorativos que no estén en la fuente.
+2. Política:
+Usá un tono que invite al debate, mostrando el conflicto, la decisión, las posturas, el impacto o la discusión pública. No tomes partido. Presentá los hechos de forma equilibrada.
 
-LEGIBILIDAD: oraciones de 10 a 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas.
+3. Sociedad:
+Dale un enfoque humano y cercano. Resaltá cómo afecta a vecinos, familias, instituciones o la comunidad.
 
-PÁRRAFOS — FORMATO HTML OBLIGATORIO:
+4. Economía:
+Enfocá la noticia en el impacto concreto: bolsillo, precios, empleo, comercio, producción, beneficios o perjuicios.
+
+5. Clima o alertas:
+Usá un tono preventivo y claro. Destacá zonas afectadas, horarios, riesgos y recomendaciones si están en el contenido.
+
+6. Deportes:
+Usá un tono dinámico, con emoción y contexto competitivo, sin exagerar resultados o hechos que no estén confirmados.
+
+7. Municipales o institucionales:
+Redactá de forma profesional y cercana, evitando que parezca una gacetilla. Resaltá el impacto real para la comunidad.
+
+TÍTULO:
+Creá un título periodístico atractivo, claro y con gancho.
+Debe generar interés para hacer clic, pero sin mentir ni exagerar.
+Evitá títulos planos o genéricos.
+No uses clickbait falso.
+El título debe reflejar el hecho más fuerte de la noticia.
+LONGITUD OBLIGATORIA: entre 80 y 110 caracteres. Sin punto al final. Sin comillas externas.
+
+BAJADA:
+Escribí una bajada breve de 1 línea.
+Debe ampliar el título y resumir lo más importante de la noticia, dejando motivo para seguir leyendo.
+UNA sola oración completa que termina en punto. Máximo 25 palabras.
+
+CUERPO DE LA NOTA:
+- Primer párrafo: contar el hecho principal de manera fuerte y clara.
+- Segundo párrafo: sumar datos importantes, contexto o protagonistas.
+- Desarrollo: ordenar la información de mayor a menor importancia.
+- Incluir detalles relevantes del contenido recibido.
+- Si hay declaraciones textuales importantes, usarlas entre comillas con atribución clara.
+- Si hay conflicto, debate o impacto social, destacarlo de manera objetiva.
+- Cierre: terminar con un dato relevante, una consecuencia, una continuidad del caso o el contexto disponible.
+
+FORMATO HTML OBLIGATORIO DEL CUERPO:
 Cada párrafo DEBE estar entre <p> y </p>. SIN EXCEPCIÓN.
 Ejemplo correcto:  <p>Primer párrafo.</p><p>Segundo párrafo.</p><p>Tercer párrafo.</p>
 Ejemplo INCORRECTO: Primer párrafo. Segundo párrafo. (sin etiquetas = RECHAZADO)
 {para_range} párrafos en total. {para_size_rule}
-- Párrafo 1: quién, qué, cuándo, dónde — nombres y cifras exactas, 2 oraciones.
-- Párrafos 2 a N-1: un dato concreto del original por párrafo. Citas textuales entre <strong>"..."</strong>.
-- Último párrafo: consecuencia, contexto o proyección. Sin anunciar que termina.
+Si el contenido tiene secciones claramente diferenciadas, podés usar <h2> para separar. Máximo 2.
+PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>.
 
-SUBTÍTULOS: Si el contenido tiene secciones diferenciadas, convertí cada una en <h2>. Máximo 2.
+ORIGINALIDAD:
+Reescribí completamente la noticia con palabras propias.
+Podés cambiar el orden de la información para mejorar la lectura.
+Mantené los datos reales, pero evitá que el texto parezca copiado del medio original.
 
-PROHIBIDO:
-- Texto sin etiquetas <p> — TODO el contenido va dentro de <p>...</p>
-- Mezclar varios párrafos dentro de un solo <p>
-- Omitir o vaguear la ubicación geográfica: ciudad, provincia y localidad van SIEMPRE nombradas
-- Reemplazar "Posadas" por "la ciudad" o "Misiones" por "la provincia" — ESO ES INCORRECTO
-- Generalizar o vaguear datos concretos ("un funcionario", "cierta cantidad", "una zona del país")
-- Inventar datos, personas, cifras o eventos ausentes del texto fuente
-- Omitir datos clave como nombres, cifras, lugares o declaraciones del original
-- <ul>, <ol> ni listas de ningún tipo
-- "En conclusión", "En resumen", "En definitiva", "Para finalizar"
-- "En primer lugar", "A continuación", "Por otro lado", "Cabe destacar"
-- Más de 2 usos de <strong>
+EXTENSIÓN:
+- {word_count_rule}
+- Si el contenido es breve, desarrollá lo máximo posible sin inventar.
+- No rellenes con frases vacías.
+- No termines la nota de forma abrupta.
+
+LEGIBILIDAD:
+- Párrafos cortos.
+- Oraciones claras.
+- Evitá bloques densos.
+- No uses palabras difíciles si no son necesarias.
+- La lectura debe ser simple, fluida y entendible para cualquier lector.
+
+INTERACCIÓN Y CLICS:
+La nota debe despertar interés real.
+Buscá el ángulo más fuerte de la información:
+conflicto, impacto, sorpresa, consecuencia, cercanía con la comunidad, debate público, alerta, dato relevante.
+Pero siempre respetando la verdad del contenido recibido.
 
 {_CATEGORY_GUIDE}
 Categorías disponibles: {cat_list}
 
-IMPORTANTE: Responde ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
+ANTES DE ENTREGAR — Verificá internamente que:
+- No haya datos inventados.
+- No haya plagio.
+- Se haya usado toda la información relevante.
+- El título tenga gancho real y entre 80 y 110 caracteres.
+- Los párrafos sean cortos y estén correctamente envueltos en <p>...</p>.
+- La nota no sea un resumen.
+- El texto esté listo para publicar en un medio digital argentino.
+- La ubicación geográfica (ciudad, provincia) esté nombrada explícitamente.
+
+IMPORTANTE: Respondé ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
-  "title": "Título entre 80 y 110 caracteres con nombre, cifra o lugar concreto del contenido. NUNCA vago ni genérico.",
-  "content": "<p>Párrafo 1 completo con todos los datos.</p><p>Párrafo 2.</p><p>Párrafo 3.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule}",
+  "title": "Título periodístico atractivo entre 80 y 110 caracteres. Con gancho. Sin punto al final.",
+  "content": "<p>Primer párrafo con hecho principal.</p><p>Segundo párrafo.</p><p>Tercer párrafo.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule}",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
-  "summary": "UNA sola oración completa que termina en punto. Máximo 25 palabras. El hecho principal: quién, qué y dónde. Sin segunda oración. Sin cortarse a mitad.",
+  "summary": "UNA sola oración completa que termina en punto. Máximo 25 palabras. El hecho principal: quién, qué y dónde. Sin segunda oración.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
