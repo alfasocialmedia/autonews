@@ -32,6 +32,8 @@ PROVIDERS: dict[str, dict] = {
         "label": "DeepSeek",
         "base_url": "https://api.deepseek.com/v1",
         "models": [
+            "deepseek-v4-pro",
+            "deepseek-v4-flash",
             "deepseek-chat",
             "deepseek-reasoner",
         ],

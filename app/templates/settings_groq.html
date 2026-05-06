@@ -187,6 +187,12 @@ function updateProvider(key) {
     ul.innerHTML = '<li><span class="dropdown-item text-muted small">Ingresá el modelo manualmente</span></li>';
   }
 
+  // Auto-actualizar modelo si el actual no es válido para el nuevo provider
+  const modelInput = document.getElementById('modelInput');
+  if (info.models && info.models.length && !info.models.includes(modelInput.value)) {
+    modelInput.value = info.models[0];
+  }
+
   // URL personalizada
   const customRow = document.getElementById('customUrlRow');
   const hiddenUrl = document.getElementById('apiBaseUrlHidden');
