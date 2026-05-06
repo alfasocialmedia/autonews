@@ -270,21 +270,15 @@ def _find_article_body(soup: BeautifulSoup):
 def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]]:
     """Extrae texto, og:image, imágenes inline y embeds de un artículo.
     Devuelve (texto, imagen_url, inline_images, embeds).
+    Usa cloudscraper para sitios con Cloudflare, httpx como fallback.
     """
-    try:
-        resp = httpx.get(
-            url,
-            timeout=_SCRAPE_TIMEOUT,
-            follow_redirects=True,
-            headers=_SCRAPE_HEADERS,
-        )
-        resp.raise_for_status()
-    except Exception as exc:
-        log.warning("No se pudo scrapear %s: %s", url, exc)
+    content = _fetch_html(url)
+    if not content:
+        log.warning("No se pudo scrapear %s", url)
         return "", None, [], []
 
     # Pasar bytes crudos para que BeautifulSoup detecte el charset real del HTML
-    soup = BeautifulSoup(resp.content, "html.parser")
+    soup = BeautifulSoup(content, "html.parser")
     og_image = _extract_og_image(soup)
 
     # Localizar el contenedor del artículo antes de cualquier modificación

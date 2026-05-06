@@ -475,7 +475,7 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
   "title": "Título entre 80 y 110 caracteres con nombre, cifra o lugar concreto del artículo. NUNCA vago ni genérico.",
   "content": "HTML periodístico. {para_range} párrafos {content_hint}. {para_size_rule} {word_count_rule} Con todos los datos específicos del original.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
-  "summary": "EXACTAMENTE 20 palabras con el dato más específico de la nota — ni una más ni una menos.",
+  "summary": "Una oración de MÁXIMO 20 palabras que resuma el hecho más concreto (quién, qué, dónde). Sin adjetivos vacíos.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
@@ -614,7 +614,7 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
   "title": "Título entre 80 y 110 caracteres con nombre, cifra o lugar concreto del contenido. NUNCA vago ni genérico.",
   "content": "Noticia reescrita en HTML. {para_range} párrafos <p>. {para_size_rule} {word_count_rule} Con todos los datos específicos del original.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
-  "summary": "EXACTAMENTE 20 palabras con el dato más específico — ni una más ni una menos.",
+  "summary": "Una oración de MÁXIMO 20 palabras que resuma el hecho más concreto (quién, qué, dónde). Sin adjetivos vacíos.",
   "keyphrase": "frase clave de 2 a 4 palabras",
   "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
 }}"""
