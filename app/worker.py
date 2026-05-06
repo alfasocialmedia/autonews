@@ -32,7 +32,7 @@ from app.models import (
 )
 from app.services.email_service import fetch_unread_emails
 from app.services.groq_service import process_email_with_groq, process_rss_with_groq
-from app.services.rss_service import fetch_rss_items, scrape_full_article
+from app.services.rss_service import fetch_rss_items, scrape_full_article, _is_garbled
 from app.services.wordpress_service import create_post, find_category_by_name, get_categories, get_or_create_category, get_or_create_tags, upload_audio, upload_media
 
 logging.basicConfig(
@@ -924,6 +924,14 @@ def process_rss_feeds():
                             if scraped_img:
                                 image_url = scraped_img
                                 log.info("  🖼 og:image scrapeada: %s", scraped_img[:80])
+
+                        # Última línea de defensa: si el body sigue siendo binario/ilegible, omitir
+                        if _is_garbled(body):
+                            log.warning("  ⏭ Body garbled tras scraping, omitiendo: %s", item["title"][:80])
+                            _log_db(db, "WARN", f"[RSS] {feed.name}: contenido binario/ilegible — {item['title'][:120]}", source="rss")
+                            rss_item.status = "skipped"
+                            db.commit()
+                            continue
 
                         ai_result = process_rss_with_groq(
                             groq_key,

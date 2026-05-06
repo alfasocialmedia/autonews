@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import unicodedata
 from datetime import datetime, timezone
 
 import feedparser
@@ -35,13 +36,30 @@ _GARBLED_THRESHOLD = 0.04  # >4 % de chars no imprimibles → contenido binario/
 
 
 def _is_garbled(text: str) -> bool:
-    """True si el texto contiene datos binarios/PDF mal decodificados (ej: edictos en Misiones Online)."""
+    """True si el texto contiene datos binarios/PDF mal decodificados.
+
+    Detecta:
+    - Caracteres de control (salvo \\n \\r \\t)
+    - Símbolos Unicode geométricos/misceláneos (◆ □ ◘ etc.) — categorías So/Sm/Sk/Cs
+    - Carácter de reemplazo U+FFFD
+    - Bloque Geometric Shapes (U+25A0–U+25FF) y Misc Symbols (U+2600–U+26FF)
+    """
     if not text or len(text) < 80:
         return False
-    bad = sum(
-        1 for c in text
-        if (ord(c) < 32 and c not in "\n\r\t") or ord(c) == 0xFFFD
-    )
+    bad = 0
+    for c in text:
+        code = ord(c)
+        cat = unicodedata.category(c)
+        if cat == "Cc" and c not in "\n\r\t":          # control sin whitespace
+            bad += 1
+        elif cat in ("So", "Sm", "Sk", "Cs"):          # símbolos y surrogates
+            bad += 1
+        elif code == 0xFFFD:                            # replacement character
+            bad += 1
+        elif 0x25A0 <= code <= 0x25FF:                  # Geometric Shapes block
+            bad += 1
+        elif 0x2600 <= code <= 0x27FF:                  # Misc Symbols / Dingbats
+            bad += 1
     return (bad / len(text)) > _GARBLED_THRESHOLD
 
 
