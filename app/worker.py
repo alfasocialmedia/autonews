@@ -914,6 +914,9 @@ def process_rss_feeds():
                                 rss_item.status = "skipped"
                                 db.commit()
                                 continue
+                            else:
+                                # Scraping falló o fue garbled pero el RSS tiene un excerpt legible
+                                log.info("  📋 Usando descripción del RSS (scraping no disponible): %s", item["title"][:60])
                             # og:image del artículo siempre es mejor que el thumbnail del RSS
                             if scraped_img:
                                 image_url = scraped_img

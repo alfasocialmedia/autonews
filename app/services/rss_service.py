@@ -63,6 +63,11 @@ def _is_garbled(text: str) -> bool:
     return (bad / len(text)) > _GARBLED_THRESHOLD
 
 
+def _upgrade_wp_thumbnail(url: str) -> str:
+    """Convierte thumbnail WordPress (imagen-300x168.jpg) a la imagen original sin sufijo de tamaño."""
+    return re.sub(r'-\d+x\d+(\.\w+(?:\?.*)?$)', r'\1', url)
+
+
 def _extract_image_url(entry) -> str | None:
     # media_content: aceptar solo si no declara dimensiones o supera el mínimo
     for mc in entry.get("media_content", []):
@@ -73,13 +78,14 @@ def _extract_image_url(entry) -> str | None:
             continue
         width = int(mc.get("width") or 0)
         if width == 0 or width >= _MIN_IMAGE_WIDTH:
-            return url
+            return _upgrade_wp_thumbnail(url)
 
     # media_thumbnail omitido: son miniaturas pequeñas; se prefiere og:image al scrapear
 
     for enc in entry.get("enclosures", []):
         if enc.get("type", "").startswith("image/"):
-            return enc.get("href") or enc.get("url")
+            url = enc.get("href") or enc.get("url") or ""
+            return _upgrade_wp_thumbnail(url) if url else None
 
     html = ""
     if entry.get("content"):
@@ -88,7 +94,7 @@ def _extract_image_url(entry) -> str | None:
         html = entry.get("summary", "")
     m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', html)
     if m:
-        return m.group(1)
+        return _upgrade_wp_thumbnail(m.group(1))
 
     return None
 
@@ -294,9 +300,11 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
     if jsonld_text:
         lines = [l.strip() for l in jsonld_text.splitlines() if l.strip()]
         result = "\n".join(lines)[:12000]
-        log.info("scrape JSON-LD ok: %d chars, og_image=%s, images=%d, embeds=%d",
-                 len(result), bool(og_image), len(inline_images), len(embeds))
-        return result, og_image, inline_images, embeds
+        if not _is_garbled(result):
+            log.info("scrape JSON-LD ok: %d chars, og_image=%s, images=%d, embeds=%d",
+                     len(result), bool(og_image), len(inline_images), len(embeds))
+            return result, og_image, inline_images, embeds
+        log.warning("scrape: JSON-LD garbled, intentando HTML: %s", url)
 
     # 2. Fallback: scraping HTML tradicional
     for tag in soup(_NOISE_TAGS):
