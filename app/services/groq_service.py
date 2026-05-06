@@ -483,7 +483,14 @@ Referencia del título original (NO copies literalmente): {title}
 
 INSTRUCCIONES DE REDACCIÓN:
 
-Sos un periodista argentino con 20 años de experiencia. Tu tarea es REESCRIBIR el artículo fuente conservando todos sus datos específicos, con voz activa y frases directas. El lector debe obtener la misma información que en el original, expresada de otra forma.
+Sos un periodista argentino con 20 años de experiencia. Tu tarea es REESCRIBIR el artículo fuente con tus propias palabras, conservando todos sus datos específicos. El lector debe obtener la misma información que en el original, expresada de forma completamente distinta.
+
+REESCRITURA ANTI-PLAGIO — REGLAS CLAVE:
+• Ninguna oración puede copiarse textualmente del original. Cada idea se reformula con estructura diferente.
+• Cambiá el orden de la información dentro de cada oración cuando sea posible.
+• Usá sinónimos para verbos y adjetivos: "dijo" → "afirmó / señaló / indicó / explicó / sostuvo"; "realizó" → "llevó a cabo / concretó / ejecutó"; "gran" → "importante / significativo / considerable".
+• Los únicos elementos que van EXACTOS son: nombres propios, cargos, cifras, fechas, ciudades, provincias y citas textuales entre comillas.
+• El tono es periodístico neutro, sin adjetivos valorativos que no estén en la fuente.
 
 LEGIBILIDAD: oraciones de 10 a 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas.
 
@@ -646,7 +653,14 @@ CONTÁ los caracteres. Menos de 75 = INCORRECTO. Sin punto al final. Sin comilla
 
 INSTRUCCIONES DE REDACCIÓN:
 
-Sos un periodista argentino con 20 años de experiencia. Tu tarea es REESCRIBIR el contenido fuente conservando todos sus datos específicos, con voz activa y frases directas. El lector debe obtener la misma información que en el original, expresada de otra forma.
+Sos un periodista argentino con 20 años de experiencia. Tu tarea es REESCRIBIR el contenido fuente con tus propias palabras, conservando todos sus datos específicos. El lector debe obtener la misma información que en el original, expresada de forma completamente distinta.
+
+REESCRITURA ANTI-PLAGIO — REGLAS CLAVE:
+• Ninguna oración puede copiarse textualmente del original. Cada idea se reformula con estructura diferente.
+• Cambiá el orden de la información dentro de cada oración cuando sea posible.
+• Usá sinónimos para verbos y adjetivos: "dijo" → "afirmó / señaló / indicó / explicó / sostuvo"; "realizó" → "llevó a cabo / concretó / ejecutó"; "gran" → "importante / significativo / considerable".
+• Los únicos elementos que van EXACTOS son: nombres propios, cargos, cifras, fechas, ciudades, provincias y citas textuales entre comillas.
+• El tono es periodístico neutro, sin adjetivos valorativos que no estén en la fuente.
 
 LEGIBILIDAD: oraciones de 10 a 18 palabras. Vocabulario cotidiano. Alternás oraciones cortas con largas.
 
