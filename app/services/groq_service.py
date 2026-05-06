@@ -456,8 +456,11 @@ def process_rss_with_groq(
 ⚠ REGLAS ABSOLUTAS — LEER ANTES DE ESCRIBIR:
 1. Basate ÚNICAMENTE en el texto de arriba. Sin excepciones.
 2. PRESERVÁ TODOS los datos concretos del texto fuente:
-   - Nombres completos de personas, instituciones, organismos y lugares
-   - Cifras exactas (cantidades, porcentajes, montos, fechas)
+   - UBICACIÓN GEOGRÁFICA (OBLIGATORIO): ciudad, provincia, barrio, localidad o país.
+     Si el texto dice "Posadas" → escribís "Posadas". Si dice "Misiones" → escribís "Misiones".
+     NUNCA reemplaces por "una ciudad", "la provincia" o "la zona". El lugar va siempre nombrado.
+   - Nombres completos de personas, instituciones y organismos
+   - Cifras exactas (cantidades, porcentajes, montos, fechas, edades)
    - Cargos oficiales, números de leyes, nombres de operativos
    - Declaraciones textuales entre comillas
    NO los reemplaces por expresiones vagas ("un funcionario", "cierta cantidad", "una zona").
@@ -498,6 +501,8 @@ SUBTÍTULOS: {heading_rule}
 PROHIBIDO:
 - Texto sin etiquetas <p> — TODO el contenido va dentro de <p>...</p>
 - Mezclar varios párrafos dentro de un solo <p>
+- Omitir o vaguear la ubicación geográfica: ciudad, provincia y localidad van SIEMPRE nombradas
+- Reemplazar "Posadas" por "la ciudad" o "Misiones" por "la provincia" — ESO ES INCORRECTO
 - Generalizar datos concretos ("un funcionario", "cierta cantidad", "una zona")
 - Inventar datos, personas, cifras o eventos ausentes del texto fuente
 - Omitir nombres, cifras, lugares o declaraciones del original
@@ -615,8 +620,11 @@ def process_email_with_groq(
 ⚠ REGLAS ABSOLUTAS — LEER ANTES DE ESCRIBIR:
 1. Reescribí ÚNICAMENTE el contenido de arriba. Sin excepciones.
 2. PRESERVÁ TODOS los datos concretos del texto fuente:
-   - Nombres completos de personas, instituciones, organismos y lugares
-   - Cifras exactas (cantidades, porcentajes, montos, fechas)
+   - UBICACIÓN GEOGRÁFICA (OBLIGATORIO): ciudad, provincia, barrio, localidad o país.
+     Si el texto dice "Posadas" → escribís "Posadas". Si dice "Misiones" → escribís "Misiones".
+     NUNCA reemplaces por "una ciudad", "la provincia" o "la zona". El lugar va siempre nombrado.
+   - Nombres completos de personas, instituciones y organismos
+   - Cifras exactas (cantidades, porcentajes, montos, fechas, edades)
    - Cargos oficiales, números de leyes, nombres de operativos
    - Declaraciones textuales entre comillas
    NO los reemplaces por expresiones vagas ("un funcionario", "cierta cantidad", "una zona").
@@ -656,6 +664,8 @@ SUBTÍTULOS: Si el contenido tiene secciones diferenciadas, convertí cada una e
 PROHIBIDO:
 - Texto sin etiquetas <p> — TODO el contenido va dentro de <p>...</p>
 - Mezclar varios párrafos dentro de un solo <p>
+- Omitir o vaguear la ubicación geográfica: ciudad, provincia y localidad van SIEMPRE nombradas
+- Reemplazar "Posadas" por "la ciudad" o "Misiones" por "la provincia" — ESO ES INCORRECTO
 - Generalizar o vaguear datos concretos ("un funcionario", "cierta cantidad", "una zona del país")
 - Inventar datos, personas, cifras o eventos ausentes del texto fuente
 - Omitir datos clave como nombres, cifras, lugares o declaraciones del original
