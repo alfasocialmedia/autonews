@@ -498,88 +498,98 @@ def _try_wp_rest_api(base_url: str, category_url: str, max_items: int = 10) -> l
     path_parts = [p for p in parsed.path.strip("/").split("/") if p]
 
     api_base = f"{base_url}/wp-json/wp/v2"
+    _api_headers = {"User-Agent": _SCRAPE_HEADERS["User-Agent"], "Accept": "application/json"}
 
-    # Intentar cada parte del path como slug de categoría (de más específica a más general)
-    cat_id = None
-    for slug in reversed(path_parts):
+    def _api_get(endpoint: str, params: dict) -> list | dict | None:
+        """GET al WP REST API — intenta cloudscraper primero, luego httpx."""
         try:
-            r = httpx.get(
-                f"{api_base}/categories",
-                params={"slug": slug, "per_page": 1},
-                timeout=10, verify=False,
-                headers={"User-Agent": _SCRAPE_HEADERS["User-Agent"]},
-            )
+            import cloudscraper
+            scraper = cloudscraper.create_scraper(browser={"browser": "chrome", "platform": "windows"})
+            r = scraper.get(endpoint, params=params, timeout=15, headers=_api_headers)
             if r.status_code == 200:
-                data = r.json()
-                if data and isinstance(data, list) and data[0].get("id"):
-                    cat_id = data[0]["id"]
-                    log.info("WP REST API: categoría '%s' → ID %s", slug, cat_id)
-                    break
+                return r.json()
         except Exception:
             pass
+        try:
+            r = httpx.get(endpoint, params=params, timeout=15, verify=False, headers=_api_headers)
+            if r.status_code == 200:
+                return r.json()
+        except Exception:
+            pass
+        return None
+
+    # Resolver cat_id desde el último slug del path (más específico primero)
+    cat_id = None
+    for slug in reversed(path_parts):
+        data = _api_get(f"{api_base}/categories", {"slug": slug, "per_page": 1})
+        if data and isinstance(data, list) and data[0].get("id"):
+            cat_id = data[0]["id"]
+            log.info("WP REST API: categoría '%s' → ID %s", slug, cat_id)
+            break
 
     if not cat_id:
-        # Sin categoría identificada — el HTML scraper lo resolverá mejor
         log.debug("_try_wp_rest_api: no se encontró cat_id para %s", category_url)
         return []
 
-    try:
-        params: dict = {"per_page": max_items, "_embed": 1, "orderby": "date", "order": "desc", "categories": cat_id}
-
-        r = httpx.get(
-            f"{api_base}/posts",
-            params=params,
-            timeout=15, verify=False,
-            headers={"User-Agent": _SCRAPE_HEADERS["User-Agent"]},
-        )
-        if r.status_code != 200:
-            return []
-
-        posts = r.json()
-        if not isinstance(posts, list):
-            return []
-
-        items = []
-        for post in posts:
-            link = post.get("link", "")
-            title = BeautifulSoup(post.get("title", {}).get("rendered", ""), "html.parser").get_text()
-            body = BeautifulSoup(post.get("excerpt", {}).get("rendered", ""), "html.parser").get_text(strip=True)
-
-            # Imagen desde _embedded
-            image_url = None
-            embedded = post.get("_embedded", {})
-            media = embedded.get("wp:featuredmedia", [{}])
-            if media and isinstance(media, list) and media[0].get("source_url"):
-                image_url = media[0]["source_url"]
-
-            # Fecha
-            published_at = None
-            date_str = post.get("date_gmt") or post.get("date")
-            if date_str:
-                try:
-                    published_at = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-                except Exception:
-                    pass
-
-            if not link or not title:
-                continue
-
-            items.append({
-                "guid": link,
-                "title": title.strip(),
-                "link": link,
-                "body": body,
-                "published_at": published_at,
-                "image_url": image_url,
-                "needs_scraping": len(body) < _MIN_BODY_LENGTH,
-            })
-
-        log.info("WP REST API ok: %d artículos desde %s", len(items), base_url)
-        return items
-
-    except Exception as exc:
-        log.debug("WP REST API error: %s", exc)
+    posts = _api_get(
+        f"{api_base}/posts",
+        {"per_page": max_items, "_embed": 1, "orderby": "date", "order": "desc", "categories": cat_id},
+    )
+    if not isinstance(posts, list):
         return []
+
+    items = []
+    for post in posts:
+        link = post.get("link", "")
+        title = BeautifulSoup(post.get("title", {}).get("rendered", ""), "html.parser").get_text().strip()
+
+        # Usar content.rendered (artículo completo) si está disponible; excerpt como último recurso
+        content_html = post.get("content", {}).get("rendered", "")
+        excerpt_html = post.get("excerpt", {}).get("rendered", "")
+
+        if content_html and len(content_html) > 300:
+            content_soup = BeautifulSoup(content_html, "html.parser")
+            # Eliminar bloques no deseados del contenido
+            for noise in content_soup(["script", "style", "figure.wp-block-embed",
+                                       "div.sharedaddy", "div.jp-relatedposts",
+                                       "div.yarpp-related", "div.related-posts"]):
+                noise.decompose()
+            paras = [p.get_text(strip=True) for p in content_soup.find_all("p") if p.get_text(strip=True)]
+            body = "\n\n".join(paras) if paras else content_soup.get_text(separator="\n", strip=True)
+        else:
+            body = BeautifulSoup(excerpt_html, "html.parser").get_text(strip=True)
+
+        # Imagen desde _embedded
+        image_url = None
+        embedded = post.get("_embedded", {})
+        media = embedded.get("wp:featuredmedia", [{}])
+        if media and isinstance(media, list) and media[0].get("source_url"):
+            image_url = _upgrade_wp_thumbnail(media[0]["source_url"])
+
+        # Fecha
+        published_at = None
+        date_str = post.get("date_gmt") or post.get("date")
+        if date_str:
+            try:
+                published_at = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+            except Exception:
+                pass
+
+        if not link or not title:
+            continue
+
+        items.append({
+            "guid": link,
+            "title": title,
+            "link": link,
+            "body": body,
+            "published_at": published_at,
+            "image_url": image_url,
+            "needs_scraping": len(body) < _MIN_BODY_LENGTH,
+        })
+
+    log.info("WP REST API ok: %d artículos desde %s", len(items), base_url)
+    return items
 
 
 # Selectores genéricos para encontrar artículos en páginas de categoría
