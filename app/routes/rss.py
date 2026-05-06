@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import ProcessedRssItem, RssFeed
-from app.services.rss_service import fetch_rss_items, test_rss_feed
+from app.services.rss_service import fetch_rss_items, scrape_category_page, test_rss_feed, test_web_source
 
 router = APIRouter(prefix="/settings/rss")
 templates = Jinja2Templates(directory="app/templates")
@@ -45,6 +45,7 @@ async def add_feed(
     request: Request,
     name: str = Form(...),
     url: str = Form(...),
+    feed_type: str = Form("rss"),
     check_interval_minutes: int = Form(60),
     articles_per_check: int = Form(1),
     max_articles_per_day: int = Form(5),
@@ -60,6 +61,7 @@ async def add_feed(
     feed = RssFeed(
         name=name.strip(),
         url=url.strip(),
+        feed_type=feed_type if feed_type in ("rss", "web") else "rss",
         check_interval_minutes=check_interval_minutes,
         articles_per_check=max(1, articles_per_check),
         max_articles_per_day=max_articles_per_day,
@@ -78,6 +80,7 @@ async def edit_feed(
     request: Request,
     name: str = Form(...),
     url: str = Form(...),
+    feed_type: str = Form("rss"),
     check_interval_minutes: int = Form(60),
     articles_per_check: int = Form(1),
     max_articles_per_day: int = Form(5),
@@ -94,6 +97,7 @@ async def edit_feed(
     if feed:
         feed.name = name.strip()
         feed.url = url.strip()
+        feed.feed_type = feed_type if feed_type in ("rss", "web") else "rss"
         feed.check_interval_minutes = check_interval_minutes
         feed.articles_per_check = max(1, articles_per_check)
         feed.max_articles_per_day = max_articles_per_day
@@ -101,6 +105,9 @@ async def edit_feed(
         feed.wp_category_id = int(wp_category_id) if wp_category_id.strip().isdigit() else None
         feed.wp_category_name = wp_category_name.strip() or None
         db.commit()
+        db.refresh(feed)
+        saved_type = feed.feed_type or "rss"
+        return RedirectResponse(f"/settings/rss?msg=Feed+actualizado+(tipo:+{saved_type})", status_code=302)
     return RedirectResponse("/settings/rss?msg=Feed+actualizado", status_code=302)
 
 
@@ -136,12 +143,20 @@ class UrlTestRequest(BaseModel):
     url: str
 
 
+class UrlTestRequestV2(BaseModel):
+    url: str
+    feed_type: str = "rss"
+
+
 @router.post("/test-url")
-async def test_url(payload: UrlTestRequest, request: Request, db: Session = Depends(get_db)):
+async def test_url(payload: UrlTestRequestV2, request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
     if not user:
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    success, message = test_rss_feed(payload.url.strip())
+    if payload.feed_type == "web":
+        success, message = test_web_source(payload.url.strip())
+    else:
+        success, message = test_rss_feed(payload.url.strip())
     return JSONResponse({"success": success, "message": message})
 
 
@@ -156,12 +171,17 @@ async def test_feed(feed_id: int, request: Request, db: Session = Depends(get_db
         return JSONResponse({"success": False, "message": "Feed no encontrado"})
 
     try:
-        items = fetch_rss_items(feed.url)
+        if (feed.feed_type or "rss") == "web":
+            items = scrape_category_page(feed.url)
+            label = f"Fuente web — {len(items)} artículos encontrados." if items else "No se encontraron artículos."
+        else:
+            items = fetch_rss_items(feed.url)
+            label = f"Feed válido — {len(items)} artículos encontrados."
     except Exception as exc:
         return JSONResponse({"success": False, "message": str(exc)})
 
     if not items:
-        return JSONResponse({"success": False, "message": "El feed no contiene ítems o no es accesible."})
+        return JSONResponse({"success": False, "message": label if 'label' in dir() else "Sin artículos."})
 
     guids = [it["guid"] for it in items[:10]]
     processed = {
@@ -181,7 +201,7 @@ async def test_feed(feed_id: int, request: Request, db: Session = Depends(get_db
 
     return JSONResponse({
         "success": True,
-        "message": f"Feed válido — {len(items)} artículos encontrados.",
+        "message": label,
         "items": article_list,
     })
 
@@ -206,9 +226,12 @@ async def publish_now(
         return JSONResponse({"success": False, "message": "Feed no encontrado"})
 
     try:
-        items = fetch_rss_items(feed.url)
+        if (feed.feed_type or "rss") == "web":
+            items = scrape_category_page(feed.url)
+        else:
+            items = fetch_rss_items(feed.url)
     except Exception as exc:
-        return JSONResponse({"success": False, "message": f"No se pudo descargar el feed: {exc}"})
+        return JSONResponse({"success": False, "message": f"No se pudo obtener artículos: {exc}"})
 
     item = next((it for it in items if it["guid"] == payload.guid), None)
     if not item:

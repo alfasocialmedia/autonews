@@ -511,7 +511,24 @@ const _addTypeConfig = {
   },
 };
 
-document.querySelectorAll('input[name="feed_type"][form]').length; // no-op, just a ref
+// Tipo de fuente en Edit Modals — actualiza el label de URL al cambiar radio
+document.querySelectorAll('.modal input[name="feed_type"]').forEach(radio => {
+  radio.addEventListener('change', function () {
+    const modal = this.closest('.modal');
+    if (!modal || modal.id === 'addModal') return; // Add Modal tiene su propio handler
+    const urlLabel = modal.querySelector('label.fw-semibold[for-url], .mb-3 > label.fw-semibold:has(+ .form-control[name="url"])');
+    // Busca el label justo encima del input[name="url"]
+    const urlInput = modal.querySelector('input[name="url"]');
+    if (urlInput) {
+      const labelEl = urlInput.closest('.mb-3')?.querySelector('label.fw-semibold');
+      if (labelEl) {
+        labelEl.textContent = this.value === 'web'
+          ? 'URL de la página de categoría'
+          : 'URL del feed RSS';
+      }
+    }
+  });
+});
 
 document.querySelectorAll('#addModal input[name="feed_type"]').forEach(radio => {
   radio.addEventListener('change', function () {
