@@ -28,6 +28,14 @@ _NOISE_SELECTORS = [
     "[class*='publicidad']", "[class*='propaganda']",
     "[class*='widget']", "[class*='popup']", "[class*='modal']",
     "[class*='cookie']", "[class*='overlay']",
+    # Reproductores de audio/video (MediaElement.js, WordPress audio shortcode)
+    "[class*='mejs-container']", "[class*='mejs-inner']",
+    "[class*='wp-audio-shortcode']", "[class*='wp-video-shortcode']",
+    # Bloques de publicidad inyectada (plugins Code Block, Ad Inserter, Tagdiv)
+    "[class*='code-block']", "[class*='ai-viewport']",
+    "[class*='td-a-rec']", "[class*='tdi_']",
+    # Reproductores externos y embeds no deseados en el texto
+    "[class*='aniview']", "[class*='video-container']",
 ]
 
 
@@ -241,7 +249,8 @@ def _find_article_body(soup: BeautifulSoup):
     _BODY_CLASSES = re.compile(
         r"entry[-_]content|post[-_]content|article[-_]content|article[-_]body|"
         r"post[-_]body|content[-_]body|story[-_]body|article__body|td-post[-_]content|"
-        r"td_block_wrap|tdb-block-inner|mvp-content-main|jeg_content|"
+        r"td_block_wrap|tdb-block-inner|tdb_single_content|tdb-single-content|"
+        r"mvp-content-main|jeg_content|"
         r"single[-_]content|nota[-_]cuerpo|cuerpo[-_]nota|news[-_]content|"
         # Crónica y sitios argentinos
         r"cronica[-_]content|nota[-_]content|contenido[-_]nota|cuerpo[-_]articulo|"
@@ -269,7 +278,7 @@ def _find_article_body(soup: BeautifulSoup):
 
 def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]]:
     """Extrae texto, og:image, imágenes inline y embeds de un artículo.
-    Devuelve (texto, imagen_url, inline_images, embeds).
+    Extrae SIEMPRE por JSON-LD y por HTML, y usa el resultado más largo.
     Usa cloudscraper para sitios con Cloudflare, httpx como fallback.
     """
     content = _fetch_html(url)
@@ -277,30 +286,31 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
         log.warning("No se pudo scrapear %s", url)
         return "", None, [], []
 
-    # Pasar bytes crudos para que BeautifulSoup detecte el charset real del HTML
     soup = BeautifulSoup(content, "html.parser")
     og_image = _extract_og_image(soup)
 
-    # Localizar el contenedor del artículo antes de cualquier modificación
+    # Extraer multimedia ANTES de eliminar ruido (iframes y figures se pierden después)
     pre_article = _find_article_body(soup)
     pre_container = pre_article if pre_article else soup
-
-    # Extraer multimedia ANTES de eliminar ruido (iframes y figures se pierden después)
     inline_images = _extract_inline_images(pre_container, og_image)
     embeds = _extract_social_embeds(pre_container)
 
-    # 1. Preferir JSON-LD: contiene el artículo completo sin paywall ni JS
+    # ── Candidato 1: JSON-LD ─────────────────────────────────────────────────
+    # Los temas WordPress (Newspaper/Tagdiv, La Nacion, Infobae) suelen incluir
+    # articleBody completo en JSON-LD. Pero algunos temas solo ponen el extracto.
+    jsonld_candidate = ""
     jsonld_text = _extract_jsonld_text(soup)
     if jsonld_text:
         lines = [l.strip() for l in jsonld_text.splitlines() if l.strip()]
-        result = "\n".join(lines)[:12000]
-        if not _is_garbled(result):
-            log.info("scrape JSON-LD ok: %d chars, og_image=%s, images=%d, embeds=%d",
-                     len(result), bool(og_image), len(inline_images), len(embeds))
-            return result, og_image, inline_images, embeds
-        log.warning("scrape: JSON-LD garbled, intentando HTML: %s", url)
+        cand = "\n".join(lines)[:12000]
+        if not _is_garbled(cand):
+            jsonld_candidate = cand
+            log.info("JSON-LD candidate: %d chars", len(jsonld_candidate))
+        else:
+            log.warning("scrape: JSON-LD garbled: %s", url)
 
-    # 2. Fallback: scraping HTML tradicional
+    # ── Candidato 2: scraping HTML ───────────────────────────────────────────
+    # Eliminar ruido de la soup (scripts, ads, reproductores, nav, etc.)
     for tag in soup(_NOISE_TAGS):
         tag.decompose()
     for sel in _NOISE_SELECTORS:
@@ -309,31 +319,50 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
                 el.decompose()
         except Exception:
             pass
-
     for a in soup.find_all("a"):
         if len((a.get_text() or "").strip()) < 4:
             a.decompose()
 
     article = _find_article_body(soup)
-
     container = article if article else soup
 
-    # Extraer párrafos respetando la estructura <p> para conservar separación real
     paras = [p.get_text(strip=True) for p in container.find_all("p") if p.get_text(strip=True)]
     if paras:
-        result = "\n\n".join(paras)[:12000]
+        html_candidate = "\n\n".join(paras)[:12000]
     else:
         text = container.get_text(separator="\n", strip=True)
-        lines = [l.strip() for l in text.splitlines() if l.strip()]
-        result = "\n".join(lines)[:12000]
+        lines2 = [l.strip() for l in text.splitlines() if l.strip()]
+        html_candidate = "\n".join(lines2)[:12000]
 
-    if _is_garbled(result):
-        log.warning("scrape: contenido binario/ilegible descartado: %s", url)
+    if _is_garbled(html_candidate):
+        log.warning("scrape: HTML garbled: %s", url)
+        html_candidate = ""
+    elif html_candidate:
+        log.info("HTML candidate: %d chars, container=%s",
+                 len(html_candidate), container.name if article else "body")
+
+    # ── Elegir el candidato más completo ────────────────────────────────────
+    # Usar el más largo: JSON-LD puede ser solo el extracto (corto),
+    # mientras que el HTML puede tener el artículo completo.
+    if jsonld_candidate and html_candidate:
+        if len(jsonld_candidate) >= len(html_candidate):
+            result = jsonld_candidate
+            log.info("scrape: JSON-LD ganó (%d > %d chars)", len(jsonld_candidate), len(html_candidate))
+        else:
+            result = html_candidate
+            log.info("scrape: HTML ganó (%d > %d chars)", len(html_candidate), len(jsonld_candidate))
+    elif jsonld_candidate:
+        result = jsonld_candidate
+        log.info("scrape: solo JSON-LD (%d chars)", len(jsonld_candidate))
+    elif html_candidate:
+        result = html_candidate
+        log.info("scrape: solo HTML (%d chars)", len(html_candidate))
+    else:
+        log.warning("scrape: sin contenido legible: %s", url)
         return "", og_image, inline_images, embeds
 
-    log.info("scrape HTML ok: %d chars, container=%s, og_image=%s, images=%d, embeds=%d",
-             len(result), container.name if article else "body",
-             bool(og_image), len(inline_images), len(embeds))
+    log.info("scrape ok: %d chars total, og_image=%s, images=%d, embeds=%d",
+             len(result), bool(og_image), len(inline_images), len(embeds))
     log.debug("scrape preview: %s", result[:300])
     return result, og_image, inline_images, embeds
 

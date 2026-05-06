@@ -48,6 +48,37 @@ log = logging.getLogger("worker")
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+def _check_content_quality(ai_result: dict, source_len: int) -> tuple[bool, str]:
+    """Verificación automática de calidad antes de publicar.
+    Devuelve (ok, motivo). Si ok=False el artículo NO se publica."""
+    import re as _re
+    content = ai_result.get("content", "")
+    title = ai_result.get("title", "")
+
+    # Título mínimo
+    if len(title) < 25:
+        return False, f"título demasiado corto ({len(title)} chars)"
+
+    # Contenido mínimo
+    plain = _re.sub(r"<[^>]+>", " ", content)
+    words = [w for w in plain.split() if len(w) > 1]
+    word_count = len(words)
+
+    if word_count < 40:
+        return False, f"contenido muy corto ({word_count} palabras)"
+
+    # Párrafos con etiqueta <p>
+    p_count = content.count("<p>")
+    if p_count < 2:
+        return False, f"sin párrafos HTML correctos (solo {p_count} <p>)"
+
+    # Si la fuente era larga, exigir más contenido generado
+    if source_len > 1500 and word_count < 150:
+        return False, f"contenido incompleto para fuente de {source_len} chars: solo {word_count} palabras"
+
+    return True, f"ok ({word_count} palabras, {p_count} párrafos)"
+
+
 def _matches_keyword_filter(keyword_filter: str | None, title: str, body: str = "") -> bool:
     """Devuelve True si el artículo pasa el filtro de palabras clave (o si no hay filtro)."""
     if not keyword_filter:
@@ -956,6 +987,18 @@ def process_rss_feeds():
                             ai_result["_forced_category_name"] = feed.wp_category_name or ""
                         elif feed.wp_category_name and not feed.wp_category_id:
                             ai_result["category"] = feed.wp_category_name
+
+                        # ── Verificación de calidad automática ───────────────
+                        quality_ok, quality_reason = _check_content_quality(ai_result, len(body))
+                        if not quality_ok:
+                            warn_msg = f"[RSS] {feed.name}: calidad insuficiente — {quality_reason} — '{item['title'][:80]}'"
+                            log.warning("  ⚠ %s", warn_msg)
+                            _log_db(db, "WARN", warn_msg, source="rss")
+                            rss_item.status = "error"
+                            rss_item.error_message = f"Calidad: {quality_reason}"
+                            db.commit()
+                            continue
+                        log.info("  ✔ Calidad: %s", quality_reason)
 
                         # Si no hay imagen, generar una con IA relacionada al tema
                         if not image_url:
