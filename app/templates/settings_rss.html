@@ -8,7 +8,7 @@
     <span class="text-muted small">Monitorea diarios online y publica automáticamente artículos reescritos</span>
   </div>
   <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
-    <i class="bi bi-plus-lg me-1"></i>Agregar feed
+    <i class="bi bi-plus-lg me-1"></i>Agregar fuente
   </button>
 </div>
 
@@ -60,11 +60,13 @@
     <div class="card border-0 shadow-sm h-100">
       <div class="card-header bg-transparent border-0 d-flex align-items-center justify-content-between">
         <div class="d-flex align-items-center gap-2">
-          <div class="avatar-icon bg-warning-subtle text-warning rounded-circle">
-            <i class="bi bi-rss-fill"></i>
+          <div class="avatar-icon {% if feed.feed_type == 'web' %}bg-info-subtle text-info{% else %}bg-warning-subtle text-warning{% endif %} rounded-circle">
+            <i class="bi bi-{% if feed.feed_type == 'web' %}globe2{% else %}rss-fill{% endif %}"></i>
           </div>
           <div>
-            <div class="fw-semibold">{{ feed.name }}</div>
+            <div class="fw-semibold">{{ feed.name }}
+              {% if feed.feed_type == 'web' %}<span class="badge bg-info-subtle text-info ms-1" style="font-size:.65rem">WEB</span>{% endif %}
+            </div>
             <div class="text-muted small text-truncate" style="max-width:240px">{{ feed.url }}</div>
           </div>
         </div>
@@ -150,7 +152,24 @@
               <input type="text" name="name" class="form-control" value="{{ feed.name }}" required>
             </div>
             <div class="mb-3">
-              <label class="form-label fw-semibold">URL del feed RSS</label>
+              <label class="form-label fw-semibold">Tipo de fuente</label>
+              <div class="d-flex gap-3">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="feed_type" id="editType{{ feed.id }}Rss" value="rss" {% if (feed.feed_type or 'rss') != 'web' %}checked{% endif %}>
+                  <label class="form-check-label" for="editType{{ feed.id }}Rss">
+                    <i class="bi bi-rss me-1 text-warning"></i>Feed RSS
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="feed_type" id="editType{{ feed.id }}Web" value="web" {% if feed.feed_type == 'web' %}checked{% endif %}>
+                  <label class="form-check-label" for="editType{{ feed.id }}Web">
+                    <i class="bi bi-globe2 me-1 text-info"></i>Página de categoría (Web)
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">{% if feed.feed_type == 'web' %}URL de la página de categoría{% else %}URL del feed RSS{% endif %}</label>
               <input type="url" name="url" class="form-control" value="{{ feed.url }}" required>
             </div>
             <div class="row g-2 mb-3">
@@ -217,7 +236,7 @@
     <h5>No hay feeds configurados</h5>
     <p class="text-muted">Agrega feeds RSS de diarios online para que el sistema los monitoree y publique artículos reescritos automáticamente.</p>
     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
-      <i class="bi bi-plus-lg me-1"></i>Agregar feed
+      <i class="bi bi-plus-lg me-1"></i>Agregar fuente
     </button>
   </div>
 </div>
@@ -245,7 +264,7 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Agregar feed RSS</h5>
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Agregar fuente</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <form method="post" action="/settings/rss/add">
@@ -255,7 +274,25 @@
             <input type="text" name="name" id="addName" class="form-control" placeholder="Ej: Clarín" required>
           </div>
           <div class="mb-3">
-            <label class="form-label fw-semibold">URL del feed RSS</label>
+            <label class="form-label fw-semibold">Tipo de fuente</label>
+            <div class="d-flex gap-3">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="feed_type" id="addTypeRss" value="rss" checked>
+                <label class="form-check-label" for="addTypeRss">
+                  <i class="bi bi-rss me-1 text-warning"></i>Feed RSS
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="feed_type" id="addTypeWeb" value="web">
+                <label class="form-check-label" for="addTypeWeb">
+                  <i class="bi bi-globe2 me-1 text-info"></i>Página de categoría (Web)
+                </label>
+              </div>
+            </div>
+            <div class="form-text" id="addTypeHint">URL del archivo RSS (termina en /feed/, .xml, .rss, etc.)</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" id="addUrlLabel">URL del feed RSS</label>
             <div class="input-group">
               <input type="url" name="url" id="addUrl" class="form-control"
                      placeholder="https://www.clarin.com/rss/lo-ultimo/" required>
@@ -460,12 +497,42 @@ document.querySelectorAll('.quick-feed').forEach(btn => {
   });
 });
 
+// Tipo de fuente en Add Modal — actualiza label, placeholder y hint
+const _addTypeConfig = {
+  rss: {
+    label: 'URL del feed RSS',
+    placeholder: 'https://www.clarin.com/rss/lo-ultimo/',
+    hint: 'URL del archivo RSS (termina en /feed/, .xml, .rss, etc.)',
+  },
+  web: {
+    label: 'URL de la página de categoría',
+    placeholder: 'https://misionesonline.net/tema/policiales-judiciales/policiales/',
+    hint: 'URL de la sección o categoría del sitio (WordPress o HTML).',
+  },
+};
+
+document.querySelectorAll('input[name="feed_type"][form]').length; // no-op, just a ref
+
+document.querySelectorAll('#addModal input[name="feed_type"]').forEach(radio => {
+  radio.addEventListener('change', function () {
+    const cfg = _addTypeConfig[this.value] || _addTypeConfig.rss;
+    document.getElementById('addUrlLabel').textContent = cfg.label;
+    document.getElementById('addUrl').placeholder = cfg.placeholder;
+    document.getElementById('addTypeHint').textContent = cfg.hint;
+    document.getElementById('addUrlFeedback').textContent = '';
+    document.getElementById('addUrl').className = 'form-control';
+  });
+});
+
 // Probar URL en el modal de agregar
 document.getElementById('btnTestAddUrl').addEventListener('click', async function () {
   const urlInput = document.getElementById('addUrl');
   const feedback = document.getElementById('addUrlFeedback');
   const url = urlInput.value.trim();
   if (!url) { feedback.textContent = 'Ingresá una URL primero.'; return; }
+
+  const feedTypeRadio = document.querySelector('#addModal input[name="feed_type"]:checked');
+  const feed_type = feedTypeRadio ? feedTypeRadio.value : 'rss';
 
   this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Probando...';
   this.disabled = true;
@@ -476,7 +543,7 @@ document.getElementById('btnTestAddUrl').addEventListener('click', async functio
     const resp = await fetch('/settings/rss/test-url', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, feed_type }),
     });
     const data = await resp.json();
     if (data.success) {
