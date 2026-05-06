@@ -183,14 +183,21 @@ async def test_feed(feed_id: int, request: Request, db: Session = Depends(get_db
     if not items:
         return JSONResponse({"success": False, "message": label if 'label' in dir() else "Sin artículos."})
 
-    guids = [it["guid"] for it in items[:10]]
+    guids = [it["guid"] for it in items[:20]]
     processed = {
         row.guid: row.status
         for row in db.query(ProcessedRssItem).filter(ProcessedRssItem.guid.in_(guids)).all()
     }
 
+    # Ordenar: primero los no procesados, luego el resto
+    _status_order = {"new": 0, "skipped": 1, "error": 2, "published": 3}
+    items_sorted = sorted(
+        items[:20],
+        key=lambda it: _status_order.get(processed.get(it["guid"], "new"), 0),
+    )
+
     article_list = []
-    for it in items[:5]:
+    for it in items_sorted[:10]:
         article_list.append({
             "guid": it["guid"],
             "title": it["title"],

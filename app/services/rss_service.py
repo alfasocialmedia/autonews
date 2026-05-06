@@ -525,13 +525,12 @@ def _try_wp_rest_api(base_url: str, category_url: str, max_items: int = 10) -> l
             pass
 
     if not cat_id:
-        # Sin slug de categoría, intentar obtener los últimos posts del sitio
-        pass
+        # Sin categoría identificada — el HTML scraper lo resolverá mejor
+        log.debug("_try_wp_rest_api: no se encontró cat_id para %s", category_url)
+        return []
 
     try:
-        params: dict = {"per_page": max_items, "_embed": 1, "orderby": "date", "order": "desc"}
-        if cat_id:
-            params["categories"] = cat_id
+        params: dict = {"per_page": max_items, "_embed": 1, "orderby": "date", "order": "desc", "categories": cat_id}
 
         r = httpx.get(
             f"{api_base}/posts",
