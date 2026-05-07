@@ -406,15 +406,15 @@ def _article_scale(char_count: int) -> tuple[str, int | None, int]:
     """Devuelve (rango_párrafos, palabras_mínimas_o_None, max_tokens) según largo de la fuente.
     None en palabras_mínimas = fuente corta, párrafos breves sin mínimo impuesto."""
     if char_count < 600:
-        return "4 a 6", None, 3000
+        return "3 a 4", None, 3000
     elif char_count < 1500:
-        return "6 a 9", 400, 5000
+        return "4 a 6", 400, 5000
     elif char_count < 3000:
-        return "8 a 12", 550, 6000
+        return "5 a 7", 550, 6000
     elif char_count < 5000:
-        return "12 a 16", 700, 7000
+        return "7 a 9", 700, 7000
     else:
-        return "16 a 22", 900, 8000
+        return "9 a 12", 900, 8000
 
 
 def _chat_with_token_fallback(client, model: str, messages: list, max_tokens: int, **kwargs):
@@ -463,7 +463,7 @@ def process_rss_with_groq(
     else:
         word_count_rule = "Sin mínimo de palabras — el artículo puede ser corto. No rellenes ni inventes para alargar."
 
-    para_size_rule = "Cada <p> con 1 oración. NUNCA más de 2 oraciones por párrafo."
+    para_size_rule = "Cada <p> con 2 a 3 oraciones relacionadas. NUNCA 1 sola oración suelta. NUNCA más de 3."
 
     prompt = f"""{base_prompt}
 
@@ -546,18 +546,19 @@ CUERPO DE LA NOTA:
 
 FORMATO HTML OBLIGATORIO DEL CUERPO:
 Cada párrafo DEBE estar entre <p> y </p>. SIN EXCEPCIÓN.
-⚠ REGLA DE ORO — PÁRRAFOS CORTOS:
+⚠ REGLA DE ORO — PÁRRAFOS:
   • {para_size_rule}
-  • Cada punto seguido es un párrafo nuevo. NO acumules oraciones en el mismo <p>.
+  • Agrupá oraciones que hablan del MISMO subtema en un solo <p>.
+  • Cuando cambia el subtema, abrís un <p> nuevo.
   • Ejemplo CORRECTO:
-      <p>Un cuerpo fue hallado este miércoles en el río Paraná.</p>
-      <p>El hecho ocurrió en Puerto Mbya, distrito de Presidente Franco.</p>
-      <p>La noticia fue reportada por el teniente Héctor Morán a la Subcomisaría 10ª.</p>
-  • Ejemplo INCORRECTO (RECHAZADO):
-      <p>Un cuerpo fue hallado este miércoles en el río Paraná, en Puerto Mbya, distrito de Presidente Franco. La noticia fue reportada por el teniente Héctor Morán a la Subcomisaría 10ª, quien alertó sobre el hallazgo.</p>
+      <p>Un cuerpo fue hallado este miércoles en el río Paraná, en Puerto Mbya, distrito de Presidente Franco. El hallazgo fue reportado por el teniente Héctor Morán a la Subcomisaría 10ª del barrio Tres Fronteras.</p>
+      <p>La víctima, un hombre aún sin identificar, presentaba un avanzado estado de descomposición y no llevaba documentación. Los investigadores trabajan contra reloj para establecer su identidad.</p>
+      <p>Por disposición del Ministerio Público, el cuerpo fue trasladado al Puerto Tres Fronteras y derivado a una funeraria local para las diligencias correspondientes.</p>
+  • Ejemplo INCORRECTO (RECHAZADO — 1 oración sola por párrafo):
+      <p>Un cuerpo fue hallado en el río Paraná.</p><p>El hecho ocurrió en Puerto Mbya.</p><p>La víctima era un hombre.</p>
 {para_range} párrafos en total.
 SUBTÍTULOS: {heading_rule}
-PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>, más de 2 oraciones dentro de un mismo <p>.
+PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>, párrafos de 1 sola oración suelta (pega esa oración con la siguiente del mismo tema).
 
 ORIGINALIDAD:
 Reescribí completamente la noticia con palabras propias.
@@ -571,10 +572,10 @@ EXTENSIÓN:
 - No termines la nota de forma abrupta.
 
 LEGIBILIDAD:
-- Párrafos MUY cortos: 1 oración por párrafo, máximo 2. NUNCA 3 oraciones en un mismo <p>.
-- Cada punto seguido = nuevo <p>. Si podés separar, separás.
-- Oraciones claras y directas.
-- Evitá bloques densos de texto.
+- Párrafos de 2 a 3 oraciones, agrupadas por idea. Ni uno solo con menos de 2 oraciones.
+- Cada párrafo desarrolla UN subtema. Cuando el subtema cambia, nuevo <p>.
+- Oraciones claras y directas, de 15 a 25 palabras.
+- Evitá bloques densos de más de 3 oraciones en el mismo <p>.
 - No uses palabras difíciles si no son necesarias.
 - La lectura debe ser simple, fluida y entendible para cualquier lector.
 
@@ -686,7 +687,7 @@ def process_email_with_groq(
     else:
         word_count_rule = "Sin mínimo de palabras — el artículo puede ser corto. No rellenes ni inventes para alargar."
 
-    para_size_rule = "Cada <p> con 1 oración. NUNCA más de 2 oraciones por párrafo."
+    para_size_rule = "Cada <p> con 2 a 3 oraciones relacionadas. NUNCA 1 sola oración suelta. NUNCA más de 3."
 
     # Extraer la primera línea significativa del cuerpo como pista de titular
     first_body_line = next(
@@ -800,10 +801,10 @@ EXTENSIÓN:
 - No termines la nota de forma abrupta.
 
 LEGIBILIDAD:
-- Párrafos MUY cortos: 1 oración por párrafo, máximo 2. NUNCA 3 oraciones en un mismo <p>.
-- Cada punto seguido = nuevo <p>. Si podés separar, separás.
-- Oraciones claras y directas.
-- Evitá bloques densos de texto.
+- Párrafos de 2 a 3 oraciones, agrupadas por idea. Ni uno solo con menos de 2 oraciones.
+- Cada párrafo desarrolla UN subtema. Cuando el subtema cambia, nuevo <p>.
+- Oraciones claras y directas, de 15 a 25 palabras.
+- Evitá bloques densos de más de 3 oraciones en el mismo <p>.
 - No uses palabras difíciles si no son necesarias.
 - La lectura debe ser simple, fluida y entendible para cualquier lector.
 
