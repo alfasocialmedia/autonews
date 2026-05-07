@@ -406,15 +406,15 @@ def _article_scale(char_count: int) -> tuple[str, int | None, int]:
     """Devuelve (rango_párrafos, palabras_mínimas_o_None, max_tokens) según largo de la fuente.
     None en palabras_mínimas = fuente corta, párrafos breves sin mínimo impuesto."""
     if char_count < 600:
-        return "3 a 5", None, 3000   # Fuente muy corta: sin mínimo, párrafos de 1 oración
+        return "4 a 6", None, 3000
     elif char_count < 1500:
-        return "4 a 5", 400, 5000
+        return "6 a 9", 400, 5000
     elif char_count < 3000:
-        return "5 a 7", 550, 6000
+        return "8 a 12", 550, 6000
     elif char_count < 5000:
-        return "7 a 9", 700, 7000
+        return "12 a 16", 700, 7000
     else:
-        return "9 a 12", 900, 8000
+        return "16 a 22", 900, 8000
 
 
 def _chat_with_token_fallback(client, model: str, messages: list, max_tokens: int, **kwargs):
@@ -460,10 +460,10 @@ def process_rss_with_groq(
 
     if min_words:
         word_count_rule = f"Mínimo {min_words} palabras."
-        para_size_rule = "Cada <p> con UNA sola idea, MÁXIMO 2 oraciones."
     else:
         word_count_rule = "Sin mínimo de palabras — el artículo puede ser corto. No rellenes ni inventes para alargar."
-        para_size_rule = "Cada <p> con 1 oración precisa y directa. Sin relleno."
+
+    para_size_rule = "Cada <p> con 1 oración. NUNCA más de 2 oraciones por párrafo."
 
     prompt = f"""{base_prompt}
 
@@ -546,11 +546,18 @@ CUERPO DE LA NOTA:
 
 FORMATO HTML OBLIGATORIO DEL CUERPO:
 Cada párrafo DEBE estar entre <p> y </p>. SIN EXCEPCIÓN.
-Ejemplo correcto:  <p>Primer párrafo.</p><p>Segundo párrafo.</p><p>Tercer párrafo.</p>
-Ejemplo INCORRECTO: Primer párrafo. Segundo párrafo. (sin etiquetas = RECHAZADO)
-{para_range} párrafos en total. {para_size_rule}
+⚠ REGLA DE ORO — PÁRRAFOS CORTOS:
+  • {para_size_rule}
+  • Cada punto seguido es un párrafo nuevo. NO acumules oraciones en el mismo <p>.
+  • Ejemplo CORRECTO:
+      <p>Un cuerpo fue hallado este miércoles en el río Paraná.</p>
+      <p>El hecho ocurrió en Puerto Mbya, distrito de Presidente Franco.</p>
+      <p>La noticia fue reportada por el teniente Héctor Morán a la Subcomisaría 10ª.</p>
+  • Ejemplo INCORRECTO (RECHAZADO):
+      <p>Un cuerpo fue hallado este miércoles en el río Paraná, en Puerto Mbya, distrito de Presidente Franco. La noticia fue reportada por el teniente Héctor Morán a la Subcomisaría 10ª, quien alertó sobre el hallazgo.</p>
+{para_range} párrafos en total.
 SUBTÍTULOS: {heading_rule}
-PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>.
+PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>, más de 2 oraciones dentro de un mismo <p>.
 
 ORIGINALIDAD:
 Reescribí completamente la noticia con palabras propias.
@@ -564,9 +571,10 @@ EXTENSIÓN:
 - No termines la nota de forma abrupta.
 
 LEGIBILIDAD:
-- Párrafos cortos.
-- Oraciones claras.
-- Evitá bloques densos.
+- Párrafos MUY cortos: 1 oración por párrafo, máximo 2. NUNCA 3 oraciones en un mismo <p>.
+- Cada punto seguido = nuevo <p>. Si podés separar, separás.
+- Oraciones claras y directas.
+- Evitá bloques densos de texto.
 - No uses palabras difíciles si no son necesarias.
 - La lectura debe ser simple, fluida y entendible para cualquier lector.
 
@@ -675,10 +683,10 @@ def process_email_with_groq(
 
     if min_words:
         word_count_rule = f"Mínimo {min_words} palabras."
-        para_size_rule = "Cada <p> con UNA sola idea, MÁXIMO 2 oraciones."
     else:
         word_count_rule = "Sin mínimo de palabras — el artículo puede ser corto. No rellenes ni inventes para alargar."
-        para_size_rule = "Cada <p> con 1 oración precisa y directa. Sin relleno."
+
+    para_size_rule = "Cada <p> con 1 oración. NUNCA más de 2 oraciones por párrafo."
 
     # Extraer la primera línea significativa del cuerpo como pista de titular
     first_body_line = next(
@@ -767,11 +775,18 @@ CUERPO DE LA NOTA:
 
 FORMATO HTML OBLIGATORIO DEL CUERPO:
 Cada párrafo DEBE estar entre <p> y </p>. SIN EXCEPCIÓN.
-Ejemplo correcto:  <p>Primer párrafo.</p><p>Segundo párrafo.</p><p>Tercer párrafo.</p>
-Ejemplo INCORRECTO: Primer párrafo. Segundo párrafo. (sin etiquetas = RECHAZADO)
-{para_range} párrafos en total. {para_size_rule}
+⚠ REGLA DE ORO — PÁRRAFOS CORTOS:
+  • {para_size_rule}
+  • Cada punto seguido es un párrafo nuevo. NO acumules oraciones en el mismo <p>.
+  • Ejemplo CORRECTO:
+      <p>Un cuerpo fue hallado este miércoles en el río Paraná.</p>
+      <p>El hecho ocurrió en Puerto Mbya, distrito de Presidente Franco.</p>
+      <p>La noticia fue reportada por el teniente Héctor Morán a la Subcomisaría 10ª.</p>
+  • Ejemplo INCORRECTO (RECHAZADO):
+      <p>Un cuerpo fue hallado este miércoles en el río Paraná, en Puerto Mbya, distrito de Presidente Franco. La noticia fue reportada por el teniente Héctor Morán a la Subcomisaría 10ª, quien alertó sobre el hallazgo.</p>
+{para_range} párrafos en total.
 Si el contenido tiene secciones claramente diferenciadas, podés usar <h2> para separar. Máximo 2.
-PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>.
+PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>, más de 2 oraciones dentro de un mismo <p>.
 
 ORIGINALIDAD:
 Reescribí completamente la noticia con palabras propias.
@@ -785,9 +800,10 @@ EXTENSIÓN:
 - No termines la nota de forma abrupta.
 
 LEGIBILIDAD:
-- Párrafos cortos.
-- Oraciones claras.
-- Evitá bloques densos.
+- Párrafos MUY cortos: 1 oración por párrafo, máximo 2. NUNCA 3 oraciones en un mismo <p>.
+- Cada punto seguido = nuevo <p>. Si podés separar, separás.
+- Oraciones claras y directas.
+- Evitá bloques densos de texto.
 - No uses palabras difíciles si no son necesarias.
 - La lectura debe ser simple, fluida y entendible para cualquier lector.
 
