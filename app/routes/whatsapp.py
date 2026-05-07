@@ -261,7 +261,9 @@ async def create_instance(wa_id: int, request: Request, db: Session = Depends(ge
             return JSONResponse({"error": "Configurá la URL y API key primero"}, status_code=400)
         from app.services.whatsapp_service import create_instance as svc_create
         result = svc_create(acc.evolution_api_url, acc.evolution_api_key, acc.instance_name)
-        return JSONResponse({"ok": True, "data": result})
+        if result.get("already_exists"):
+            return JSONResponse({"ok": True, "message": "La instancia ya existe — escaneá el QR si aún no está conectada."})
+        return JSONResponse({"ok": True, "message": "Instancia creada. Ahora escaneá el QR.", "data": result})
     except Exception as exc:
         log.error("create_instance error: %s", exc)
         return JSONResponse({"error": str(exc)}, status_code=500)

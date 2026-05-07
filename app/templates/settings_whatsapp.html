@@ -524,7 +524,7 @@ document.querySelectorAll('.create-instance-btn').forEach(btn => {
     this.disabled = true;
     const resp = await fetch(`/settings/whatsapp/${waId}/create-instance`, { method: 'POST' });
     const data = await resp.json();
-    showToast(data.ok ? 'Instancia creada. Ahora escaneá el QR.' : ('Error: ' + data.error),
+    showToast(data.ok ? (data.message || 'Instancia creada.') : ('Error: ' + data.error),
               data.ok ? 'success' : 'danger');
     this.innerHTML = orig;
     this.disabled = false;

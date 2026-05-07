@@ -36,10 +36,26 @@ def create_instance(url: str, api_key: str, instance_name: str) -> dict:
         if r.status_code == 400:
             # Instancia ya existe — no es un error
             return {"instanceName": instance_name, "already_exists": True}
+        if r.status_code == 403:
+            # Puede significar: instancia ya conectada, o API key incorrecta
+            try:
+                body = r.json()
+                body_str = str(body).lower()
+            except Exception:
+                body_str = r.text.lower()
+            # Si parece que la instancia ya existe/está conectada, tratar como éxito
+            if any(w in body_str for w in ("already", "exists", "connected", "conflict")):
+                return {"instanceName": instance_name, "already_exists": True}
+            # De lo contrario es un error de autenticación
+            raise Exception(
+                "API key incorrecta o sin permisos. "
+                "Verificá que el API key coincida con AUTHENTICATION_API_KEY en tu Evolution API. "
+                f"Respuesta: {r.text[:300]}"
+            )
         r.raise_for_status()
         return r.json()
     except requests.exceptions.HTTPError as exc:
-        if exc.response is not None and exc.response.status_code == 400:
+        if exc.response is not None and exc.response.status_code in (400, 403):
             return {"instanceName": instance_name, "already_exists": True}
         raise
 
