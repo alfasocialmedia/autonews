@@ -162,6 +162,7 @@ async def add_whatsapp_account(
     broadcast_template: str = Form(""),
     wordpress_settings_id: str = Form(""),
     publish_mode: str = Form("both"),
+    rewrite_mode: str = Form("rewrite"),
 ):
     user = _require_admin(request, db)
     if not user:
@@ -178,6 +179,7 @@ async def add_whatsapp_account(
         broadcast_template=broadcast_template.strip() or "*{title}*\n\n{summary}\n\n{url}",
         wordpress_settings_id=int(wordpress_settings_id) if wordpress_settings_id.strip().isdigit() else None,
         publish_mode=publish_mode if publish_mode in ("both", "wordpress_only", "whatsapp_only") else "both",
+        rewrite_mode=rewrite_mode if rewrite_mode in ("rewrite", "title_only") else "rewrite",
     )
     db.add(acc)
     db.commit()
@@ -199,6 +201,7 @@ async def edit_whatsapp_account(
     broadcast_template: str = Form(""),
     wordpress_settings_id: str = Form(""),
     publish_mode: str = Form("both"),
+    rewrite_mode: str = Form("rewrite"),
 ):
     user = _require_admin(request, db)
     if not user:
@@ -219,6 +222,7 @@ async def edit_whatsapp_account(
         acc.broadcast_template = broadcast_template.strip()
     acc.wordpress_settings_id = int(wordpress_settings_id) if wordpress_settings_id.strip().isdigit() else None
     acc.publish_mode = publish_mode if publish_mode in ("both", "wordpress_only", "whatsapp_only") else "both"
+    acc.rewrite_mode = rewrite_mode if rewrite_mode in ("rewrite", "title_only") else "rewrite"
     db.commit()
     return RedirectResponse("/settings/whatsapp?saved=1", status_code=302)
 
@@ -876,7 +880,20 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
         )
         subject = first_line[:120] if first_line else (article_body[:100] if article_body else "Noticia por WhatsApp")
 
-    if source_url and len(article_body) > 300:
+    rewrite_mode = getattr(settings, "rewrite_mode", "rewrite") or "rewrite"
+
+    if rewrite_mode == "title_only":
+        from app.services.groq_service import generate_title_for_content, _text_to_html_paragraphs
+        log.info("WA: modo título potente — IA genera metadatos, contenido original intacto")
+        ai_result = generate_title_for_content(
+            api_key, groq_cfg.model, groq_cfg.base_prompt,
+            article_body,
+            available_categories=wp_categories or None,
+            provider=groq_cfg.provider,
+            api_base_url=groq_cfg.api_base_url,
+        )
+        ai_result["content"] = _text_to_html_paragraphs(article_body)
+    elif source_url and len(article_body) > 300:
         from app.services.groq_service import process_rss_with_groq
         ai_result = process_rss_with_groq(
             api_key, groq_cfg.model, groq_cfg.base_prompt,

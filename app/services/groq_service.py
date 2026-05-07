@@ -435,6 +435,97 @@ def _chat_with_token_fallback(client, model: str, messages: list, max_tokens: in
         raise
 
 
+def _text_to_html_paragraphs(text: str) -> str:
+    """Convierte texto plano a párrafos HTML. Si ya tiene <p>, lo devuelve tal cual."""
+    if "<p>" in text.lower():
+        return text
+    blocks = re.split(r'\n\s*\n', text.strip())
+    parts = [f'<p>{b.strip().replace(chr(10), " ")}</p>' for b in blocks if b.strip()]
+    if not parts:
+        return f'<p>{text}</p>'
+    if len(parts) == 1:
+        words = text.split()
+        if len(words) > 80:
+            mid = len(words) // 2
+            parts = [f'<p>{" ".join(words[:mid])}</p>', f'<p>{" ".join(words[mid:])}</p>']
+    return '\n'.join(parts)
+
+
+def generate_title_for_content(
+    api_key: str,
+    model: str,
+    base_prompt: str,
+    article_text: str,
+    available_categories: list[str] | None = None,
+    provider: str = "groq",
+    api_base_url: str | None = None,
+) -> dict:
+    """Genera título, bajada, categoría y etiquetas sin reescribir el contenido original."""
+    cat_list = ", ".join(available_categories) if available_categories else _DEFAULT_CATEGORIES
+    first_line = next(
+        (l.strip() for l in article_text.splitlines() if len(l.strip()) > 20), ""
+    )
+
+    prompt = f"""Analizá el siguiente texto y generá un título periodístico potente para publicarlo en un medio digital argentino.
+No reescribas el contenido. Solo generá el título, bajada, categoría y etiquetas.
+
+══════════════ TEXTO FUENTE ══════════════
+{article_text[:8000]}
+══════════════════════════════════════════
+
+TÍTULO:
+Creá un título periodístico atractivo, claro y con gancho para generar clics.
+Debe reflejar el hecho más importante del texto.
+Entre 80 y 110 caracteres. Sin punto al final. Sin comillas externas. Sin clickbait falso.
+
+BAJADA:
+Una sola oración completa que termina en punto. Máximo 25 palabras. Resumí el hecho principal: quién, qué y dónde.
+
+{_CATEGORY_GUIDE}
+Categorías disponibles: {cat_list}
+
+Respondé ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
+{{
+  "title": "Título entre 80 y 110 caracteres. Sin punto al final.",
+  "summary": "Una sola oración terminada en punto. Máximo 25 palabras.",
+  "category": "Exactamente una de estas: {cat_list}",
+  "keyphrase": "frase clave 2-4 palabras",
+  "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
+}}"""
+
+    max_tokens = 800
+    if provider == "anthropic":
+        raw = _call_anthropic_text(api_key, model, prompt, max_tokens)
+    else:
+        client = _get_client(api_key, provider, api_base_url)
+        resp = _chat_with_token_fallback(
+            client, model,
+            [{"role": "user", "content": prompt}],
+            max_tokens,
+            temperature=0.7,
+        )
+        raw = resp.choices[0].message.content.strip()
+    log.debug("AI title-only raw (300): %s", raw[:300])
+
+    text = _normalize_quotes(raw)
+    result = _extract_first_json(text)
+    if result:
+        if "title" in result:
+            result["title"] = _clean_subject(result["title"])
+        if "summary" in result:
+            result["summary"] = _normalize_summary(result["summary"], result.get("title", ""))
+        return result
+
+    log.warning("generate_title_for_content: no se pudo parsear JSON. Raw: %s", raw[:200])
+    return {
+        "title": first_line[:80] if first_line else article_text[:60],
+        "summary": article_text[:200],
+        "category": "General",
+        "keyphrase": "",
+        "tags": [],
+    }
+
+
 def process_rss_with_groq(
     api_key: str,
     model: str,

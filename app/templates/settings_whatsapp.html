@@ -113,6 +113,28 @@
               <div class="form-text">Qué hacer con los mensajes recibidos: publicar en WordPress, difundir en grupos, o ambos.</div>
             </div>
             <div class="mb-3">
+              <label class="form-label fw-semibold small">Modo de procesamiento IA</label>
+              {% set rm = acc.rewrite_mode or 'rewrite' %}
+              <div class="btn-group w-100" role="group" aria-label="Modo de reescritura">
+                <input type="radio" class="btn-check" name="rewrite_mode"
+                       id="rm-rewrite-{{ acc.id }}" value="rewrite"
+                       {% if rm == 'rewrite' %}checked{% endif %}>
+                <label class="btn btn-outline-warning btn-sm" for="rm-rewrite-{{ acc.id }}">
+                  <i class="bi bi-stars me-1"></i>Reescribir sin plagio
+                </label>
+                <input type="radio" class="btn-check" name="rewrite_mode"
+                       id="rm-title-{{ acc.id }}" value="title_only"
+                       {% if rm == 'title_only' %}checked{% endif %}>
+                <label class="btn btn-outline-secondary btn-sm" for="rm-title-{{ acc.id }}">
+                  <i class="bi bi-fonts me-1"></i>Solo título potente
+                </label>
+              </div>
+              <div class="form-text">
+                <strong>Reescribir sin plagio:</strong> la IA redacta la nota completa con sus propias palabras.<br>
+                <strong>Solo título potente:</strong> la IA genera el título y bajada, el contenido se publica tal como llegó.
+              </div>
+            </div>
+            <div class="mb-3">
               <label class="form-label fw-semibold small">URL de Evolution API</label>
               <input type="url" name="evolution_api_url" class="form-control form-control-sm"
                      placeholder="http://localhost:8080" value="{{ acc.evolution_api_url or '' }}">
@@ -471,6 +493,23 @@
               </label>
             </div>
             <div class="form-text">Qué hacer con los mensajes recibidos por esta cuenta.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Modo de procesamiento IA</label>
+            <div class="btn-group w-100" role="group" aria-label="Modo de reescritura">
+              <input type="radio" class="btn-check" name="rewrite_mode" id="addRmRewrite" value="rewrite" checked>
+              <label class="btn btn-outline-warning btn-sm" for="addRmRewrite">
+                <i class="bi bi-stars me-1"></i>Reescribir sin plagio
+              </label>
+              <input type="radio" class="btn-check" name="rewrite_mode" id="addRmTitle" value="title_only">
+              <label class="btn btn-outline-secondary btn-sm" for="addRmTitle">
+                <i class="bi bi-fonts me-1"></i>Solo título potente
+              </label>
+            </div>
+            <div class="form-text">
+              <strong>Reescribir:</strong> la IA redacta la nota completa.<br>
+              <strong>Solo título:</strong> la IA genera el título, el contenido llega como está.
+            </div>
           </div>
         </div>
         <div class="modal-footer">
