@@ -136,12 +136,25 @@
         <div id="savedGroups">
           {% if groups %}
           <table class="table table-sm mb-3">
-            <thead><tr><th>Nombre</th><th>JID</th><th>Estado</th><th></th></tr></thead>
+            <thead><tr><th>Nombre</th><th>JID</th><th>WordPress</th><th>Estado</th><th>Acción</th></tr></thead>
             <tbody>
             {% for g in groups %}
             <tr id="row-{{ g.id }}">
               <td class="fw-semibold">{{ g.name }}</td>
               <td class="font-monospace small text-muted">{{ g.jid }}</td>
+              <td>
+                <select class="form-select form-select-sm wp-assign-select"
+                        data-id="{{ g.id }}"
+                        title="WordPress destino para este grupo">
+                  <option value="">Todos</option>
+                  {% for wp in wp_sites %}
+                  <option value="{{ wp.id }}"
+                    {% if g.wordpress_settings_id == wp.id %}selected{% endif %}>
+                    {{ wp.name }}
+                  </option>
+                  {% endfor %}
+                </select>
+              </td>
               <td>
                 <button class="btn btn-xs btn-outline-{% if g.enabled %}success{% else %}secondary{% endif %} toggle-btn"
                         data-id="{{ g.id }}">
@@ -512,6 +525,25 @@ document.querySelectorAll('.delete-btn').forEach(btn => {
     const resp = await fetch(`/settings/whatsapp/groups/${id}/delete`, { method: 'POST' });
     const data = await resp.json();
     if (data.ok) document.getElementById('row-' + id)?.remove();
+  });
+});
+
+// ── Asignar WordPress a grupo ────────────────────────────────────────────────────
+document.querySelectorAll('.wp-assign-select').forEach(sel => {
+  sel.addEventListener('change', async function () {
+    const id = this.dataset.id;
+    const wpId = this.value ? parseInt(this.value) : null;
+    const resp = await fetch(`/settings/whatsapp/groups/${id}/assign-wp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wordpress_settings_id: wpId }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      showToast('WordPress asignado', 'success');
+    } else {
+      showToast(data.error || 'Error al guardar', 'danger');
+    }
   });
 });
 

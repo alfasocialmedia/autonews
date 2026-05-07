@@ -101,6 +101,14 @@
           <dt class="col-6 text-muted"><i class="bi bi-tag me-1"></i>Categoría WP</dt>
           <dd class="col-6"><span class="badge bg-success-subtle text-success">{{ feed.wp_category_name }}</span></dd>
           {% endif %}
+          <dt class="col-6 text-muted"><i class="bi bi-globe me-1"></i>WordPress</dt>
+          <dd class="col-6">
+            {% if feed.wordpress_settings %}
+              <span class="badge bg-info-subtle text-info">{{ feed.wordpress_settings.name }}</span>
+            {% else %}
+              <span class="text-muted small">Todos</span>
+            {% endif %}
+          </dd>
           <dt class="col-6 text-muted">Publicados total</dt>
           <dd class="col-6">{{ feed._published_count }}</dd>
           <dt class="col-6 text-muted">Última revisión</dt>
@@ -217,6 +225,21 @@
                          value="{{ feed.wp_category_name or '' }}" placeholder="Nombre categoría WP">
                 </div>
               </div>
+            </div>
+            <div class="mb-1">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-globe me-1 text-info"></i>Publicar en WordPress
+              </label>
+              <select name="wordpress_settings_id" class="form-select" title="Sitio WordPress destino">
+                <option value="">— Todos los sitios activos —</option>
+                {% for wp in wp_sites %}
+                <option value="{{ wp.id }}"
+                  {% if feed.wordpress_settings_id == wp.id %}selected{% endif %}>
+                  {{ wp.name }} ({{ wp.site_url }})
+                </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Elegí a qué WordPress publicar. Vacío = publica en todos.</div>
             </div>
           </div>
           <div class="modal-footer">
@@ -384,6 +407,18 @@
               </div>
             </div>
             <div class="form-text">Si se define, todos los artículos de este feed se publicarán en esa categoría de WordPress. Ingresá el ID o el nombre exacto de la categoría.</div>
+          </div>
+          <div class="mb-1">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-globe me-1 text-info"></i>Publicar en WordPress
+            </label>
+            <select name="wordpress_settings_id" class="form-select" title="Sitio WordPress destino">
+              <option value="">— Todos los sitios activos —</option>
+              {% for wp in wp_sites %}
+              <option value="{{ wp.id }}">{{ wp.name }} ({{ wp.site_url }})</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Elegí a qué WordPress publicar. Vacío = publica en todos los sitios activos.</div>
           </div>
         </div>
         <div class="modal-footer">

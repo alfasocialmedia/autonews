@@ -13,7 +13,7 @@ _preview_cache: dict[str, dict] = {}
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import ProcessedRssItem, RssFeed
+from app.models import ProcessedRssItem, RssFeed, WordPressSettings
 from app.services.rss_service import fetch_rss_items, scrape_category_page, test_rss_feed, test_web_source
 
 router = APIRouter(prefix="/settings/rss")
@@ -27,15 +27,16 @@ async def rss_page(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/", status_code=302)
 
     feeds = db.query(RssFeed).order_by(RssFeed.created_at.desc()).all()
-    # Agregar conteo de publicaciones por feed
     for feed in feeds:
         feed._published_count = db.query(ProcessedRssItem).filter(
             ProcessedRssItem.rss_feed_id == feed.id,
             ProcessedRssItem.status == "published",
         ).count()
 
+    wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.id).all()
+
     return templates.TemplateResponse(
-        "settings_rss.html", {"request": request, "user": user, "feeds": feeds}
+        "settings_rss.html", {"request": request, "user": user, "feeds": feeds, "wp_sites": wp_sites}
     )
 
 
@@ -57,6 +58,7 @@ async def add_feed(
     keyword_filter: str = Form(""),
     wp_category_id: str = Form(""),
     wp_category_name: str = Form(""),
+    wordpress_settings_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user = get_current_user(request, db)
@@ -73,6 +75,7 @@ async def add_feed(
         keyword_filter=_parse_keyword_filter(keyword_filter),
         wp_category_id=int(wp_category_id) if wp_category_id.strip().isdigit() else None,
         wp_category_name=wp_category_name.strip() or None,
+        wordpress_settings_id=int(wordpress_settings_id) if wordpress_settings_id.strip().isdigit() else None,
     )
     db.add(feed)
     db.commit()
@@ -92,6 +95,7 @@ async def edit_feed(
     keyword_filter: str = Form(""),
     wp_category_id: str = Form(""),
     wp_category_name: str = Form(""),
+    wordpress_settings_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user = get_current_user(request, db)
@@ -109,6 +113,7 @@ async def edit_feed(
         feed.keyword_filter = _parse_keyword_filter(keyword_filter)
         feed.wp_category_id = int(wp_category_id) if wp_category_id.strip().isdigit() else None
         feed.wp_category_name = wp_category_name.strip() or None
+        feed.wordpress_settings_id = int(wordpress_settings_id) if wordpress_settings_id.strip().isdigit() else None
         db.commit()
         db.refresh(feed)
         saved_type = feed.feed_type or "rss"

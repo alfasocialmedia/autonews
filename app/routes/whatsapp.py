@@ -9,11 +9,12 @@ import time
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import WhatsAppChannel, WhatsAppGroup, WhatsAppSettings
+from app.models import WhatsAppChannel, WhatsAppGroup, WhatsAppSettings, WordPressSettings
 
 log = logging.getLogger("whatsapp_route")
 
@@ -186,12 +187,14 @@ async def whatsapp_settings(request: Request, db: Session = Depends(get_db)):
     settings = _get_settings(db)
     groups = db.query(WhatsAppGroup).order_by(WhatsAppGroup.id).all()
     channels = db.query(WhatsAppChannel).order_by(WhatsAppChannel.id).all()
+    wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.id).all()
     return templates.TemplateResponse(
         "settings_whatsapp.html",
         {
             "request": request, "user": user, "s": settings,
             "groups": groups, "max_groups": MAX_GROUPS,
             "channels": channels, "max_channels": MAX_CHANNELS,
+            "wp_sites": wp_sites,
         },
     )
 
@@ -382,6 +385,30 @@ async def delete_group(group_id: int, request: Request, db: Session = Depends(ge
         db.delete(g)
         db.commit()
     return JSONResponse({"ok": True})
+
+
+class AssignWPRequest(BaseModel):
+    wordpress_settings_id: int | None = None
+
+
+@router.post("/settings/whatsapp/groups/{group_id}/assign-wp")
+async def assign_wp_to_group(
+    group_id: int,
+    payload: AssignWPRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = _require_admin(request, db)
+    if not user:
+        return JSONResponse({"error": "No autorizado"}, status_code=403)
+
+    g = db.query(WhatsAppGroup).filter(WhatsAppGroup.id == group_id).first()
+    if not g:
+        return JSONResponse({"error": "Grupo no encontrado"}, status_code=404)
+
+    g.wordpress_settings_id = payload.wordpress_settings_id
+    db.commit()
+    return JSONResponse({"ok": True, "wordpress_settings_id": g.wordpress_settings_id})
 
 
 # ── Canales ───────────────────────────────────────────────────────────────────

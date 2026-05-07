@@ -153,16 +153,19 @@ class RssFeed(Base):
     check_interval_minutes = Column(Integer, default=60)
     articles_per_check = Column(Integer, default=1)
     max_articles_per_day = Column(Integer, default=5)
-    # Filtro: solo procesa artículos cuyo título/body contenga alguna de estas palabras (CSV)
     keyword_filter = Column(Text, nullable=True)
-    # Categoría WP forzada: si se define, ignora la categoría que detecta Groq
     wp_category_id = Column(Integer, nullable=True)
     wp_category_name = Column(String(100), nullable=True)
+    # WordPress destino: NULL = publicar en todos los sitios activos
+    wordpress_settings_id = Column(
+        Integer, ForeignKey("wordpress_settings.id", ondelete="SET NULL"), nullable=True
+    )
     last_checked_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     items = relationship("ProcessedRssItem", back_populates="rss_feed", cascade="all, delete-orphan")
+    wordpress_settings = relationship("WordPressSettings", foreign_keys=[wordpress_settings_id])
 
 
 class ProcessedRssItem(Base):
@@ -226,7 +229,13 @@ class WhatsAppGroup(Base):
     jid = Column(String(200), unique=True, nullable=False)   # 1234567890-123@g.us
     name = Column(String(200), nullable=False)
     enabled = Column(Boolean, default=True)
+    # WordPress destino: NULL = recibe difusión de todos los sitios activos
+    wordpress_settings_id = Column(
+        Integer, ForeignKey("wordpress_settings.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    wordpress_settings = relationship("WordPressSettings", foreign_keys=[wordpress_settings_id])
 
 
 class WhatsAppChannel(Base):

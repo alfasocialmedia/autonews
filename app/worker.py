@@ -799,17 +799,16 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
             db.commit()
             published_count += 1
 
-            # Difusión WhatsApp tras primera publicación exitosa
-            if published_count == 1:
-                _broadcast_whatsapp(db, ai_result, wp_post.get("link", ""))
+            # Difusión WhatsApp para este sitio WP (grupos asignados a él o globales)
+            _broadcast_whatsapp(db, ai_result, wp_post.get("link", ""), wp_site_id=wp_cfg.id)
 
         except Exception as exc:
             log.error("Error publicando RSS en %s: %s", wp_cfg.name, exc)
     return published_count
 
 
-def _broadcast_whatsapp(db, ai_result: dict, wp_url: str):
-    """Envía el artículo recién publicado a los grupos de WhatsApp configurados."""
+def _broadcast_whatsapp(db, ai_result: dict, wp_url: str, wp_site_id: int | None = None):
+    """Envía el artículo recién publicado a los grupos de WhatsApp asignados a ese sitio WP."""
     try:
         from app.models import WhatsAppSettings, WhatsAppGroup
         from app.services.whatsapp_service import send_text
@@ -818,7 +817,17 @@ def _broadcast_whatsapp(db, ai_result: dict, wp_url: str):
         if not s or not s.broadcast_enabled or not s.evolution_api_url or not s.evolution_api_key:
             return
 
-        groups = db.query(WhatsAppGroup).filter(WhatsAppGroup.enabled == True).all()
+        all_groups = db.query(WhatsAppGroup).filter(WhatsAppGroup.enabled == True).all()
+        if not all_groups:
+            return
+
+        # Filtrar grupos: los que coinciden con el WP site que publicó, o los sin asignar (globales)
+        if wp_site_id is not None:
+            groups = [g for g in all_groups
+                      if g.wordpress_settings_id is None or g.wordpress_settings_id == wp_site_id]
+        else:
+            groups = all_groups
+
         if not groups:
             return
 
@@ -1035,7 +1044,13 @@ def process_rss_feeds():
                         rss_item.status = "processed"
                         db.commit()
 
-                        count = _publish_ai_result(db, ai_result, wp_sites, image_url=image_url, source_name=feed.name, inline_images=inline_images, embeds=embeds)
+                        # Publicar solo en el WP asignado al feed (o en todos si no tiene asignación)
+                        feed_wp_sites = (
+                            [s for s in wp_sites if s.id == feed.wordpress_settings_id]
+                            if feed.wordpress_settings_id
+                            else wp_sites
+                        )
+                        count = _publish_ai_result(db, ai_result, feed_wp_sites, image_url=image_url, source_name=feed.name, inline_images=inline_images, embeds=embeds)
                         rss_item.status = "published" if count > 0 else "error"
                         db.commit()
 

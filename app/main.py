@@ -131,6 +131,12 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE rss_feeds ADD COLUMN wp_category_name VARCHAR(100)"))
             if "feed_type" not in cols:
                 conn.execute(text("ALTER TABLE rss_feeds ADD COLUMN feed_type VARCHAR(20) DEFAULT 'rss'"))
+            if "wordpress_settings_id" not in cols:
+                conn.execute(text("ALTER TABLE rss_feeds ADD COLUMN wordpress_settings_id INTEGER REFERENCES wordpress_settings(id) ON DELETE SET NULL"))
+        if "whatsapp_groups" in tables:
+            cols = [c["name"] for c in inspector.get_columns("whatsapp_groups")]
+            if "wordpress_settings_id" not in cols:
+                conn.execute(text("ALTER TABLE whatsapp_groups ADD COLUMN wordpress_settings_id INTEGER REFERENCES wordpress_settings(id) ON DELETE SET NULL"))
         if "posts" in tables:
             cols = [c["name"] for c in inspector.get_columns("posts")]
             if "source_name" not in cols:
