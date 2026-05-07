@@ -459,16 +459,22 @@ def generate_title_for_content(
     available_categories: list[str] | None = None,
     provider: str = "groq",
     api_base_url: str | None = None,
+    title_hint: str = "",
 ) -> dict:
     """Genera título, bajada, categoría y etiquetas sin reescribir el contenido original."""
     cat_list = ", ".join(available_categories) if available_categories else _DEFAULT_CATEGORIES
     first_line = next(
         (l.strip() for l in article_text.splitlines() if len(l.strip()) > 20), ""
     )
+    hint_line = (
+        f"\nEl usuario identificó este contenido con el encabezado: «{title_hint}» — "
+        "usalo como referencia para crear un título más potente y preciso.\n"
+        if title_hint else ""
+    )
 
     prompt = f"""Analizá el siguiente texto y generá un título periodístico potente para publicarlo en un medio digital argentino.
 No reescribas el contenido. Solo generá el título, bajada, categoría y etiquetas.
-
+{hint_line}
 ══════════════ TEXTO FUENTE ══════════════
 {article_text[:8000]}
 ══════════════════════════════════════════

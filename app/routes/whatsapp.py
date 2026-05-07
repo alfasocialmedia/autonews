@@ -26,6 +26,28 @@ MAX_CHANNELS = 5
 
 _URL_RE = re.compile(r'https?://[^\s<>"\']+', re.IGNORECASE)
 _TAG_RE = re.compile(r'<[^>]+>')
+_WA_BOLD_LINE_RE = re.compile(r'^\*([^*\n]+)\*\s*$')
+_WA_BOLD_INLINE_RE = re.compile(r'\*([^*\n]{1,300})\*')
+
+
+def _preprocess_wa_text(text: str) -> tuple[str, str]:
+    """Limpia formato negrita WhatsApp (*texto*) y detecta posible título.
+    - Líneas completamente entre ** → se convierten en texto limpio y la primera con
+      más de 15 chars se toma como pista de título.
+    - Negritas inline (*palabra*) → se eliminan los asteriscos.
+    Devuelve (texto_limpio, título_hint)."""
+    title_hint = ""
+    clean_lines = []
+    for line in text.splitlines():
+        m = _WA_BOLD_LINE_RE.match(line.strip())
+        if m:
+            inner = m.group(1).strip()
+            if not title_hint and len(inner) > 15:
+                title_hint = inner
+            clean_lines.append(inner)
+        else:
+            clean_lines.append(_WA_BOLD_INLINE_RE.sub(r'\1', line))
+    return '\n'.join(clean_lines), title_hint
 
 
 def _sanitize_text(text: str) -> str:
@@ -615,6 +637,7 @@ def _flush_wa_buffer(buf_key: str):
     source_url = buf["source_url"]
     jid = buf["jid"]
     instance_name = buf.get("instance_name", "")
+    wa_title_hint = buf.get("wa_title_hint", "")
 
     if not text and not media_data:
         return
@@ -628,14 +651,15 @@ def _flush_wa_buffer(buf_key: str):
             s = db.query(WhatsAppSettings).first()
         if s:
             _publish_whatsapp_news(db, s, text or "Foto compartida vía WhatsApp",
-                                   media_data, source_url, sender_jid=jid)
+                                   media_data, source_url, sender_jid=jid,
+                                   wa_title_hint=wa_title_hint)
     except Exception as exc:
         log.error("_flush_wa_buffer error: %s", exc)
     finally:
         db.close()
 
 
-def _buffer_wa_content(buf_key: str, jid: str, text: str, media_data, source_url: str | None, instance_name: str):
+def _buffer_wa_content(buf_key: str, jid: str, text: str, media_data, source_url: str | None, instance_name: str, wa_title_hint: str = ""):
     with _wa_buf_lock:
         existing = _wa_buffers.get(buf_key)
 
@@ -646,6 +670,7 @@ def _buffer_wa_content(buf_key: str, jid: str, text: str, media_data, source_url
                 combined_text = existing["text"] + "\n\n" + text
             combined_media = existing["media_data"] or media_data
             combined_url = existing["source_url"] or source_url
+            combined_hint = existing.get("wa_title_hint", "") or wa_title_hint
 
             has_text = bool(combined_text and combined_text.strip())
             has_media = combined_media is not None
@@ -654,14 +679,15 @@ def _buffer_wa_content(buf_key: str, jid: str, text: str, media_data, source_url
                 log.info("WA buffer: texto + imagen listos — procesando de inmediato (%s)", buf_key)
                 t = threading.Thread(
                     target=_flush_immediately,
-                    args=(buf_key, jid, combined_text, combined_media, combined_url, instance_name),
+                    args=(buf_key, jid, combined_text, combined_media, combined_url, instance_name, combined_hint),
                     daemon=True,
                 )
                 t.start()
                 return
 
             existing.update({"text": combined_text, "media_data": combined_media,
-                             "source_url": combined_url, "ts": time.time()})
+                             "source_url": combined_url, "ts": time.time(),
+                             "wa_title_hint": combined_hint})
             timer = threading.Timer(_BUFFER_SECS, _flush_wa_buffer, args=[buf_key])
             timer.daemon = True
             existing["timer"] = timer
@@ -674,12 +700,13 @@ def _buffer_wa_content(buf_key: str, jid: str, text: str, media_data, source_url
                 "source_url": source_url, "jid": jid,
                 "instance_name": instance_name,
                 "timer": timer, "ts": time.time(),
+                "wa_title_hint": wa_title_hint,
             }
             timer.start()
             log.info("WA buffer: iniciado para %s (espera %ds más mensajes)", buf_key, _BUFFER_SECS)
 
 
-def _flush_immediately(buf_key: str, jid: str, text: str, media_data, source_url: str | None, instance_name: str):
+def _flush_immediately(buf_key: str, jid: str, text: str, media_data, source_url: str | None, instance_name: str, wa_title_hint: str = ""):
     from app.database import SessionLocal
     db = SessionLocal()
     try:
@@ -689,7 +716,8 @@ def _flush_immediately(buf_key: str, jid: str, text: str, media_data, source_url
             s = db.query(WhatsAppSettings).first()
         if s:
             _publish_whatsapp_news(db, s, text or "Foto compartida vía WhatsApp",
-                                   media_data, source_url, sender_jid=jid)
+                                   media_data, source_url, sender_jid=jid,
+                                   wa_title_hint=wa_title_hint)
     except Exception as exc:
         log.error("_flush_immediately error: %s", exc)
     finally:
@@ -730,6 +758,7 @@ def _process_wa_message(payload: dict):
             return
 
         text = msg.get("text", "").strip()
+        text, wa_title_hint = _preprocess_wa_text(text)
         media_data = None
         audio_transcript = ""
 
@@ -766,6 +795,7 @@ def _process_wa_message(payload: dict):
                             api_base_url=groq_cfg.api_base_url,
                         )
                         if ocr:
+                            ocr = _WA_BOLD_INLINE_RE.sub(r'\1', ocr)
                             text = (text + "\n\n" + ocr).strip() if text else ocr
                             log.info("WA: OCR extraído (%d chars)", len(ocr))
             else:
@@ -787,7 +817,7 @@ def _process_wa_message(payload: dict):
             if not audio_transcript:
                 audio_transcript = text or "Nota de voz recibida por WhatsApp"
             _publish_whatsapp_news(db, s, audio_transcript, None, None, sender_jid=msg["jid"])
-            return
+            return  # Audio no lleva title_hint
 
         final_text = text
         if not final_text and not media_data:
@@ -803,11 +833,13 @@ def _process_wa_message(payload: dict):
             return
 
         if source_url:
-            _publish_whatsapp_news(db, s, final_text, media_data, source_url, sender_jid=msg["jid"])
+            _publish_whatsapp_news(db, s, final_text, media_data, source_url,
+                                   sender_jid=msg["jid"], wa_title_hint=wa_title_hint)
             return
 
         buf_key = f"{instance_name}:{msg['from']}"
-        _buffer_wa_content(buf_key, msg["jid"], final_text, media_data, source_url, instance_name)
+        _buffer_wa_content(buf_key, msg["jid"], final_text, media_data, source_url,
+                           instance_name, wa_title_hint=wa_title_hint)
 
     except Exception as exc:
         log.error("_process_wa_message error: %s", exc)
@@ -819,7 +851,7 @@ def _process_wa_message(payload: dict):
         db.close()
 
 
-def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str | None, sender_jid: str | None = None):
+def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str | None, sender_jid: str | None = None, wa_title_hint: str = ""):
     from app.models import GroqSettings
     from app.crypto import decrypt_value
 
@@ -873,12 +905,16 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
     if source_url:
         subject = ""
     else:
-        first_line = next(
-            (l.strip() for l in article_body.splitlines()
-             if len(l.strip()) > 20 and not l.strip().lower().startswith(("la imagen", "el texto", "en la imagen"))),
-            ""
-        )
-        subject = first_line[:120] if first_line else (article_body[:100] if article_body else "Noticia por WhatsApp")
+        if wa_title_hint and len(wa_title_hint) > 15:
+            subject = wa_title_hint[:120]
+            log.info("WA: usando título en negrita del mensaje como referencia: %s", subject)
+        else:
+            first_line = next(
+                (l.strip() for l in article_body.splitlines()
+                 if len(l.strip()) > 20 and not l.strip().lower().startswith(("la imagen", "el texto", "en la imagen"))),
+                ""
+            )
+            subject = first_line[:120] if first_line else (article_body[:100] if article_body else "Noticia por WhatsApp")
 
     rewrite_mode = getattr(settings, "rewrite_mode", "rewrite") or "rewrite"
 
@@ -891,6 +927,7 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
             available_categories=wp_categories or None,
             provider=groq_cfg.provider,
             api_base_url=groq_cfg.api_base_url,
+            title_hint=wa_title_hint,
         )
         ai_result["content"] = _text_to_html_paragraphs(article_body)
     elif source_url and len(article_body) > 300:
