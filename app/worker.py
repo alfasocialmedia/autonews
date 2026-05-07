@@ -619,6 +619,30 @@ def _embeds_to_wp_blocks(embeds: list[str]) -> str:
     return "\n\n".join(blocks)
 
 
+def _upload_inline_images(site_url: str, api_user: str, wp_pwd: str, image_urls: list[str]) -> list[str]:
+    """Descarga y sube imágenes inline a WordPress media library.
+    Devuelve WP media URLs; si falla una imagen usa la URL original como fallback."""
+    result = []
+    for url in image_urls:
+        try:
+            payload = _download_image(url)
+            if not payload:
+                result.append(url)
+                continue
+            img_data, img_name, img_mime = payload
+            media_result = upload_media(site_url, api_user, wp_pwd, img_data, img_name, img_mime)
+            if media_result:
+                _, wp_url = media_result
+                log.info("  🖼 Imagen inline subida a WP: %s", wp_url[:80])
+                result.append(wp_url)
+            else:
+                result.append(url)
+        except Exception as exc:
+            log.warning("No se pudo subir imagen inline %s: %s", url, exc)
+            result.append(url)
+    return result
+
+
 def _inject_images_into_content(content: str, image_urls: list[str]) -> str:
     """Inyecta imágenes inline como bloques wp:image distribuidos entre párrafos."""
     if not image_urls or not content:
@@ -731,10 +755,11 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
                 except Exception as exc:
                     log.warning("No se pudo subir imagen a %s: %s", wp_cfg.name, exc)
 
-            # Subir audio y anteponer bloque de reproductor al contenido
+            # Subir imágenes inline a WP y anteponer reproductor de audio
             content = ai_result.get("content", "")
             if inline_images:
-                content = _inject_images_into_content(content, list(inline_images))
+                wp_inline_imgs = _upload_inline_images(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, list(inline_images))
+                content = _inject_images_into_content(content, wp_inline_imgs)
             if embeds:
                 embed_blocks = _embeds_to_wp_blocks(embeds)
                 if embed_blocks:

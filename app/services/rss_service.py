@@ -135,16 +135,29 @@ def _extract_og_image(soup: BeautifulSoup) -> str | None:
 
 
 _IMG_SKIP = ("logo", "icon", "avatar", "pixel", "tracking", "spinner", "btn", "arrow", "spacer", "badge", "placeholder")
+_LAZY_ATTRS = ("data-src", "data-lazy-src", "data-original", "data-lazy", "data-lazyload", "data-full-url")
 
 
 def _extract_inline_images(container, og_image: str | None) -> list[str]:
-    """Extrae URLs de imágenes editoriales dentro del artículo (hasta 3, excluye la og:image)."""
+    """Extrae URLs de imágenes editoriales dentro del artículo (hasta 2, excluye la og:image).
+    Maneja lazy loading (data-src, data-lazy-src, data-original, etc.)."""
     seen: set[str] = {og_image} if og_image else set()
     images: list[str] = []
-    for img in container.find_all("img", src=True):
+    for img in container.find_all("img"):
+        # Resolver URL real: priorizar src; si es placeholder/data-URI buscar atributos lazy
         src = img.get("src", "").strip()
-        if not src.startswith("http"):
+        if not src or src.startswith("data:") or not src.startswith("http"):
+            for attr in _LAZY_ATTRS:
+                val = img.get(attr, "").strip()
+                if val and val.startswith("http"):
+                    src = val
+                    break
+
+        if not src or not src.startswith("http"):
             continue
+
+        src = _upgrade_wp_thumbnail(src)
+
         if src in seen:
             continue
         if any(x in src.lower() for x in _IMG_SKIP):
@@ -160,7 +173,7 @@ def _extract_inline_images(container, og_image: str | None) -> list[str]:
             pass
         seen.add(src)
         images.append(src)
-        if len(images) >= 3:
+        if len(images) >= 2:  # máximo 2 imágenes inline por artículo
             break
     return images
 
