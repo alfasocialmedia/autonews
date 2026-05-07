@@ -2,9 +2,14 @@
 {% block title %}WhatsApp — AutoNews{% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h2 class="page-title"><i class="bi bi-whatsapp me-2 text-success"></i>WhatsApp</h2>
-  <span class="text-muted small">Recibe noticias por WhatsApp y difunde en grupos — Evolution API</span>
+<div class="page-header d-flex justify-content-between align-items-center">
+  <div>
+    <h2 class="page-title"><i class="bi bi-whatsapp me-2 text-success"></i>WhatsApp</h2>
+    <span class="text-muted small">Múltiples cuentas — cada una con su instancia, grupos y canales</span>
+  </div>
+  <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addAccountModal">
+    <i class="bi bi-plus-lg me-1"></i>Agregar cuenta
+  </button>
 </div>
 
 {% if request.query_params.get('saved') %}
@@ -14,156 +19,190 @@
 </div>
 {% endif %}
 
-<div class="row g-4">
-
-  <!-- ── Columna izquierda ── -->
-  <div class="col-lg-7">
-
-    <!-- Configuración Evolution API -->
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header bg-transparent border-0 pt-3">
-        <h6 class="mb-0"><i class="bi bi-gear me-2"></i>Conexión Evolution API</h6>
+<!-- ══ Acordeón de cuentas ══ -->
+<div class="accordion" id="waAccordion">
+{% for acc in accounts %}
+<div class="accordion-item border-0 shadow-sm mb-3 rounded overflow-hidden">
+  <h2 class="accordion-header">
+    <button class="accordion-button {% if not loop.first %}collapsed{% endif %} py-3"
+            type="button" data-bs-toggle="collapse" data-bs-target="#acc-{{ acc.id }}">
+      <div class="d-flex align-items-center gap-2 flex-grow-1 me-3">
+        <i class="bi bi-whatsapp text-success fs-5"></i>
+        <span class="fw-semibold">{{ acc.name }}</span>
+        <code class="small text-muted">{{ acc.instance_name }}</code>
+        {% if acc.wordpress_settings %}
+        <span class="badge bg-info-subtle text-info border border-info-subtle">{{ acc.wordpress_settings.name }}</span>
+        {% else %}
+        <span class="badge bg-secondary">Todos los WP</span>
+        {% endif %}
+        <span class="badge bg-{% if acc.enabled %}success{% else %}secondary{% endif %} ms-1">
+          {% if acc.enabled %}Activa{% else %}Inactiva{% endif %}
+        </span>
       </div>
-      <div class="card-body">
-        <form method="post" action="/settings/whatsapp/save" id="mainForm">
+      <!-- Toggle activar/desactivar — detener propagación para no colapsar -->
+      <div class="me-2" onclick="event.stopPropagation(); event.preventDefault();">
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input wa-toggle" type="checkbox" role="switch"
+                 data-id="{{ acc.id }}" {% if acc.enabled %}checked{% endif %}
+                 title="Activar/desactivar esta cuenta">
+        </div>
+      </div>
+    </button>
+  </h2>
 
-          <div class="mb-3">
-            <label class="form-label fw-semibold">URL de Evolution API</label>
-            <input type="url" name="evolution_api_url" class="form-control"
-                   placeholder="http://localhost:8080"
-                   value="{{ s.evolution_api_url or '' }}">
-            <div class="form-text">Ej: <code>http://TU_VPS_IP:8080</code> — donde está corriendo el contenedor Docker</div>
-          </div>
+  <div id="acc-{{ acc.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}">
+    <div class="accordion-body p-0">
+      <div class="row g-0">
 
-          <div class="mb-3">
-            <label class="form-label fw-semibold">API Key</label>
-            <div class="input-group">
-              <input type="password" name="evolution_api_key" class="form-control" id="apiKeyInput"
-                     placeholder="Tu api key de Evolution API"
-                     value="{{ s.evolution_api_key or '' }}">
-              <button class="btn btn-outline-secondary" type="button" id="toggleKey">
-                <i class="bi bi-eye"></i>
+        <!-- ── Columna izquierda: Config + Grupos + Canales ── -->
+        <div class="col-lg-7 p-4 border-end">
+
+          <!-- Config -->
+          <h6 class="text-muted text-uppercase small fw-semibold mb-3">
+            <i class="bi bi-gear me-1"></i>Configuración
+          </h6>
+          <form method="post" action="/settings/whatsapp/{{ acc.id }}/edit">
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">Nombre descriptivo</label>
+              <input type="text" name="name" class="form-control form-control-sm"
+                     value="{{ acc.name }}" placeholder="Ej: Número principal" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">WordPress destino</label>
+              <select name="wordpress_settings_id" class="form-select form-select-sm"
+                      title="Sitio WordPress al que publica esta cuenta">
+                <option value="">Todos los sitios activos</option>
+                {% for wp in wp_sites %}
+                <option value="{{ wp.id }}" {% if acc.wordpress_settings_id == wp.id %}selected{% endif %}>
+                  {{ wp.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">URL de Evolution API</label>
+              <input type="url" name="evolution_api_url" class="form-control form-control-sm"
+                     placeholder="http://localhost:8080" value="{{ acc.evolution_api_url or '' }}">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">API Key</label>
+              <div class="input-group input-group-sm">
+                <input type="password" name="evolution_api_key" class="form-control"
+                       id="apiKey-{{ acc.id }}" value="{{ acc.evolution_api_key or '' }}"
+                       placeholder="API key de Evolution API">
+                <button class="btn btn-outline-secondary toggle-key-btn" type="button"
+                        data-target="apiKey-{{ acc.id }}">
+                  <i class="bi bi-eye"></i>
+                </button>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">Nombre de instancia</label>
+              <input type="text" name="instance_name" class="form-control form-control-sm"
+                     placeholder="botnews" value="{{ acc.instance_name or 'botnews' }}">
+              <div class="form-text">Identificador en Evolution API (único por cuenta)</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">Números autorizados (CSV, sin +)</label>
+              <textarea name="authorized_numbers" class="form-control form-control-sm font-monospace" rows="2"
+                        placeholder="5491112345678, 5491198765432">{{ acc.authorized_numbers or '' }}</textarea>
+              <div class="form-text">Dejar vacío para aceptar cualquier número.</div>
+            </div>
+
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" name="enabled" id="enabled-{{ acc.id }}"
+                     {% if acc.enabled %}checked{% endif %}>
+              <label class="form-check-label small" for="enabled-{{ acc.id }}">
+                <strong>Recepción activa</strong> — procesar mensajes entrantes
+              </label>
+            </div>
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" name="broadcast_enabled" id="broadcast-{{ acc.id }}"
+                     {% if acc.broadcast_enabled %}checked{% endif %}>
+              <label class="form-check-label small" for="broadcast-{{ acc.id }}">
+                <strong>Difusión activa</strong> — enviar artículos a los grupos
+              </label>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">Plantilla de difusión</label>
+              <textarea name="broadcast_template" class="form-control form-control-sm font-monospace" rows="3"
+                        placeholder="*{title}*&#10;&#10;{summary}&#10;&#10;{url}">{{ acc.broadcast_template or '*{title}*\n\n{summary}\n\n{url}' }}</textarea>
+              <div class="form-text">Variables: <code>{title}</code> <code>{summary}</code> <code>{url}</code></div>
+            </div>
+
+            <div class="d-flex gap-2 align-items-center">
+              <button type="submit" class="btn btn-sm btn-primary">
+                <i class="bi bi-save me-1"></i>Guardar
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-danger ms-auto"
+                      onclick="confirmDelete('/settings/whatsapp/{{ acc.id }}/delete', 'la cuenta {{ acc.name }}')">
+                <i class="bi bi-trash me-1"></i>Eliminar cuenta
               </button>
             </div>
-          </div>
+          </form>
 
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Nombre de instancia</label>
-            <input type="text" name="instance_name" class="form-control"
-                   placeholder="botnews"
-                   value="{{ s.instance_name or 'botnews' }}">
-            <div class="form-text">Identificador de la conexión WA en Evolution API</div>
-          </div>
+          <hr class="my-4">
 
-          <div class="form-check form-switch mb-4">
-            <input class="form-check-input" type="checkbox" name="enabled" id="enabledSwitch"
-                   {% if s.enabled %}checked{% endif %}>
-            <label class="form-check-label" for="enabledSwitch">
-              <strong>Recepción activa</strong> — procesar mensajes entrantes como noticias
-            </label>
-          </div>
-
-          <hr class="my-3">
-          <h6 class="mb-3"><i class="bi bi-megaphone me-2"></i>Difusión a grupos</h6>
-
-          <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" name="broadcast_enabled" id="broadcastSwitch"
-                   {% if s.broadcast_enabled %}checked{% endif %}>
-            <label class="form-check-label" for="broadcastSwitch">
-              Enviar artículo publicado a los grupos configurados
-            </label>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Plantilla del mensaje</label>
-            <textarea name="broadcast_template" class="form-control font-monospace" rows="4"
-                      placeholder="*{title}*&#10;&#10;{summary}&#10;&#10;{url}">{{ s.broadcast_template or '*{title}*\n\n{summary}\n\n{url}' }}</textarea>
-            <div class="form-text">Variables: <code>{title}</code> <code>{summary}</code> <code>{url}</code></div>
-          </div>
-
-          <hr class="my-3">
-          <h6 class="mb-3"><i class="bi bi-shield-lock me-2"></i>Números autorizados</h6>
-
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Números que pueden enviar noticias (CSV)</label>
-            <textarea name="authorized_numbers" class="form-control font-monospace" rows="3"
-                      placeholder="5491112345678, 5491198765432">{{ s.authorized_numbers or '' }}</textarea>
-            <div class="form-text">Formato internacional sin <code>+</code>. Dejar vacío para aceptar cualquier número.</div>
-          </div>
-
-          <div class="d-flex gap-2 flex-wrap">
-            <button type="submit" class="btn btn-primary">
-              <i class="bi bi-save me-1"></i>Guardar configuración
+          <!-- Webhook -->
+          <h6 class="text-muted text-uppercase small fw-semibold mb-3">
+            <i class="bi bi-link-45deg me-1"></i>Webhook
+          </h6>
+          <div class="input-group input-group-sm mb-1">
+            <input type="url" class="form-control webhook-url-input" id="webhookUrl-{{ acc.id }}"
+                   placeholder="https://tu-panel.com">
+            <button class="btn btn-outline-primary set-webhook-btn" type="button"
+                    data-id="{{ acc.id }}">
+              <i class="bi bi-send me-1"></i>Configurar
             </button>
           </div>
-        </form>
-      </div>
-    </div>
+          <div class="webhook-result small" id="webhookResult-{{ acc.id }}"></div>
 
-    <!-- Configurar webhook -->
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header bg-transparent border-0 pt-3">
-        <h6 class="mb-0"><i class="bi bi-link-45deg me-2"></i>Configurar Webhook</h6>
-      </div>
-      <div class="card-body">
-        <p class="small text-muted mb-3">
-          Ingresá la URL pública de este panel para que Evolution API envíe los mensajes entrantes.
-        </p>
-        <div class="input-group">
-          <input type="url" id="webhookBaseUrl" class="form-control"
-                 placeholder="https://tu-panel.com">
-          <button class="btn btn-outline-primary" id="setWebhookBtn">
-            <i class="bi bi-send me-1"></i>Configurar
-          </button>
-        </div>
-        <div id="webhookResult" class="mt-2 small"></div>
-      </div>
-    </div>
+          <hr class="my-4">
 
-    <!-- Grupos destino -->
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center">
-        <h6 class="mb-0"><i class="bi bi-people me-2"></i>Grupos destino
-          <span class="badge bg-secondary ms-1">{{ groups|length }}/{{ max_groups }}</span>
-        </h6>
-        <button class="btn btn-sm btn-outline-success" id="fetchGroupsBtn">
-          <i class="bi bi-arrow-clockwise me-1"></i>Cargar grupos de WA
-        </button>
-      </div>
-      <div class="card-body">
+          <!-- Grupos -->
+          <h6 class="text-muted text-uppercase small fw-semibold mb-3">
+            <i class="bi bi-people me-1"></i>Grupos destino
+            <span class="badge bg-secondary ms-1">{{ acc._groups|length }}/{{ max_groups }}</span>
+            <button type="button" class="btn btn-xs btn-outline-success ms-2 fetch-groups-btn" data-id="{{ acc.id }}">
+              <i class="bi bi-arrow-clockwise me-1"></i>Cargar de WA
+            </button>
+          </h6>
 
-        <!-- Lista de grupos guardados -->
-        <div id="savedGroups">
-          {% if groups %}
+          <!-- Panel de grupos encontrados -->
+          <div id="fetchedGroupsPanel-{{ acc.id }}" class="mb-2 d-none">
+            <p class="small fw-semibold mb-1">Grupos encontrados — clic para seleccionar:</p>
+            <div id="fetchedGroupsList-{{ acc.id }}" class="list-group list-group-flush border rounded small fetched-list-scroll mb-2"></div>
+          </div>
+
+          {% if acc._groups %}
           <table class="table table-sm mb-3">
-            <thead><tr><th>Nombre</th><th>JID</th><th>WordPress</th><th>Estado</th><th>Acción</th></tr></thead>
+            <thead><tr><th>Nombre</th><th>JID</th><th>WordPress</th><th>Estado</th><th></th></tr></thead>
             <tbody>
-            {% for g in groups %}
+            {% for g in acc._groups %}
             <tr id="row-{{ g.id }}">
-              <td class="fw-semibold">{{ g.name }}</td>
-              <td class="font-monospace small text-muted">{{ g.jid }}</td>
+              <td class="fw-semibold small">{{ g.name }}</td>
+              <td class="font-monospace small text-muted jid-cell" title="{{ g.jid }}">{{ g.jid }}</td>
               <td>
-                <select class="form-select form-select-sm wp-assign-select"
-                        data-id="{{ g.id }}"
+                <select class="form-select form-select-sm wp-assign-select" data-id="{{ g.id }}"
                         title="WordPress destino para este grupo">
                   <option value="">Todos</option>
                   {% for wp in wp_sites %}
-                  <option value="{{ wp.id }}"
-                    {% if g.wordpress_settings_id == wp.id %}selected{% endif %}>
-                    {{ wp.name }}
-                  </option>
+                  <option value="{{ wp.id }}" {% if g.wordpress_settings_id == wp.id %}selected{% endif %}>{{ wp.name }}</option>
                   {% endfor %}
                 </select>
               </td>
               <td>
-                <button class="btn btn-xs btn-outline-{% if g.enabled %}success{% else %}secondary{% endif %} toggle-btn"
+                <button type="button" class="btn btn-xs btn-outline-{% if g.enabled %}success{% else %}secondary{% endif %} toggle-btn"
                         data-id="{{ g.id }}">
                   {% if g.enabled %}Activo{% else %}Inactivo{% endif %}
                 </button>
               </td>
               <td>
-                <button class="btn btn-xs btn-outline-danger delete-btn" data-id="{{ g.id }}">
-                  <i class="bi bi-trash"></i>
+                <button type="button" class="btn btn-xs btn-outline-danger delete-btn"
+                        data-id="{{ g.id }}" title="Eliminar grupo">
+                  <i class="bi bi-trash" aria-hidden="true"></i>
+                  <span class="visually-hidden">Eliminar</span>
                 </button>
               </td>
             </tr>
@@ -173,70 +212,54 @@
           {% else %}
           <p class="text-muted small mb-3">Sin grupos configurados.</p>
           {% endif %}
-        </div>
 
-        <!-- Agregar grupo manual -->
-        {% if groups|length < max_groups %}
-        <div class="border rounded p-3 bg-light">
-          <p class="small fw-semibold mb-2">Agregar grupo manualmente</p>
-          <div class="row g-2">
-            <div class="col">
-              <input type="text" id="newGroupJid" class="form-control form-control-sm font-monospace"
-                     placeholder="1234567890-123456789@g.us">
-            </div>
-            <div class="col">
-              <input type="text" id="newGroupName" class="form-control form-control-sm"
-                     placeholder="Nombre del grupo">
-            </div>
-            <div class="col-auto">
-              <button class="btn btn-sm btn-success" id="addGroupBtn">
-                <i class="bi bi-plus-lg"></i>
-              </button>
+          {% if acc._groups|length < max_groups %}
+          <div class="border rounded p-2 bg-light">
+            <p class="small fw-semibold mb-2">Agregar grupo manualmente</p>
+            <div class="row g-2">
+              <div class="col">
+                <input type="text" class="form-control form-control-sm font-monospace new-group-jid"
+                       id="newGroupJid-{{ acc.id }}" placeholder="1234567890-123@g.us">
+              </div>
+              <div class="col">
+                <input type="text" class="form-control form-control-sm new-group-name"
+                       id="newGroupName-{{ acc.id }}" placeholder="Nombre">
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-sm btn-success add-group-btn"
+                        data-id="{{ acc.id }}" title="Agregar grupo">
+                  <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                  <span class="visually-hidden">Agregar</span>
+                </button>
+              </div>
             </div>
           </div>
-          <div class="form-text">El JID lo ves en Evolution API o al cargar grupos arriba.</div>
-        </div>
-        {% endif %}
+          {% endif %}
 
-        <!-- Selector de grupos cargados desde WA -->
-        <div id="fetchedGroupsPanel" class="mt-3 d-none">
-          <p class="small fw-semibold mb-2">Grupos encontrados en WhatsApp:</p>
-          <div id="fetchedGroupsList" class="list-group list-group-flush small"></div>
-        </div>
-      </div>
-    </div>
+          <hr class="my-4">
 
-    <!-- Canales destino -->
-    <div class="card border-0 shadow-sm mt-4">
-      <div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center">
-        <h6 class="mb-0"><i class="bi bi-megaphone me-2 text-primary"></i>Canales de WhatsApp
-          <span class="badge bg-secondary ms-1">{{ channels|length }}/{{ max_channels }}</span>
-        </h6>
-        <button type="button" class="btn btn-sm btn-outline-success" id="fetchChannelsBtn">
-          <i class="bi bi-arrow-clockwise me-1"></i>Cargar canales de WA
-        </button>
-      </div>
-      <div class="card-body">
-        <p class="small text-muted mb-3">
-          Publicá también en canales de WhatsApp vinculados al número conectado.
-        </p>
+          <!-- Canales -->
+          <h6 class="text-muted text-uppercase small fw-semibold mb-3">
+            <i class="bi bi-megaphone me-1 text-primary"></i>Canales de WhatsApp
+            <span class="badge bg-secondary ms-1">{{ acc._channels|length }}/{{ max_channels }}</span>
+            <button type="button" class="btn btn-xs btn-outline-success ms-2 fetch-channels-btn" data-id="{{ acc.id }}">
+              <i class="bi bi-arrow-clockwise me-1"></i>Cargar de WA
+            </button>
+          </h6>
 
-        <!-- Panel de canales encontrados en WA -->
-        <div id="fetchedChannelsPanel" class="d-none mb-3">
-          <p class="small fw-semibold mb-1">Canales encontrados — hacé clic para seleccionar:</p>
-          <div id="fetchedChannelsList" class="list-group list-group-flush border rounded fetched-list-scroll"></div>
-        </div>
+          <div id="fetchedChannelsPanel-{{ acc.id }}" class="mb-2 d-none">
+            <p class="small fw-semibold mb-1">Canales encontrados — clic para seleccionar:</p>
+            <div id="fetchedChannelsList-{{ acc.id }}" class="list-group list-group-flush border rounded small fetched-list-scroll mb-2"></div>
+          </div>
 
-        <!-- Lista de canales guardados -->
-        <div id="savedChannels">
-          {% if channels %}
+          {% if acc._channels %}
           <table class="table table-sm mb-3">
-            <thead><tr><th>Nombre</th><th>JID</th><th>Estado</th><th><span class="visually-hidden">Acciones</span></th></tr></thead>
+            <thead><tr><th>Nombre</th><th>JID</th><th>Estado</th><th></th></tr></thead>
             <tbody>
-            {% for ch in channels %}
+            {% for ch in acc._channels %}
             <tr id="chrow-{{ ch.id }}">
-              <td class="fw-semibold">{{ ch.name }}</td>
-              <td class="font-monospace small text-muted">{{ ch.jid }}</td>
+              <td class="fw-semibold small">{{ ch.name }}</td>
+              <td class="font-monospace small text-muted jid-cell" title="{{ ch.jid }}">{{ ch.jid }}</td>
               <td>
                 <button type="button" class="btn btn-xs btn-outline-{% if ch.enabled %}success{% else %}secondary{% endif %} ch-toggle-btn"
                         data-id="{{ ch.id }}">
@@ -257,112 +280,154 @@
           {% else %}
           <p class="text-muted small mb-3">Sin canales configurados.</p>
           {% endif %}
+
+          {% if acc._channels|length < max_channels %}
+          <div class="border rounded p-2 bg-light">
+            <p class="small fw-semibold mb-2">Agregar canal manualmente</p>
+            <div class="row g-2">
+              <div class="col">
+                <input type="text" class="form-control form-control-sm font-monospace new-channel-jid"
+                       id="newChannelJid-{{ acc.id }}" placeholder="120363XXXXXXXXXX@newsletter">
+              </div>
+              <div class="col">
+                <input type="text" class="form-control form-control-sm new-channel-name"
+                       id="newChannelName-{{ acc.id }}" placeholder="Nombre">
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-sm btn-primary add-channel-btn"
+                        data-id="{{ acc.id }}" title="Agregar canal">
+                  <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                  <span class="visually-hidden">Agregar</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
         </div>
 
-        <!-- Agregar canal manual -->
-        {% if channels|length < max_channels %}
-        <div class="border rounded p-3 bg-light">
-          <p class="small fw-semibold mb-2">Agregar canal manualmente</p>
-          <div class="row g-2">
-            <div class="col">
-              <input type="text" id="newChannelJid" class="form-control form-control-sm font-monospace"
-                     placeholder="120363XXXXXXXXXX@newsletter">
-            </div>
-            <div class="col">
-              <input type="text" id="newChannelName" class="form-control form-control-sm"
-                     placeholder="Nombre del canal">
-            </div>
-            <div class="col-auto">
-              <button type="button" class="btn btn-sm btn-primary" id="addChannelBtn" title="Agregar canal">
-                <i class="bi bi-plus-lg" aria-hidden="true"></i>
-                <span class="visually-hidden">Agregar</span>
+        <!-- ── Columna derecha: Conexión ── -->
+        <div class="col-lg-5 p-4 bg-light">
+
+          <h6 class="text-muted text-uppercase small fw-semibold mb-3">
+            <i class="bi bi-wifi me-1"></i>Estado de conexión
+          </h6>
+
+          <div id="statusBadge-{{ acc.id }}" class="mb-3 text-center">
+            <span class="badge bg-secondary px-3 py-2">
+              <i class="bi bi-question-circle me-1"></i>Sin verificar
+            </span>
+          </div>
+
+          <div id="qrContainer-{{ acc.id }}" class="text-center d-none mb-3">
+            <p class="small text-muted mb-2">Escaneá el QR con WhatsApp:</p>
+            <img id="qrImage-{{ acc.id }}" src="" alt="QR Code" class="img-fluid rounded border qr-img">
+            <div class="mt-2">
+              <button type="button" class="btn btn-sm btn-outline-primary refresh-qr-btn" data-id="{{ acc.id }}">
+                <i class="bi bi-arrow-clockwise me-1"></i>Nuevo QR
               </button>
             </div>
           </div>
-          <div class="form-text">Usá "Cargar canales de WA" para autocompletar, o ingresá el JID manualmente.</div>
-        </div>
-        {% endif %}
 
-      </div>
-    </div>
-
-  </div>
-
-  <!-- ── Columna derecha ── -->
-  <div class="col-lg-5">
-
-    <!-- Estado de conexión -->
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header bg-transparent border-0 pt-3 d-flex justify-content-between align-items-center">
-        <h6 class="mb-0"><i class="bi bi-wifi me-2"></i>Estado de conexión</h6>
-        <button class="btn btn-sm btn-outline-secondary" id="refreshStatusBtn">
-          <i class="bi bi-arrow-clockwise"></i>
-        </button>
-      </div>
-      <div class="card-body text-center">
-        <div id="statusBadge" class="mb-3">
-          <span class="badge bg-secondary fs-6 px-3 py-2">
-            <i class="bi bi-question-circle me-1"></i>Sin verificar
-          </span>
-        </div>
-        <div id="qrContainer" class="d-none">
-          <p class="small text-muted mb-2">Escaneá el QR con WhatsApp:</p>
-          <img id="qrImage" src="" alt="QR Code" class="img-fluid rounded border" style="max-width:220px">
-          <div class="mt-2">
-            <button class="btn btn-sm btn-outline-primary" id="refreshQrBtn">
-              <i class="bi bi-arrow-clockwise me-1"></i>Nuevo QR
+          <div class="d-flex gap-2 flex-wrap justify-content-center mb-4">
+            <button type="button" class="btn btn-sm btn-outline-primary check-status-btn" data-id="{{ acc.id }}">
+              <i class="bi bi-plug me-1"></i>Verificar
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-success create-instance-btn" data-id="{{ acc.id }}">
+              <i class="bi bi-plus-circle me-1"></i>Crear instancia
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-info show-qr-btn" data-id="{{ acc.id }}">
+              <i class="bi bi-qr-code me-1"></i>Ver QR
             </button>
           </div>
+
+          <hr class="my-3">
+
+          <h6 class="text-muted text-uppercase small fw-semibold mb-3">
+            <i class="bi bi-send me-1"></i>Prueba de difusión
+          </h6>
+          <button type="button" class="btn btn-outline-success btn-sm w-100 test-broadcast-btn" data-id="{{ acc.id }}">
+            <i class="bi bi-lightning-charge me-1"></i>Enviar mensaje de prueba a grupos
+          </button>
+          <div class="broadcast-result small mt-2" id="broadcastResult-{{ acc.id }}"></div>
+
+          <hr class="my-3">
+
+          <div class="card border-0 bg-success-subtle">
+            <div class="card-body p-3">
+              <h6 class="fw-semibold small"><i class="bi bi-list-ol me-1 text-success"></i>Cómo configurar</h6>
+              <ol class="small mb-0 ps-3">
+                <li>Completá URL, API key e instancia</li>
+                <li>Guardá y hacé clic en <em>Crear instancia</em></li>
+                <li>Hacé clic en <em>Ver QR</em> y escaneá con WhatsApp</li>
+                <li>Configurá el webhook con la URL del panel</li>
+                <li>Agregá grupos y activá la difusión</li>
+              </ol>
+            </div>
+          </div>
+
         </div>
-        <div class="d-flex gap-2 justify-content-center flex-wrap mt-2">
-          <button class="btn btn-sm btn-outline-primary" id="checkStatusBtn">
-            <i class="bi bi-plug me-1"></i>Verificar
-          </button>
-          <button class="btn btn-sm btn-outline-success" id="createInstanceBtn">
-            <i class="bi bi-plus-circle me-1"></i>Crear instancia
-          </button>
-          <button class="btn btn-sm btn-outline-info" id="showQrBtn">
-            <i class="bi bi-qr-code me-1"></i>Ver QR
-          </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+</div>
+
+<!-- ══ Modal: Agregar cuenta ══ -->
+<div class="modal fade" id="addAccountModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-whatsapp me-2 text-success"></i>Agregar cuenta WhatsApp</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/settings/whatsapp/add">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nombre descriptivo</label>
+            <input type="text" name="name" class="form-control" placeholder="Ej: Número principal" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">WordPress destino</label>
+            <select name="wordpress_settings_id" class="form-select" title="Sitio WordPress para esta cuenta">
+              <option value="">Todos los sitios activos</option>
+              {% for wp in wp_sites %}
+              <option value="{{ wp.id }}">{{ wp.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">URL de Evolution API</label>
+            <input type="url" name="evolution_api_url" class="form-control"
+                   placeholder="http://tu-vps-ip:8080">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">API Key</label>
+            <input type="password" name="evolution_api_key" class="form-control"
+                   placeholder="API key de Evolution API">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nombre de instancia</label>
+            <input type="text" name="instance_name" class="form-control"
+                   placeholder="botnews" value="botnews">
+            <div class="form-text">Debe ser único por número de WhatsApp.</div>
+          </div>
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" name="enabled" id="addEnabled">
+            <label class="form-check-label" for="addEnabled">Recepción activa</label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" name="broadcast_enabled" id="addBroadcast">
+            <label class="form-check-label" for="addBroadcast">Difusión activa</label>
+          </div>
         </div>
-      </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success"><i class="bi bi-save me-1"></i>Crear cuenta</button>
+        </div>
+      </form>
     </div>
-
-    <!-- Prueba de difusión -->
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-header bg-transparent border-0 pt-3">
-        <h6 class="mb-0"><i class="bi bi-send me-2"></i>Prueba de difusión</h6>
-      </div>
-      <div class="card-body">
-        <p class="small text-muted">Envía un mensaje de prueba a todos los grupos activos.</p>
-        <button class="btn btn-outline-success w-100" id="testBroadcastBtn">
-          <i class="bi bi-lightning-charge me-1"></i>Enviar mensaje de prueba
-        </button>
-        <div id="broadcastResult" class="mt-2 small"></div>
-      </div>
-    </div>
-
-    <!-- Instrucciones -->
-    <div class="card border-0 bg-success-subtle">
-      <div class="card-body">
-        <h6 class="fw-semibold"><i class="bi bi-list-ol me-2 text-success"></i>Cómo configurar</h6>
-        <ol class="small mb-0 ps-3">
-          <li>Instalá <strong>Evolution API</strong> con Docker en tu VPS</li>
-          <li>Ingresá la URL y API key arriba y guardá</li>
-          <li>Hacé clic en <em>Crear instancia</em></li>
-          <li>Hacé clic en <em>Ver QR</em> y escaneá con WhatsApp</li>
-          <li>Configurá el webhook con la URL pública del panel</li>
-          <li>Agregá hasta {{ max_groups }} grupos destino</li>
-          <li>Activá <em>Recepción activa</em> y <em>Difusión</em> según necesites</li>
-        </ol>
-        <hr class="my-2">
-        <p class="small mb-0 text-muted">
-          <i class="bi bi-info-circle me-1"></i>
-          Enviá texto, imagen o video al número conectado desde un número autorizado para publicar en WordPress.
-        </p>
-      </div>
-    </div>
-
   </div>
 </div>
 {% endblock %}
@@ -370,21 +435,40 @@
 {% block scripts %}
 <style>
 .btn-xs { padding: .15rem .4rem; font-size: .75rem; }
+.fetched-list-scroll { max-height: 200px; overflow-y: auto; }
+.accordion-button:not(.collapsed) { background-color: rgba(25,135,84,.06); }
+.jid-cell { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qr-img { max-width: 200px; }
 </style>
 <script>
-// ── Toggle API key ─────────────────────────────────────────────────────────────
-document.getElementById('toggleKey')?.addEventListener('click', function () {
-  const inp = document.getElementById('apiKeyInput');
-  const icon = this.querySelector('i');
-  inp.type = inp.type === 'password' ? 'text' : 'password';
-  icon.className = inp.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+// ── Toggle ver/ocultar API key ─────────────────────────────────────────────────
+document.querySelectorAll('.toggle-key-btn').forEach(btn => {
+  btn.addEventListener('click', function () {
+    const inp = document.getElementById(this.dataset.target);
+    const icon = this.querySelector('i');
+    if (!inp) return;
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+    icon.className = inp.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+  });
+});
+
+// ── Toggle activa/desactivada (header del accordion) ─────────────────────────
+document.querySelectorAll('.wa-toggle').forEach(toggle => {
+  toggle.addEventListener('change', async function () {
+    const id = this.dataset.id;
+    const resp = await fetch(`/settings/whatsapp/${id}/toggle`, { method: 'POST' });
+    const data = await resp.json();
+    if (data.ok) {
+      showToast(data.enabled ? 'Cuenta activada' : 'Cuenta desactivada', data.enabled ? 'success' : 'secondary');
+    }
+  });
 });
 
 // ── Estado de conexión ─────────────────────────────────────────────────────────
-async function checkStatus() {
-  const badge = document.getElementById('statusBadge');
-  badge.innerHTML = '<span class="badge bg-secondary fs-6 px-3 py-2"><span class="spinner-border spinner-border-sm me-1"></span>Verificando...</span>';
-  const resp = await fetch('/settings/whatsapp/status');
+async function checkStatus(waId) {
+  const badge = document.getElementById(`statusBadge-${waId}`);
+  badge.innerHTML = '<span class="badge bg-secondary px-3 py-2"><span class="spinner-border spinner-border-sm me-1"></span>Verificando...</span>';
+  const resp = await fetch(`/settings/whatsapp/${waId}/status`);
   const data = await resp.json();
   const state = data.state || 'unknown';
   const map = {
@@ -395,114 +479,127 @@ async function checkStatus() {
     error:      ['danger',    'bi-exclamation-circle','Error'],
   };
   const [color, icon, label] = map[state] || map.unknown;
-  badge.innerHTML = `<span class="badge bg-${color} fs-6 px-3 py-2"><i class="bi ${icon} me-1"></i>${label}</span>`;
-
-  const qrPanel = document.getElementById('qrContainer');
+  badge.innerHTML = `<span class="badge bg-${color} px-3 py-2"><i class="bi ${icon} me-1"></i>${label}</span>`;
+  const qrPanel = document.getElementById(`qrContainer-${waId}`);
   if (state === 'close' || state === 'connecting') {
     qrPanel.classList.remove('d-none');
-    loadQr();
+    loadQr(waId);
   } else {
     qrPanel.classList.add('d-none');
   }
 }
 
-document.getElementById('checkStatusBtn')?.addEventListener('click', checkStatus);
-document.getElementById('refreshStatusBtn')?.addEventListener('click', checkStatus);
+document.querySelectorAll('.check-status-btn').forEach(btn => {
+  btn.addEventListener('click', function () { checkStatus(this.dataset.id); });
+});
 
 // ── QR ─────────────────────────────────────────────────────────────────────────
-async function loadQr() {
-  const img = document.getElementById('qrImage');
+async function loadQr(waId) {
+  const img = document.getElementById(`qrImage-${waId}`);
+  if (!img) return;
   img.src = '';
-  const resp = await fetch('/settings/whatsapp/qr');
+  const resp = await fetch(`/settings/whatsapp/${waId}/qr`);
   const data = await resp.json();
   if (data.error) { showToast('Error QR: ' + data.error, 'danger'); return; }
   if (data.base64) {
     const src = data.base64.startsWith('data:') ? data.base64 : 'data:image/png;base64,' + data.base64;
     img.src = src;
-    document.getElementById('qrContainer').classList.remove('d-none');
+    document.getElementById(`qrContainer-${waId}`).classList.remove('d-none');
   }
 }
 
-document.getElementById('showQrBtn')?.addEventListener('click', loadQr);
-document.getElementById('refreshQrBtn')?.addEventListener('click', loadQr);
+document.querySelectorAll('.show-qr-btn').forEach(btn => {
+  btn.addEventListener('click', function () { loadQr(this.dataset.id); });
+});
+document.querySelectorAll('.refresh-qr-btn').forEach(btn => {
+  btn.addEventListener('click', function () { loadQr(this.dataset.id); });
+});
 
 // ── Crear instancia ─────────────────────────────────────────────────────────────
-document.getElementById('createInstanceBtn')?.addEventListener('click', async function () {
-  const orig = this.innerHTML;
-  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creando…';
-  this.disabled = true;
-  const resp = await fetch('/settings/whatsapp/create-instance', { method: 'POST' });
-  const data = await resp.json();
-  showToast(data.ok ? 'Instancia creada. Ahora escaneá el QR.' : ('Error: ' + data.error),
-            data.ok ? 'success' : 'danger');
-  this.innerHTML = orig;
-  this.disabled = false;
-  if (data.ok) loadQr();
+document.querySelectorAll('.create-instance-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const waId = this.dataset.id;
+    const orig = this.innerHTML;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creando…';
+    this.disabled = true;
+    const resp = await fetch(`/settings/whatsapp/${waId}/create-instance`, { method: 'POST' });
+    const data = await resp.json();
+    showToast(data.ok ? 'Instancia creada. Ahora escaneá el QR.' : ('Error: ' + data.error),
+              data.ok ? 'success' : 'danger');
+    this.innerHTML = orig;
+    this.disabled = false;
+    if (data.ok) loadQr(waId);
+  });
 });
 
 // ── Webhook ─────────────────────────────────────────────────────────────────────
-document.getElementById('setWebhookBtn')?.addEventListener('click', async function () {
-  const baseUrl = document.getElementById('webhookBaseUrl').value.trim();
-  if (!baseUrl) { showToast('Ingresá la URL del panel', 'warning'); return; }
-  const form = new FormData();
-  form.append('webhook_base_url', baseUrl);
-  const resp = await fetch('/settings/whatsapp/set-webhook', { method: 'POST', body: form });
-  const data = await resp.json();
-  const el = document.getElementById('webhookResult');
-  if (data.ok) {
-    el.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>Webhook configurado: <code>${data.webhook_url}</code></span>`;
-  } else {
-    el.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${data.error}</span>`;
-  }
+document.querySelectorAll('.set-webhook-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const waId = this.dataset.id;
+    const baseUrl = document.getElementById(`webhookUrl-${waId}`).value.trim();
+    if (!baseUrl) { showToast('Ingresá la URL del panel', 'warning'); return; }
+    const form = new FormData();
+    form.append('webhook_base_url', baseUrl);
+    const resp = await fetch(`/settings/whatsapp/${waId}/set-webhook`, { method: 'POST', body: form });
+    const data = await resp.json();
+    const el = document.getElementById(`webhookResult-${waId}`);
+    if (data.ok) {
+      el.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>Webhook configurado: <code>${data.webhook_url}</code></span>`;
+    } else {
+      el.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${data.error}</span>`;
+    }
+  });
 });
 
 // ── Cargar grupos desde WA ──────────────────────────────────────────────────────
-document.getElementById('fetchGroupsBtn')?.addEventListener('click', async function () {
-  const orig = this.innerHTML;
-  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Cargando…';
-  this.disabled = true;
-  const resp = await fetch('/settings/whatsapp/fetch-groups');
-  const data = await resp.json();
-  this.innerHTML = orig;
-  this.disabled = false;
-
-  if (data.error) { showToast('Error: ' + data.error, 'danger'); return; }
-  const groups = data.groups || [];
-  if (!groups.length) { showToast('No se encontraron grupos', 'warning'); return; }
-
-  const panel = document.getElementById('fetchedGroupsPanel');
-  const list = document.getElementById('fetchedGroupsList');
-  list.innerHTML = '';
-  groups.forEach(g => {
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
-    item.innerHTML = `<span>${g.subject}</span><code class="small text-muted">${g.id}</code>`;
-    item.addEventListener('click', () => {
-      document.getElementById('newGroupJid').value = g.id;
-      document.getElementById('newGroupName').value = g.subject;
-      panel.classList.add('d-none');
+document.querySelectorAll('.fetch-groups-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const waId = this.dataset.id;
+    const orig = this.innerHTML;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>';
+    this.disabled = true;
+    const resp = await fetch(`/settings/whatsapp/${waId}/fetch-groups`);
+    const data = await resp.json();
+    this.innerHTML = orig;
+    this.disabled = false;
+    if (data.error) { showToast('Error: ' + data.error, 'danger'); return; }
+    const groups = data.groups || [];
+    if (!groups.length) { showToast('No se encontraron grupos', 'warning'); return; }
+    const panel = document.getElementById(`fetchedGroupsPanel-${waId}`);
+    const list = document.getElementById(`fetchedGroupsList-${waId}`);
+    list.innerHTML = '';
+    groups.forEach(g => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center py-1';
+      item.innerHTML = `<span>${g.subject}</span><code class="small text-muted">${g.id}</code>`;
+      item.addEventListener('click', () => {
+        document.getElementById(`newGroupJid-${waId}`).value = g.id;
+        document.getElementById(`newGroupName-${waId}`).value = g.subject;
+        panel.classList.add('d-none');
+      });
+      list.appendChild(item);
     });
-    list.appendChild(item);
+    panel.classList.remove('d-none');
   });
-  panel.classList.remove('d-none');
 });
 
 // ── Agregar grupo ───────────────────────────────────────────────────────────────
-document.getElementById('addGroupBtn')?.addEventListener('click', async function () {
-  const jid = document.getElementById('newGroupJid').value.trim();
-  const name = document.getElementById('newGroupName').value.trim();
-  if (!jid) { showToast('JID requerido', 'warning'); return; }
-
-  const form = new FormData();
-  form.append('jid', jid);
-  form.append('name', name || jid);
-  const resp = await fetch('/settings/whatsapp/groups/add', { method: 'POST', body: form });
-  const data = await resp.json();
-
-  if (data.error) { showToast(data.error, 'danger'); return; }
-  showToast('Grupo agregado', 'success');
-  setTimeout(() => location.reload(), 800);
+document.querySelectorAll('.add-group-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const waId = this.dataset.id;
+    const jid = document.getElementById(`newGroupJid-${waId}`).value.trim();
+    const name = document.getElementById(`newGroupName-${waId}`).value.trim();
+    if (!jid) { showToast('JID requerido', 'warning'); return; }
+    const form = new FormData();
+    form.append('jid', jid);
+    form.append('name', name || jid);
+    const resp = await fetch(`/settings/whatsapp/${waId}/groups/add`, { method: 'POST', body: form });
+    const data = await resp.json();
+    if (data.error) { showToast(data.error, 'danger'); return; }
+    showToast('Grupo agregado', 'success');
+    setTimeout(() => location.reload(), 800);
+  });
 });
 
 // ── Toggle / delete grupos ──────────────────────────────────────────────────────
@@ -539,65 +636,63 @@ document.querySelectorAll('.wp-assign-select').forEach(sel => {
       body: JSON.stringify({ wordpress_settings_id: wpId }),
     });
     const data = await resp.json();
-    if (data.ok) {
-      showToast('WordPress asignado', 'success');
-    } else {
-      showToast(data.error || 'Error al guardar', 'danger');
-    }
+    showToast(data.ok ? 'WordPress asignado' : (data.error || 'Error'), data.ok ? 'success' : 'danger');
   });
 });
 
 // ── Cargar canales desde WA ─────────────────────────────────────────────────────
-document.getElementById('fetchChannelsBtn')?.addEventListener('click', async function () {
-  const orig = this.innerHTML;
-  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Cargando…';
-  this.disabled = true;
-  const resp = await fetch('/settings/whatsapp/fetch-channels');
-  const data = await resp.json();
-  this.innerHTML = orig;
-  this.disabled = false;
-
-  if (data.error) { showToast('Error: ' + data.error, 'danger'); return; }
-  if (data.status === 'not_supported') {
-    showToast('Tu versión de Evolution API no soporta canales. Ingresá el JID manualmente.', 'warning');
-    return;
-  }
-  const channels = data.channels || [];
-  if (!channels.length) { showToast('No se encontraron canales vinculados al número', 'warning'); return; }
-
-  const panel = document.getElementById('fetchedChannelsPanel');
-  const list = document.getElementById('fetchedChannelsList');
-  list.innerHTML = '';
-  channels.forEach(c => {
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
-    item.innerHTML = `<span>${c.subject}</span><code class="small text-muted">${c.id}</code>`;
-    item.addEventListener('click', () => {
-      document.getElementById('newChannelJid').value = c.id;
-      document.getElementById('newChannelName').value = c.subject;
-      panel.classList.add('d-none');
+document.querySelectorAll('.fetch-channels-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const waId = this.dataset.id;
+    const orig = this.innerHTML;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>';
+    this.disabled = true;
+    const resp = await fetch(`/settings/whatsapp/${waId}/fetch-channels`);
+    const data = await resp.json();
+    this.innerHTML = orig;
+    this.disabled = false;
+    if (data.error) { showToast('Error: ' + data.error, 'danger'); return; }
+    if (data.status === 'not_supported') {
+      showToast('Tu versión de Evolution API no soporta canales. Ingresá el JID manualmente.', 'warning');
+      return;
+    }
+    const channels = data.channels || [];
+    if (!channels.length) { showToast('No se encontraron canales', 'warning'); return; }
+    const panel = document.getElementById(`fetchedChannelsPanel-${waId}`);
+    const list = document.getElementById(`fetchedChannelsList-${waId}`);
+    list.innerHTML = '';
+    channels.forEach(c => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center py-1';
+      item.innerHTML = `<span>${c.subject}</span><code class="small text-muted">${c.id}</code>`;
+      item.addEventListener('click', () => {
+        document.getElementById(`newChannelJid-${waId}`).value = c.id;
+        document.getElementById(`newChannelName-${waId}`).value = c.subject;
+        panel.classList.add('d-none');
+      });
+      list.appendChild(item);
     });
-    list.appendChild(item);
+    panel.classList.remove('d-none');
   });
-  panel.classList.remove('d-none');
 });
 
-// ── Canales ─────────────────────────────────────────────────────────────────────
-document.getElementById('addChannelBtn')?.addEventListener('click', async function () {
-  const jid = document.getElementById('newChannelJid').value.trim();
-  const name = document.getElementById('newChannelName').value.trim();
-  if (!jid) { showToast('JID requerido', 'warning'); return; }
-
-  const form = new FormData();
-  form.append('jid', jid);
-  form.append('name', name || jid);
-  const resp = await fetch('/settings/whatsapp/channels/add', { method: 'POST', body: form });
-  const data = await resp.json();
-
-  if (data.error) { showToast(data.error, 'danger'); return; }
-  showToast('Canal agregado', 'success');
-  setTimeout(() => location.reload(), 800);
+// ── Agregar canal ───────────────────────────────────────────────────────────────
+document.querySelectorAll('.add-channel-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const waId = this.dataset.id;
+    const jid = document.getElementById(`newChannelJid-${waId}`).value.trim();
+    const name = document.getElementById(`newChannelName-${waId}`).value.trim();
+    if (!jid) { showToast('JID requerido', 'warning'); return; }
+    const form = new FormData();
+    form.append('jid', jid);
+    form.append('name', name || jid);
+    const resp = await fetch(`/settings/whatsapp/${waId}/channels/add`, { method: 'POST', body: form });
+    const data = await resp.json();
+    if (data.error) { showToast(data.error, 'danger'); return; }
+    showToast('Canal agregado', 'success');
+    setTimeout(() => location.reload(), 800);
+  });
 });
 
 document.querySelectorAll('.ch-toggle-btn').forEach(btn => {
@@ -623,20 +718,23 @@ document.querySelectorAll('.ch-delete-btn').forEach(btn => {
 });
 
 // ── Test broadcast ──────────────────────────────────────────────────────────────
-document.getElementById('testBroadcastBtn')?.addEventListener('click', async function () {
-  const orig = this.innerHTML;
-  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando…';
-  this.disabled = true;
-  const resp = await fetch('/settings/whatsapp/test-broadcast', { method: 'POST' });
-  const data = await resp.json();
-  const el = document.getElementById('broadcastResult');
-  if (data.ok) {
-    el.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>Enviado a ${data.sent} grupo(s). Fallidos: ${data.failed}.</span>`;
-  } else {
-    el.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${data.error}</span>`;
-  }
-  this.innerHTML = orig;
-  this.disabled = false;
+document.querySelectorAll('.test-broadcast-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const waId = this.dataset.id;
+    const orig = this.innerHTML;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando…';
+    this.disabled = true;
+    const resp = await fetch(`/settings/whatsapp/${waId}/test-broadcast`, { method: 'POST' });
+    const data = await resp.json();
+    const el = document.getElementById(`broadcastResult-${waId}`);
+    if (data.ok) {
+      el.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>Enviado a ${data.sent} grupo(s). Fallidos: ${data.failed}.</span>`;
+    } else {
+      el.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${data.error}</span>`;
+    }
+    this.innerHTML = orig;
+    this.disabled = false;
+  });
 });
 </script>
 {% endblock %}

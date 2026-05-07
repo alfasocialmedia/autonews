@@ -133,10 +133,24 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE rss_feeds ADD COLUMN feed_type VARCHAR(20) DEFAULT 'rss'"))
             if "wordpress_settings_id" not in cols:
                 conn.execute(text("ALTER TABLE rss_feeds ADD COLUMN wordpress_settings_id INTEGER REFERENCES wordpress_settings(id) ON DELETE SET NULL"))
+        if "whatsapp_settings" in tables:
+            cols = [c["name"] for c in inspector.get_columns("whatsapp_settings")]
+            if "name" not in cols:
+                conn.execute(text("ALTER TABLE whatsapp_settings ADD COLUMN name VARCHAR(100) DEFAULT 'Principal'"))
+            if "wordpress_settings_id" not in cols:
+                conn.execute(text("ALTER TABLE whatsapp_settings ADD COLUMN wordpress_settings_id INTEGER REFERENCES wordpress_settings(id) ON DELETE SET NULL"))
         if "whatsapp_groups" in tables:
             cols = [c["name"] for c in inspector.get_columns("whatsapp_groups")]
             if "wordpress_settings_id" not in cols:
                 conn.execute(text("ALTER TABLE whatsapp_groups ADD COLUMN wordpress_settings_id INTEGER REFERENCES wordpress_settings(id) ON DELETE SET NULL"))
+            if "whatsapp_settings_id" not in cols:
+                conn.execute(text("ALTER TABLE whatsapp_groups ADD COLUMN whatsapp_settings_id INTEGER REFERENCES whatsapp_settings(id) ON DELETE CASCADE"))
+                conn.execute(text("UPDATE whatsapp_groups SET whatsapp_settings_id = (SELECT id FROM whatsapp_settings LIMIT 1) WHERE whatsapp_settings_id IS NULL"))
+        if "whatsapp_channels" in tables:
+            cols = [c["name"] for c in inspector.get_columns("whatsapp_channels")]
+            if "whatsapp_settings_id" not in cols:
+                conn.execute(text("ALTER TABLE whatsapp_channels ADD COLUMN whatsapp_settings_id INTEGER REFERENCES whatsapp_settings(id) ON DELETE CASCADE"))
+                conn.execute(text("UPDATE whatsapp_channels SET whatsapp_settings_id = (SELECT id FROM whatsapp_settings LIMIT 1) WHERE whatsapp_settings_id IS NULL"))
         if "posts" in tables:
             cols = [c["name"] for c in inspector.get_columns("posts")]
             if "source_name" not in cols:

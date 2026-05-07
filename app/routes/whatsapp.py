@@ -29,21 +29,12 @@ _TAG_RE = re.compile(r'<[^>]+>')
 
 
 def _sanitize_text(text: str) -> str:
-    """
-    Elimina caracteres corruptos del texto antes de enviar a IA o a WhatsApp.
-    Resuelve el problema de sitios que devuelven Windows-1252 declarado como UTF-8
-    (aparecen como ◆ U+FFFD en el resultado).
-    """
     import unicodedata
-
-    # 1. Intentar reparar mojibake (Latin-1 leído como UTF-8)
     try:
         repaired = text.encode('latin-1').decode('utf-8')
         text = repaired
     except (UnicodeEncodeError, UnicodeDecodeError):
-        pass  # ya estaba bien o no es Latin-1
-
-    # 2. Eliminar U+FFFD (replacement char) y caracteres de control
+        pass
     clean = []
     for ch in text:
         if ch in ('\n', '\t'):
@@ -51,22 +42,20 @@ def _sanitize_text(text: str) -> str:
         elif ch == '\r':
             clean.append('\n')
         elif unicodedata.category(ch)[0] == 'C':
-            continue  # control char — descartar
+            continue
         else:
             clean.append(ch)
-
     result = ''.join(clean)
-    # 3. Normalizar a NFC (elimina duplicados de combinación)
     return unicodedata.normalize('NFC', result)
 
-# Patrones de ruido típicos del scraping de portales de noticias
+
 _NOISE_LINE_RE = re.compile(
     r'^\s*('
-    r'\+|[-–—]{2,}'                          # separadores
-    r'|[\d]{1,2}/[\d]{1,2}/[\d]{2,4}.*'      # fechas
-    r'|\d{1,2}:\d{2}\s*(am|pm)?'             # horas
-    r'|seguinos(\s+en)?'                      # "Seguinos en"
-    r'|compartir|copiar(\s+(enlace|link))?'  # botones sociales
+    r'\+|[-–—]{2,}'
+    r'|[\d]{1,2}/[\d]{1,2}/[\d]{2,4}.*'
+    r'|\d{1,2}:\d{2}\s*(am|pm)?'
+    r'|seguinos(\s+en)?'
+    r'|compartir|copiar(\s+(enlace|link))?'
     r'|publicidad|suscri\w*|newsletter'
     r'|comentar|imprimir|relacionad\w*'
     r'|whatsapp|facebook|twitter|instagram|tiktok|youtube'
@@ -78,7 +67,6 @@ _NOISE_LINE_RE = re.compile(
 
 
 def _clean_scrape_noise(text: str) -> str:
-    """Elimina ruido típico del scraping: fechas, botones sociales, categorías cortas."""
     lines = text.splitlines()
     result = []
     for line in lines:
@@ -86,7 +74,6 @@ def _clean_scrape_noise(text: str) -> str:
         if not stripped:
             result.append("")
             continue
-        # Saltar líneas cortas que son categorías / etiquetas / noise
         if len(stripped) < 45 and _NOISE_LINE_RE.match(stripped):
             continue
         result.append(line)
@@ -94,79 +81,21 @@ def _clean_scrape_noise(text: str) -> str:
 
 
 def _html_to_plain(html_text: str, max_chars: int = 3000) -> str:
-    """Convierte HTML de artículo a texto plano con párrafos bien espaciados para WhatsApp."""
-    # Convertir subtítulos en negrita WhatsApp antes de eliminar tags
     text = re.sub(r'<h[2-4][^>]*>(.*?)</h[2-4]>', r'\n\n*\1*\n', html_text, flags=re.IGNORECASE | re.DOTALL)
-    # Párrafos y listas → doble salto (respira bien en WhatsApp)
     text = re.sub(r'</(p|li)>', '\n\n', text, flags=re.IGNORECASE)
     text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
-    # Eliminar etiquetas restantes
     text = _TAG_RE.sub('', text)
-    # Decodificar entidades HTML (&amp; &nbsp; etc.)
     text = _html_mod.unescape(text)
-    # Colapsar espacios horizontales y líneas en blanco excesivas
     text = re.sub(r'[ \t]+', ' ', text)
     text = re.sub(r' \n', '\n', text)
     text = re.sub(r'\n{3,}', '\n\n', text).strip()
-
     if len(text) <= max_chars:
         return text
-
-    # Cortar en el último punto antes del límite
     cut = text[:max_chars]
     last_dot = cut.rfind('.')
     if last_dot > max_chars // 2:
         return cut[:last_dot + 1]
     return cut.rstrip() + "…"
-
-
-def _ensure_tables():
-    """Crea las tablas de WhatsApp si no existen (fallback por si la migración no corrió)."""
-    from sqlalchemy import inspect, text
-    from app.database import engine
-    inspector = inspect(engine)
-    tables = inspector.get_table_names()
-    with engine.begin() as conn:
-        if "whatsapp_settings" not in tables:
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS whatsapp_settings (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    evolution_api_url VARCHAR(300) DEFAULT 'http://localhost:8080',
-                    evolution_api_key VARCHAR(300) DEFAULT '',
-                    instance_name VARCHAR(100) DEFAULT 'botnews',
-                    enabled BOOLEAN DEFAULT 0,
-                    authorized_numbers TEXT DEFAULT '',
-                    broadcast_enabled BOOLEAN DEFAULT 0,
-                    broadcast_template TEXT DEFAULT '*{title}*\n\n{summary}\n\n{url}',
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME
-                )
-            """))
-        if "whatsapp_groups" not in tables:
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS whatsapp_groups (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    jid VARCHAR(200) NOT NULL UNIQUE,
-                    name VARCHAR(200) NOT NULL,
-                    enabled BOOLEAN DEFAULT 1,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-
-
-def _get_settings(db: Session) -> WhatsAppSettings:
-    try:
-        s = db.query(WhatsAppSettings).first()
-    except Exception:
-        _ensure_tables()
-        db.expire_all()
-        s = None
-    if not s:
-        s = WhatsAppSettings()
-        db.add(s)
-        db.commit()
-        db.refresh(s)
-    return s
 
 
 def _require_admin(request: Request, db: Session):
@@ -176,7 +105,11 @@ def _require_admin(request: Request, db: Session):
     return user
 
 
-# ── Página principal de configuración ─────────────────────────────────────────
+def _get_account(db: Session, wa_id: int) -> WhatsAppSettings | None:
+    return db.query(WhatsAppSettings).filter(WhatsAppSettings.id == wa_id).first()
+
+
+# ── Página principal ───────────────────────────────────────────────────────────
 
 @router.get("/settings/whatsapp", response_class=HTMLResponse)
 async def whatsapp_settings(request: Request, db: Session = Depends(get_db)):
@@ -184,27 +117,42 @@ async def whatsapp_settings(request: Request, db: Session = Depends(get_db)):
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    settings = _get_settings(db)
-    groups = db.query(WhatsAppGroup).order_by(WhatsAppGroup.id).all()
-    channels = db.query(WhatsAppChannel).order_by(WhatsAppChannel.id).all()
+    accounts = db.query(WhatsAppSettings).order_by(WhatsAppSettings.id).all()
+    if not accounts:
+        default = WhatsAppSettings(name="Principal")
+        db.add(default)
+        db.commit()
+        db.refresh(default)
+        accounts = [default]
+
+    for acc in accounts:
+        acc._groups = db.query(WhatsAppGroup).filter(
+            WhatsAppGroup.whatsapp_settings_id == acc.id
+        ).order_by(WhatsAppGroup.id).all()
+        acc._channels = db.query(WhatsAppChannel).filter(
+            WhatsAppChannel.whatsapp_settings_id == acc.id
+        ).order_by(WhatsAppChannel.id).all()
+
     wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.id).all()
     return templates.TemplateResponse(
         "settings_whatsapp.html",
         {
-            "request": request, "user": user, "s": settings,
-            "groups": groups, "max_groups": MAX_GROUPS,
-            "channels": channels, "max_channels": MAX_CHANNELS,
+            "request": request, "user": user,
+            "accounts": accounts,
             "wp_sites": wp_sites,
+            "max_groups": MAX_GROUPS,
+            "max_channels": MAX_CHANNELS,
         },
     )
 
 
-# ── Guardar configuración ──────────────────────────────────────────────────────
+# ── CRUD de cuentas ────────────────────────────────────────────────────────────
 
-@router.post("/settings/whatsapp/save")
-async def whatsapp_save(
+@router.post("/settings/whatsapp/add")
+async def add_whatsapp_account(
     request: Request,
     db: Session = Depends(get_db),
+    name: str = Form("Principal"),
     evolution_api_url: str = Form(""),
     evolution_api_key: str = Form(""),
     instance_name: str = Form("botnews"),
@@ -212,37 +160,107 @@ async def whatsapp_save(
     authorized_numbers: str = Form(""),
     broadcast_enabled: str = Form("off"),
     broadcast_template: str = Form(""),
+    wordpress_settings_id: str = Form(""),
 ):
     user = _require_admin(request, db)
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    s = _get_settings(db)
-    s.evolution_api_url = evolution_api_url.rstrip("/")
-    s.evolution_api_key = evolution_api_key
-    s.instance_name = instance_name or "botnews"
-    s.enabled = enabled == "on"
-    s.authorized_numbers = authorized_numbers.strip()
-    s.broadcast_enabled = broadcast_enabled == "on"
-    if broadcast_template.strip():
-        s.broadcast_template = broadcast_template.strip()
+    acc = WhatsAppSettings(
+        name=name.strip() or "Nueva cuenta",
+        evolution_api_url=evolution_api_url.rstrip("/"),
+        evolution_api_key=evolution_api_key,
+        instance_name=instance_name.strip() or "botnews",
+        enabled=enabled == "on",
+        authorized_numbers=authorized_numbers.strip(),
+        broadcast_enabled=broadcast_enabled == "on",
+        broadcast_template=broadcast_template.strip() or "*{title}*\n\n{summary}\n\n{url}",
+        wordpress_settings_id=int(wordpress_settings_id) if wordpress_settings_id.strip().isdigit() else None,
+    )
+    db.add(acc)
     db.commit()
     return RedirectResponse("/settings/whatsapp?saved=1", status_code=302)
 
 
+@router.post("/settings/whatsapp/{wa_id}/edit")
+async def edit_whatsapp_account(
+    wa_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    name: str = Form("Principal"),
+    evolution_api_url: str = Form(""),
+    evolution_api_key: str = Form(""),
+    instance_name: str = Form("botnews"),
+    enabled: str = Form("off"),
+    authorized_numbers: str = Form(""),
+    broadcast_enabled: str = Form("off"),
+    broadcast_template: str = Form(""),
+    wordpress_settings_id: str = Form(""),
+):
+    user = _require_admin(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    acc = _get_account(db, wa_id)
+    if not acc:
+        return RedirectResponse("/settings/whatsapp", status_code=302)
+
+    acc.name = name.strip() or "Principal"
+    acc.evolution_api_url = evolution_api_url.rstrip("/")
+    acc.evolution_api_key = evolution_api_key
+    acc.instance_name = instance_name.strip() or "botnews"
+    acc.enabled = enabled == "on"
+    acc.authorized_numbers = authorized_numbers.strip()
+    acc.broadcast_enabled = broadcast_enabled == "on"
+    if broadcast_template.strip():
+        acc.broadcast_template = broadcast_template.strip()
+    acc.wordpress_settings_id = int(wordpress_settings_id) if wordpress_settings_id.strip().isdigit() else None
+    db.commit()
+    return RedirectResponse("/settings/whatsapp?saved=1", status_code=302)
+
+
+@router.post("/settings/whatsapp/{wa_id}/delete")
+async def delete_whatsapp_account(wa_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _require_admin(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    acc = _get_account(db, wa_id)
+    if acc:
+        db.delete(acc)
+        db.commit()
+    return RedirectResponse("/settings/whatsapp", status_code=302)
+
+
+@router.post("/settings/whatsapp/{wa_id}/toggle")
+async def toggle_whatsapp_account(wa_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _require_admin(request, db)
+    if not user:
+        return JSONResponse({"error": "No autorizado"}, status_code=403)
+
+    acc = _get_account(db, wa_id)
+    if not acc:
+        return JSONResponse({"error": "No encontrado"}, status_code=404)
+    acc.enabled = not acc.enabled
+    db.commit()
+    return JSONResponse({"ok": True, "enabled": acc.enabled})
+
+
 # ── Crear instancia ────────────────────────────────────────────────────────────
 
-@router.post("/settings/whatsapp/create-instance")
-async def create_instance(request: Request, db: Session = Depends(get_db)):
+@router.post("/settings/whatsapp/{wa_id}/create-instance")
+async def create_instance(wa_id: int, request: Request, db: Session = Depends(get_db)):
     try:
         user = _require_admin(request, db)
         if not user:
             return JSONResponse({"error": "No autorizado"}, status_code=403)
-        s = _get_settings(db)
-        if not s.evolution_api_url or not s.evolution_api_key:
+        acc = _get_account(db, wa_id)
+        if not acc:
+            return JSONResponse({"error": "Cuenta no encontrada"}, status_code=404)
+        if not acc.evolution_api_url or not acc.evolution_api_key:
             return JSONResponse({"error": "Configurá la URL y API key primero"}, status_code=400)
         from app.services.whatsapp_service import create_instance as svc_create
-        result = svc_create(s.evolution_api_url, s.evolution_api_key, s.instance_name)
+        result = svc_create(acc.evolution_api_url, acc.evolution_api_key, acc.instance_name)
         return JSONResponse({"ok": True, "data": result})
     except Exception as exc:
         log.error("create_instance error: %s", exc)
@@ -251,15 +269,17 @@ async def create_instance(request: Request, db: Session = Depends(get_db)):
 
 # ── QR code ────────────────────────────────────────────────────────────────────
 
-@router.get("/settings/whatsapp/qr")
-async def get_qr(request: Request, db: Session = Depends(get_db)):
+@router.get("/settings/whatsapp/{wa_id}/qr")
+async def get_qr(wa_id: int, request: Request, db: Session = Depends(get_db)):
     try:
         user = _require_admin(request, db)
         if not user:
             return JSONResponse({"error": "No autorizado"}, status_code=403)
-        s = _get_settings(db)
+        acc = _get_account(db, wa_id)
+        if not acc:
+            return JSONResponse({"error": "Cuenta no encontrada"}, status_code=404)
         from app.services.whatsapp_service import get_qr as svc_qr
-        return JSONResponse(svc_qr(s.evolution_api_url, s.evolution_api_key, s.instance_name))
+        return JSONResponse(svc_qr(acc.evolution_api_url, acc.evolution_api_key, acc.instance_name))
     except Exception as exc:
         log.error("get_qr error: %s", exc)
         return JSONResponse({"error": str(exc)}, status_code=500)
@@ -267,24 +287,27 @@ async def get_qr(request: Request, db: Session = Depends(get_db)):
 
 # ── Estado de conexión ─────────────────────────────────────────────────────────
 
-@router.get("/settings/whatsapp/status")
-async def connection_status(request: Request, db: Session = Depends(get_db)):
+@router.get("/settings/whatsapp/{wa_id}/status")
+async def connection_status(wa_id: int, request: Request, db: Session = Depends(get_db)):
     try:
         user = _require_admin(request, db)
         if not user:
             return JSONResponse({"error": "No autorizado"}, status_code=403)
-        s = _get_settings(db)
+        acc = _get_account(db, wa_id)
+        if not acc:
+            return JSONResponse({"error": "Cuenta no encontrada"}, status_code=404)
         from app.services.whatsapp_service import get_status
-        return JSONResponse(get_status(s.evolution_api_url, s.evolution_api_key, s.instance_name))
+        return JSONResponse(get_status(acc.evolution_api_url, acc.evolution_api_key, acc.instance_name))
     except Exception as exc:
         log.error("connection_status error: %s", exc)
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
-# ── Configurar webhook en Evolution API ────────────────────────────────────────
+# ── Webhook ────────────────────────────────────────────────────────────────────
 
-@router.post("/settings/whatsapp/set-webhook")
+@router.post("/settings/whatsapp/{wa_id}/set-webhook")
 async def configure_webhook(
+    wa_id: int,
     request: Request,
     db: Session = Depends(get_db),
     webhook_base_url: str = Form(""),
@@ -293,10 +316,12 @@ async def configure_webhook(
         user = _require_admin(request, db)
         if not user:
             return JSONResponse({"error": "No autorizado"}, status_code=403)
-        s = _get_settings(db)
+        acc = _get_account(db, wa_id)
+        if not acc:
+            return JSONResponse({"error": "Cuenta no encontrada"}, status_code=404)
         webhook_url = webhook_base_url.rstrip("/") + "/webhook/whatsapp"
         from app.services.whatsapp_service import set_webhook
-        ok = set_webhook(s.evolution_api_url, s.evolution_api_key, s.instance_name, webhook_url)
+        ok = set_webhook(acc.evolution_api_url, acc.evolution_api_key, acc.instance_name, webhook_url)
         if ok:
             return JSONResponse({"ok": True, "webhook_url": webhook_url})
         return JSONResponse({"error": "No se pudo configurar el webhook"}, status_code=500)
@@ -307,32 +332,37 @@ async def configure_webhook(
 
 # ── Grupos ─────────────────────────────────────────────────────────────────────
 
-@router.get("/settings/whatsapp/fetch-groups")
-async def fetch_groups(request: Request, db: Session = Depends(get_db)):
+@router.get("/settings/whatsapp/{wa_id}/fetch-groups")
+async def fetch_groups(wa_id: int, request: Request, db: Session = Depends(get_db)):
     user = _require_admin(request, db)
     if not user:
         return JSONResponse({"error": "No autorizado"}, status_code=403)
 
-    s = _get_settings(db)
+    acc = _get_account(db, wa_id)
+    if not acc:
+        return JSONResponse({"error": "Cuenta no encontrada"}, status_code=404)
     from app.services.whatsapp_service import fetch_groups as svc_groups
-    groups = svc_groups(s.evolution_api_url, s.evolution_api_key, s.instance_name)
+    groups = svc_groups(acc.evolution_api_url, acc.evolution_api_key, acc.instance_name)
     return JSONResponse({"groups": groups})
 
 
-@router.get("/settings/whatsapp/fetch-channels")
-async def fetch_channels_route(request: Request, db: Session = Depends(get_db)):
+@router.get("/settings/whatsapp/{wa_id}/fetch-channels")
+async def fetch_channels_route(wa_id: int, request: Request, db: Session = Depends(get_db)):
     user = _require_admin(request, db)
     if not user:
         return JSONResponse({"error": "No autorizado"}, status_code=403)
 
-    s = _get_settings(db)
+    acc = _get_account(db, wa_id)
+    if not acc:
+        return JSONResponse({"error": "Cuenta no encontrada"}, status_code=404)
     from app.services.whatsapp_service import fetch_newsletters
-    channels, status = fetch_newsletters(s.evolution_api_url, s.evolution_api_key, s.instance_name)
+    channels, status = fetch_newsletters(acc.evolution_api_url, acc.evolution_api_key, acc.instance_name)
     return JSONResponse({"channels": channels, "status": status})
 
 
-@router.post("/settings/whatsapp/groups/add")
+@router.post("/settings/whatsapp/{wa_id}/groups/add")
 async def add_group(
+    wa_id: int,
     request: Request,
     db: Session = Depends(get_db),
     jid: str = Form(""),
@@ -342,9 +372,13 @@ async def add_group(
     if not user:
         return JSONResponse({"error": "No autorizado"}, status_code=403)
 
-    count = db.query(WhatsAppGroup).count()
+    acc = _get_account(db, wa_id)
+    if not acc:
+        return JSONResponse({"error": "Cuenta no encontrada"}, status_code=404)
+
+    count = db.query(WhatsAppGroup).filter(WhatsAppGroup.whatsapp_settings_id == wa_id).count()
     if count >= MAX_GROUPS:
-        return JSONResponse({"error": f"Máximo {MAX_GROUPS} grupos permitidos"}, status_code=400)
+        return JSONResponse({"error": f"Máximo {MAX_GROUPS} grupos por cuenta"}, status_code=400)
 
     if not jid.strip():
         return JSONResponse({"error": "JID requerido"}, status_code=400)
@@ -353,7 +387,7 @@ async def add_group(
     if existing:
         return JSONResponse({"error": "Grupo ya agregado"}, status_code=400)
 
-    g = WhatsAppGroup(jid=jid.strip(), name=name.strip() or jid.strip())
+    g = WhatsAppGroup(jid=jid.strip(), name=name.strip() or jid.strip(), whatsapp_settings_id=wa_id)
     db.add(g)
     db.commit()
     db.refresh(g)
@@ -413,8 +447,9 @@ async def assign_wp_to_group(
 
 # ── Canales ───────────────────────────────────────────────────────────────────
 
-@router.post("/settings/whatsapp/channels/add")
+@router.post("/settings/whatsapp/{wa_id}/channels/add")
 async def add_channel(
+    wa_id: int,
     request: Request,
     db: Session = Depends(get_db),
     jid: str = Form(""),
@@ -424,9 +459,13 @@ async def add_channel(
     if not user:
         return JSONResponse({"error": "No autorizado"}, status_code=403)
 
-    count = db.query(WhatsAppChannel).count()
+    acc = _get_account(db, wa_id)
+    if not acc:
+        return JSONResponse({"error": "Cuenta no encontrada"}, status_code=404)
+
+    count = db.query(WhatsAppChannel).filter(WhatsAppChannel.whatsapp_settings_id == wa_id).count()
     if count >= MAX_CHANNELS:
-        return JSONResponse({"error": f"Máximo {MAX_CHANNELS} canales permitidos"}, status_code=400)
+        return JSONResponse({"error": f"Máximo {MAX_CHANNELS} canales por cuenta"}, status_code=400)
 
     if not jid.strip():
         return JSONResponse({"error": "JID requerido"}, status_code=400)
@@ -435,7 +474,7 @@ async def add_channel(
     if existing:
         return JSONResponse({"error": "Canal ya agregado"}, status_code=400)
 
-    ch = WhatsAppChannel(jid=jid.strip(), name=name.strip() or jid.strip())
+    ch = WhatsAppChannel(jid=jid.strip(), name=name.strip() or jid.strip(), whatsapp_settings_id=wa_id)
     db.add(ch)
     db.commit()
     db.refresh(ch)
@@ -469,24 +508,30 @@ async def delete_channel(channel_id: int, request: Request, db: Session = Depend
     return JSONResponse({"ok": True})
 
 
-# ── Mensaje de prueba ──────────────────────────────────────────────────────────
+# ── Prueba de difusión ─────────────────────────────────────────────────────────
 
-@router.post("/settings/whatsapp/test-broadcast")
-async def test_broadcast(request: Request, db: Session = Depends(get_db)):
+@router.post("/settings/whatsapp/{wa_id}/test-broadcast")
+async def test_broadcast(wa_id: int, request: Request, db: Session = Depends(get_db)):
     user = _require_admin(request, db)
     if not user:
         return JSONResponse({"error": "No autorizado"}, status_code=403)
 
-    s = _get_settings(db)
-    groups = db.query(WhatsAppGroup).filter(WhatsAppGroup.enabled == True).all()
+    acc = _get_account(db, wa_id)
+    if not acc:
+        return JSONResponse({"error": "Cuenta no encontrada"}, status_code=404)
+
+    groups = db.query(WhatsAppGroup).filter(
+        WhatsAppGroup.enabled == True,
+        WhatsAppGroup.whatsapp_settings_id == wa_id,
+    ).all()
     if not groups:
-        return JSONResponse({"error": "No hay grupos activos configurados"}, status_code=400)
+        return JSONResponse({"error": "No hay grupos activos para esta cuenta"}, status_code=400)
 
     from app.services.whatsapp_service import send_text
     sent, failed = 0, 0
     for g in groups:
         ok = send_text(
-            s.evolution_api_url, s.evolution_api_key, s.instance_name,
+            acc.evolution_api_url, acc.evolution_api_key, acc.instance_name,
             g.jid, "✅ *AutoNews* — Prueba de conexión correcta.",
         )
         if ok:
@@ -508,7 +553,6 @@ async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
 
     event = payload.get("event", "")
 
-    # Loguear TODOS los eventos para diagnóstico de canales
     try:
         import json as _json
         raw = _json.dumps(payload)
@@ -524,14 +568,12 @@ async def whatsapp_webhook(request: Request, db: Session = Depends(get_db)):
     if event not in ("messages.upsert", "MESSAGES_UPSERT"):
         return JSONResponse({"ok": True})
 
-    # Procesar en hilo separado para no bloquear FastAPI
     thread = threading.Thread(target=_process_wa_message, args=(payload,), daemon=True)
     thread.start()
     return JSONResponse({"ok": True})
 
 
 def _log_db(db, level: str, message: str):
-    """Guarda un log en la base de datos para que aparezca en el panel."""
     try:
         from app.models import Log
         db.add(Log(level=level, message=message, source="whatsapp"))
@@ -543,22 +585,18 @@ def _log_db(db, level: str, message: str):
             pass
 
 
-# ── Buffer de mensajes multi-parte (texto + foto separados) ────────────────────
-# Cuando el usuario envía texto e imagen como mensajes separados, acumulamos
-# ambos durante BUFFER_SECS segundos y los procesamos juntos.
+# ── Buffer de mensajes multi-parte ────────────────────────────────────────────
 
-_BUFFER_SECS = 15  # ventana de espera para combinar mensajes del mismo remitente
+_BUFFER_SECS = 15
 
-# {sender_number: {"text": str, "media_data": tuple|None, "source_url": str|None,
-#                  "jid": str, "timer": Timer, "ts": float}}
+# key: "{instance_name}:{sender_number}"
 _wa_buffers: dict[str, dict] = {}
 _wa_buf_lock = threading.Lock()
 
 
-def _flush_wa_buffer(sender: str):
-    """Procesa el buffer acumulado de un remitente (llamado por el timer o al llegar nuevo mensaje completo)."""
+def _flush_wa_buffer(buf_key: str):
     with _wa_buf_lock:
-        buf = _wa_buffers.pop(sender, None)
+        buf = _wa_buffers.pop(buf_key, None)
     if not buf:
         return
 
@@ -566,6 +604,7 @@ def _flush_wa_buffer(sender: str):
     media_data = buf["media_data"]
     source_url = buf["source_url"]
     jid = buf["jid"]
+    instance_name = buf.get("instance_name", "")
 
     if not text and not media_data:
         return
@@ -573,7 +612,10 @@ def _flush_wa_buffer(sender: str):
     from app.database import SessionLocal
     db = SessionLocal()
     try:
-        s = db.query(WhatsAppSettings).first()
+        if instance_name:
+            s = db.query(WhatsAppSettings).filter(WhatsAppSettings.instance_name == instance_name).first()
+        else:
+            s = db.query(WhatsAppSettings).first()
         if s:
             _publish_whatsapp_news(db, s, text or "Foto compartida vía WhatsApp",
                                    media_data, source_url, sender_jid=jid)
@@ -583,67 +625,58 @@ def _flush_wa_buffer(sender: str):
         db.close()
 
 
-def _buffer_wa_content(sender: str, jid: str, text: str, media_data, source_url: str | None):
-    """
-    Acumula contenido en el buffer del remitente y (re)inicia el timer.
-    Si el buffer ya tiene texto y llega imagen (o viceversa), el timer se
-    cancela y el procesamiento ocurre de inmediato.
-    """
+def _buffer_wa_content(buf_key: str, jid: str, text: str, media_data, source_url: str | None, instance_name: str):
     with _wa_buf_lock:
-        existing = _wa_buffers.get(sender)
+        existing = _wa_buffers.get(buf_key)
 
         if existing:
-            # Cancelar timer previo
             existing["timer"].cancel()
-
-            # Combinar: texto de quien lo tenga, imagen de quien la tenga
             combined_text = existing["text"] or text
-            # Si ambos tienen texto, concatenar (ej: dos textos seguidos)
             if existing["text"] and text and text != existing["text"]:
                 combined_text = existing["text"] + "\n\n" + text
             combined_media = existing["media_data"] or media_data
             combined_url = existing["source_url"] or source_url
 
-            # Si ya tenemos tanto texto como imagen, procesar inmediatamente
             has_text = bool(combined_text and combined_text.strip())
             has_media = combined_media is not None
             if has_text and has_media:
-                del _wa_buffers[sender]
-                log.info("WA buffer: texto + imagen listos — procesando de inmediato (%s)", sender)
+                del _wa_buffers[buf_key]
+                log.info("WA buffer: texto + imagen listos — procesando de inmediato (%s)", buf_key)
                 t = threading.Thread(
                     target=_flush_immediately,
-                    args=(sender, jid, combined_text, combined_media, combined_url),
+                    args=(buf_key, jid, combined_text, combined_media, combined_url, instance_name),
                     daemon=True,
                 )
                 t.start()
                 return
 
-            # Actualizar buffer y reiniciar timer
             existing.update({"text": combined_text, "media_data": combined_media,
                              "source_url": combined_url, "ts": time.time()})
-            timer = threading.Timer(_BUFFER_SECS, _flush_wa_buffer, args=[sender])
+            timer = threading.Timer(_BUFFER_SECS, _flush_wa_buffer, args=[buf_key])
             timer.daemon = True
             existing["timer"] = timer
             timer.start()
         else:
-            # Primer mensaje de este remitente: crear buffer
-            timer = threading.Timer(_BUFFER_SECS, _flush_wa_buffer, args=[sender])
+            timer = threading.Timer(_BUFFER_SECS, _flush_wa_buffer, args=[buf_key])
             timer.daemon = True
-            _wa_buffers[sender] = {
+            _wa_buffers[buf_key] = {
                 "text": text, "media_data": media_data,
                 "source_url": source_url, "jid": jid,
+                "instance_name": instance_name,
                 "timer": timer, "ts": time.time(),
             }
             timer.start()
-            log.info("WA buffer: iniciado para %s (espera %ds más mensajes)", sender, _BUFFER_SECS)
+            log.info("WA buffer: iniciado para %s (espera %ds más mensajes)", buf_key, _BUFFER_SECS)
 
 
-def _flush_immediately(sender: str, jid: str, text: str, media_data, source_url: str | None):
-    """Procesa contenido combinado sin pasar por el buffer (cuando ya tenemos todo)."""
+def _flush_immediately(buf_key: str, jid: str, text: str, media_data, source_url: str | None, instance_name: str):
     from app.database import SessionLocal
     db = SessionLocal()
     try:
-        s = db.query(WhatsAppSettings).first()
+        if instance_name:
+            s = db.query(WhatsAppSettings).filter(WhatsAppSettings.instance_name == instance_name).first()
+        else:
+            s = db.query(WhatsAppSettings).first()
         if s:
             _publish_whatsapp_news(db, s, text or "Foto compartida vía WhatsApp",
                                    media_data, source_url, sender_jid=jid)
@@ -655,9 +688,7 @@ def _flush_immediately(sender: str, jid: str, text: str, media_data, source_url:
 
 # ── Procesamiento del webhook ──────────────────────────────────────────────────
 
-
 def _process_wa_message(payload: dict):
-    """Procesa un mensaje de WhatsApp entrante y publica en WordPress si corresponde."""
     from app.database import SessionLocal
     db = SessionLocal()
     try:
@@ -666,11 +697,16 @@ def _process_wa_message(payload: dict):
         if not msg:
             return
 
-        s = db.query(WhatsAppSettings).first()
+        # Enrutar por nombre de instancia
+        instance_name = payload.get("instance", "")
+        if instance_name:
+            s = db.query(WhatsAppSettings).filter(WhatsAppSettings.instance_name == instance_name).first()
+        else:
+            s = db.query(WhatsAppSettings).first()
+
         if not s or not s.enabled:
             return
 
-        # Verificar número autorizado — normalizar a solo dígitos para comparar
         authorized = [re.sub(r"[^0-9]", "", n) for n in (s.authorized_numbers or "").split(",") if n.strip()]
         if authorized and msg["from"] not in authorized:
             log.info("WA: número no autorizado %s (autorizados: %s)", msg["from"], authorized)
@@ -679,13 +715,12 @@ def _process_wa_message(payload: dict):
         log.info("WA: número autorizado %s — procesando mensaje tipo=%s", msg["from"], msg.get("type"))
         _log_db(db, "INFO", f"[WA] Mensaje recibido de {msg['from']} — tipo: {msg.get('type')}")
 
-        # Ignorar mensajes de grupos (solo procesar DMs)
         if msg["is_group"]:
             log.info("WA: mensaje de grupo ignorado (solo se procesan DMs)")
             return
 
         text = msg.get("text", "").strip()
-        media_data = None   # (bytes, filename, mimetype) para imagen adjunta
+        media_data = None
         audio_transcript = ""
 
         raw_data = msg.get("_raw_data", {})
@@ -695,9 +730,7 @@ def _process_wa_message(payload: dict):
         import mimetypes as _mt
 
         if msg_type == "image":
-            # Intento 1: Evolution API base64
             result = get_media_base64(s.evolution_api_url, s.evolution_api_key, s.instance_name, raw_data) if raw_data else None
-            # Intento 2: URL directa del campo imageMessage
             if not result and media_dict:
                 from app.services.whatsapp_service import download_media
                 dl = download_media(s.evolution_api_url, s.evolution_api_key, s.instance_name, media_dict)
@@ -710,7 +743,6 @@ def _process_wa_message(payload: dict):
                 media_data = (img_bytes, f"wa_image{ext}", img_mime)
                 log.info("WA: imagen descargada (%d bytes, %s)", len(img_bytes), img_mime)
 
-                # OCR/visión: extraer texto de la imagen cuando no hay caption o es muy corto
                 if len(text) < 30:
                     from app.models import GroqSettings
                     from app.crypto import decrypt_value
@@ -730,7 +762,6 @@ def _process_wa_message(payload: dict):
                 log.warning("WA: no se pudo descargar la imagen — se continúa sin foto")
 
         elif msg_type == "audio":
-            # Audio: transcribir y procesar de inmediato (no requiere buffer)
             result = get_media_base64(s.evolution_api_url, s.evolution_api_key, s.instance_name, raw_data) if raw_data else None
             if result:
                 audio_bytes, audio_mime = result
@@ -745,34 +776,28 @@ def _process_wa_message(payload: dict):
                     log.info("WA: transcripción (%d chars): %s…", len(audio_transcript), audio_transcript[:80])
             if not audio_transcript:
                 audio_transcript = text or "Nota de voz recibida por WhatsApp"
-
-            # Audio no se bufferiza — publicar de inmediato
             _publish_whatsapp_news(db, s, audio_transcript, None, None, sender_jid=msg["jid"])
             return
 
-        # Video/documento: el caption ya viene en msg["text"]
         final_text = text
         if not final_text and not media_data:
             log.info("WA: mensaje sin contenido procesable (%s)", msg_type)
             return
 
-        # Detectar URL para scrapear
         url_match = _URL_RE.search(final_text) if final_text else None
         source_url = url_match.group().rstrip(".,;)>") if url_match else None
 
-        # Mensajes de texto sin URL muy cortos: ignorar (no bufferizar, no publicar)
         if not source_url and not media_data and msg_type == "text" and len(final_text) < 80:
             log.info("WA: mensaje de texto muy corto sin URL (%d chars) — ignorado", len(final_text))
             _log_db(db, "WARNING", f"[WA] Mensaje ignorado: texto muy corto ({len(final_text)} chars) y sin URL")
             return
 
-        # URLs: procesar de inmediato sin esperar más mensajes
         if source_url:
             _publish_whatsapp_news(db, s, final_text, media_data, source_url, sender_jid=msg["jid"])
             return
 
-        # Texto y/o imagen: acumular en buffer para combinar con mensajes del mismo remitente
-        _buffer_wa_content(msg["from"], msg["jid"], final_text, media_data, source_url)
+        buf_key = f"{instance_name}:{msg['from']}"
+        _buffer_wa_content(buf_key, msg["jid"], final_text, media_data, source_url, instance_name)
 
     except Exception as exc:
         log.error("_process_wa_message error: %s", exc)
@@ -785,11 +810,6 @@ def _process_wa_message(payload: dict):
 
 
 def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str | None, sender_jid: str | None = None):
-    """
-    Procesa con IA el contenido recibido por WA, publica en WordPress
-    y difunde a grupos y canales de WhatsApp.
-    Si source_url está presente, scrapea el artículo de esa URL.
-    """
     from app.models import GroqSettings
     from app.crypto import decrypt_value
 
@@ -800,23 +820,25 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
 
     api_key = decrypt_value(groq_cfg.encrypted_api_key)
 
-    # Obtener categorías reales de WordPress para que la IA elija la correcta
     from app.models import WordPressSettings as _WPSettings
     from app.worker import _fetch_wp_category_names
-    wp_sites_for_cats = db.query(_WPSettings).filter(_WPSettings.is_active == True).all()
+    wp_all = db.query(_WPSettings).filter(_WPSettings.is_active == True).all()
+    # Filtrar WP sites según la asignación de la cuenta WA
+    if settings.wordpress_settings_id:
+        wp_sites_for_cats = [w for w in wp_all if w.id == settings.wordpress_settings_id]
+    else:
+        wp_sites_for_cats = wp_all
     wp_categories = _fetch_wp_category_names(wp_sites_for_cats)
 
     article_body = text
     scraped_image_url = None
 
-    # Si el mensaje tiene una URL: scrapear el artículo completo
     if source_url:
         log.info("WA: URL detectada — scrapeando %s", source_url)
         try:
             from app.services.rss_service import scrape_full_article
             scraped_text, scraped_image_url, _, _ = scrape_full_article(source_url)
             if scraped_text and len(scraped_text) > 200:
-                # Limpiar encoding corrupto, luego ruido del scraping
                 article_body = _clean_scrape_noise(_sanitize_text(scraped_text))
                 log.info("WA: artículo scrapeado y limpio (%d chars)", len(article_body))
             else:
@@ -826,7 +848,6 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
             log.warning("WA: no se pudo scrapear %s: %s", source_url, exc)
             article_body = ""
 
-        # Si el scraping no dio contenido suficiente, notificar y abortar
         if len(article_body) < 300:
             log.warning("WA: contenido insuficiente tras scraping — abortando")
             if sender_jid:
@@ -839,14 +860,9 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
                 )
             return
 
-    # Procesar con IA
-    # Para URLs: subject vacío → la IA genera el título desde el contenido
     if source_url:
         subject = ""
     else:
-        # Usar la primera línea significativa del contenido como hint de título.
-        # Evita que caption cortos ("Mirá esto") o metadata de OCR ("La imagen muestra...")
-        # contaminen el título generado.
         first_line = next(
             (l.strip() for l in article_body.splitlines()
              if len(l.strip()) > 20 and not l.strip().lower().startswith(("la imagen", "el texto", "en la imagen"))),
@@ -877,11 +893,9 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
     log.info("WA: IA generó — %s", titulo)
     _log_db(db, "INFO", f"[WA] IA procesó: {titulo}")
 
-    # Publicar en WordPress (sin el texto de cierre de WA)
     try:
         from app.worker import _publish_ai_result
-        from app.models import WordPressSettings as _WPSettings
-        wp_sites = db.query(_WPSettings).filter(_WPSettings.is_active == True).all()
+        wp_sites = wp_sites_for_cats
         if wp_sites:
             count = _publish_ai_result(db, ai_result, wp_sites,
                                        image_url=scraped_image_url, source_name="WhatsApp",
@@ -898,7 +912,6 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
         log.warning("WA → WordPress error: %s", _exc)
         _log_db(db, "ERROR", f"[WA] Error publicando en WordPress: {_exc}")
 
-    # Difundir a grupos y canales (el cierre usa la URL del sitio WordPress)
     _broadcast_whatsapp(db, settings, ai_result, media_data, scraped_image_url)
 
 
@@ -907,39 +920,39 @@ def _broadcast_whatsapp(
     img_payload=None,
     fallback_image_url: str | None = None,
 ):
-    """Envía la noticia completa a los grupos de WA. Cierra con el sitio WordPress."""
     if not settings.broadcast_enabled:
         log.info("WA broadcast: difusión deshabilitada")
         _log_db(db, "WARNING", "[WA] Broadcast deshabilitado — activalo en Configuración → WhatsApp")
         return
 
-    groups = db.query(WhatsAppGroup).filter(WhatsAppGroup.enabled == True).all()
+    groups = db.query(WhatsAppGroup).filter(
+        WhatsAppGroup.enabled == True,
+        WhatsAppGroup.whatsapp_settings_id == settings.id,
+    ).all()
     if not groups:
-        log.info("WA broadcast: no hay grupos activos configurados")
+        log.info("WA broadcast: no hay grupos activos para esta cuenta")
         _log_db(db, "WARNING", "[WA] No hay grupos activos — agregá grupos en Configuración → WhatsApp")
         return
 
     from app.services.whatsapp_service import send_text, send_image_base64, send_image
 
-    # Título limpio: sin saltos de línea (rompen el bold en WhatsApp)
     title = re.sub(r'\s+', ' ', ai_result.get("title", "")).strip()
     content_html = ai_result.get("content", "")
     summary = ai_result.get("summary", "")
-
-    # Cuerpo: artículo completo en texto plano
     body = _html_to_plain(content_html, max_chars=3000) if content_html else summary
 
-    # URL del sitio WordPress como cierre (sin link externo a la fuente)
     site_url = ""
     try:
         from app.models import WordPressSettings
-        wp_cfg = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).first()
+        if settings.wordpress_settings_id:
+            wp_cfg = db.query(WordPressSettings).filter(WordPressSettings.id == settings.wordpress_settings_id).first()
+        else:
+            wp_cfg = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).first()
         if wp_cfg:
             site_url = wp_cfg.site_url.rstrip("/")
     except Exception:
         pass
 
-    # Sanitizar encoding antes de enviar (elimina ◆ U+FFFD y chars corruptos)
     title = _sanitize_text(title)
     body = _sanitize_text(body)
 
@@ -948,7 +961,6 @@ def _broadcast_whatsapp(
     if domain:
         msg_text += f"\n\nTodas las noticias en {domain}"
 
-    # Descargar imagen scrapeada una sola vez para reutilizarla en grupos y canales
     scraped_img_bytes: bytes | None = None
     scraped_img_mime: str = "image/jpeg"
     if fallback_image_url:
@@ -966,26 +978,22 @@ def _broadcast_whatsapp(
 
     def _send_to_jid(jid: str, label: str):
         sent = False
-        # 1. Imagen adjunta recibida (bytes)
         if img_payload:
             img_bytes, _img_name, img_mime = img_payload
             sent = send_image_base64(
                 settings.evolution_api_url, settings.evolution_api_key,
                 settings.instance_name, jid, img_bytes, img_mime, msg_text,
             )
-        # 2. Imagen scrapeada (descargada una vez arriba)
         if not sent and scraped_img_bytes:
             sent = send_image_base64(
                 settings.evolution_api_url, settings.evolution_api_key,
                 settings.instance_name, jid, scraped_img_bytes, scraped_img_mime, msg_text,
             )
-        # 3. Imagen por URL directa (último recurso)
         if not sent and fallback_image_url:
             sent = send_image(
                 settings.evolution_api_url, settings.evolution_api_key,
                 settings.instance_name, jid, fallback_image_url, msg_text,
             )
-        # 4. Solo texto
         if not sent:
             sent = send_text(
                 settings.evolution_api_url, settings.evolution_api_key,
@@ -1000,8 +1008,10 @@ def _broadcast_whatsapp(
     for g in groups:
         _send_to_jid(g.jid, g.name)
 
-    # Difundir a canales de WhatsApp configurados
-    channels = db.query(WhatsAppChannel).filter(WhatsAppChannel.enabled == True).all()
+    channels = db.query(WhatsAppChannel).filter(
+        WhatsAppChannel.enabled == True,
+        WhatsAppChannel.whatsapp_settings_id == settings.id,
+    ).all()
     if channels:
         log.info("WA broadcast: enviando a %d canal(es)", len(channels))
         for ch in channels:

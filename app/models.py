@@ -210,16 +210,24 @@ class WhatsAppSettings(Base):
     __tablename__ = "whatsapp_settings"
 
     id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), default="Principal")
     evolution_api_url = Column(String(300), default="http://localhost:8080")
     evolution_api_key = Column(String(300), default="")
     instance_name = Column(String(100), default="botnews")
     enabled = Column(Boolean, default=False)
-    # Números autorizados para enviar noticias (CSV, formato internacional sin +)
     authorized_numbers = Column(Text, default="")
     broadcast_enabled = Column(Boolean, default=False)
     broadcast_template = Column(Text, default="*{title}*\n\n{summary}\n\n{url}")
+    # WordPress destino: NULL = publicar en todos los sitios activos
+    wordpress_settings_id = Column(
+        Integer, ForeignKey("wordpress_settings.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    wordpress_settings = relationship("WordPressSettings", foreign_keys=[wordpress_settings_id])
+    groups = relationship("WhatsAppGroup", back_populates="whatsapp_settings", cascade="all, delete-orphan")
+    channels = relationship("WhatsAppChannel", back_populates="whatsapp_settings", cascade="all, delete-orphan")
 
 
 class WhatsAppGroup(Base):
@@ -229,12 +237,15 @@ class WhatsAppGroup(Base):
     jid = Column(String(200), unique=True, nullable=False)   # 1234567890-123@g.us
     name = Column(String(200), nullable=False)
     enabled = Column(Boolean, default=True)
-    # WordPress destino: NULL = recibe difusión de todos los sitios activos
+    whatsapp_settings_id = Column(
+        Integer, ForeignKey("whatsapp_settings.id", ondelete="CASCADE"), nullable=True
+    )
     wordpress_settings_id = Column(
         Integer, ForeignKey("wordpress_settings.id", ondelete="SET NULL"), nullable=True
     )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    whatsapp_settings = relationship("WhatsAppSettings", back_populates="groups", foreign_keys=[whatsapp_settings_id])
     wordpress_settings = relationship("WordPressSettings", foreign_keys=[wordpress_settings_id])
 
 
@@ -245,4 +256,9 @@ class WhatsAppChannel(Base):
     jid = Column(String(200), unique=True, nullable=False)   # 120363XXXXXXXXXX@newsletter
     name = Column(String(200), nullable=False)
     enabled = Column(Boolean, default=True)
+    whatsapp_settings_id = Column(
+        Integer, ForeignKey("whatsapp_settings.id", ondelete="CASCADE"), nullable=True
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    whatsapp_settings = relationship("WhatsAppSettings", back_populates="channels", foreign_keys=[whatsapp_settings_id])
