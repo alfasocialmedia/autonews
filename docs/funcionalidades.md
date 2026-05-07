@@ -213,12 +213,56 @@ El sistema puede publicar en **múltiples sitios WordPress simultáneamente**. L
 
 ## 7. Difusión por WhatsApp
 
-Tras publicar exitosamente en WordPress (primer sitio), se envía una notificación a grupos de WhatsApp configurados.
+Integración con **Evolution API** para recibir noticias y difundir artículos publicados.
 
-- Integración con **Evolution API**.
-- Plantilla de mensaje configurable: `{title}`, `{summary}`, `{url}`.
-- Difusión a múltiples grupos con JIDs configurados.
-- Solo se ejecuta si la difusión está habilitada en la configuración.
+### 7.1 Múltiples cuentas
+
+El sistema soporta **múltiples cuentas de WhatsApp simultáneas**, cada una con su propio número, instancia en Evolution API y configuración independiente.
+
+Cada cuenta tiene:
+
+- **Nombre descriptivo** (para identificarla en el panel)
+- **Instancia de Evolution API** (nombre único por número, ej: `botnews`, `botnews2`)
+- **WordPress destino**: si se asigna un sitio específico, la cuenta solo publica y recibe noticias de ese sitio. Si queda vacío, opera con todos los sitios activos.
+- **Grupos y canales** propios (no se comparten entre cuentas)
+- **Números autorizados** para enviar contenido (vacío = acepta cualquier número)
+- **Difusión** habilitada/deshabilitada de forma independiente
+
+### 7.2 Enrutamiento por instancia
+
+El webhook `/webhook/whatsapp` es único para todas las cuentas. Evolution API incluye el campo `instance` en el payload, y el sistema enruta automáticamente al `WhatsAppSettings` cuyo `instance_name` coincide.
+
+### 7.3 Recepción de noticias (inbound)
+
+Cuando un número autorizado envía un mensaje al número conectado:
+
+| Tipo de contenido                    | Procesamiento                                                          |
+| ------------------------------------ | ---------------------------------------------------------------------- |
+| Texto largo (≥ 80 chars)             | Procesado directamente con IA                                          |
+| URL                                  | Se scrapea el artículo y se procesa con IA                             |
+| Imagen                               | Se descarga; si el caption es corto, se extrae texto con OCR (visión)  |
+| Audio                                | Se transcribe con Whisper (Groq) y se procesa como texto               |
+| Texto + imagen (mensajes separados)  | Se combinan en un buffer de 15 segundos antes de procesar              |
+
+Si el scraping de una URL falla o produce menos de 300 caracteres, se notifica al remitente por WhatsApp.
+
+### 7.4 Difusión outbound
+
+Tras publicar en WordPress se envía el artículo a los grupos de cada cuenta:
+
+- Se itera por cada cuenta con **difusión activa**.
+- Si la cuenta tiene **WordPress destino** asignado, solo difunde artículos de ese sitio.
+- Dentro de cada cuenta, los grupos pueden tener a su vez un **WordPress destino** propio (filtro adicional).
+- **Plantilla configurable** por cuenta: `{title}`, `{summary}`, `{url}`.
+- Se envía con imagen si hay `og:image` disponible (base64 o URL directa como fallback).
+- También se difunde a **canales de WhatsApp** (newsletters) configurados en la misma cuenta.
+
+### 7.5 Grupos y canales
+
+- Máximo **5 grupos** y **5 canales** por cuenta.
+- Se pueden cargar desde Evolution API (botón "Cargar de WA") o agregar manualmente con el JID.
+- Cada grupo tiene su propio **WordPress destino** (filtro de qué noticias recibe).
+- Los canales reciben el mismo mensaje que los grupos.
 
 ---
 
@@ -298,7 +342,8 @@ Desde la sección RSS se puede forzar la publicación inmediata de cualquier art
 ## Historial de cambios relevantes
 
 | Fecha | Cambio |
-|-------|--------|
+| ----- | ------ |
+| 2026-05-07 | Soporte multi-cuenta WhatsApp: múltiples números, cada uno con su instancia, grupos, canales y WordPress destino independientes |
 | 2026-05-05 | Documentación de configuración de Instagram Graph API (`docs/instagram-graph-api.md`) |
 | 2026-05-04 | Soporte para imágenes inline y embeds de YouTube/Twitter/Instagram/Facebook extraídos del artículo scrapeado e inyectados como bloques Gutenberg |
 | 2026-05 | Reintentar con tokens asequibles cuando OpenRouter devuelve error 402 |
