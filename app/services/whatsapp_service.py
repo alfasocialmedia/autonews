@@ -102,33 +102,54 @@ def get_status(url: str, api_key: str, instance_name: str) -> dict:
         return {"state": "error", "error": str(exc)}
 
 
-def set_webhook(url: str, api_key: str, instance_name: str, webhook_url: str) -> bool:
-    try:
-        r = requests.post(
-            f"{url}/webhook/set/{instance_name}",
-            headers=_headers(api_key),
-            json={
-                "webhook": {
-                    "enabled": True,
-                    "url": webhook_url,
-                    "webhookByEvents": False,
-                    "webhookBase64": False,
-                    "events": [
-                        "MESSAGES_UPSERT",
-                        "MESSAGES_UPDATE",
-                        "CONNECTION_UPDATE",
-                        "CHATS_UPSERT",
-                        "CHATS_UPDATE",
-                    ],
-                }
-            },
-            timeout=TIMEOUT, verify=VERIFY_SSL,
-        )
-        r.raise_for_status()
-        return True
-    except Exception as exc:
-        log.warning("set_webhook error: %s", exc)
-        return False
+_WEBHOOK_EVENTS = [
+    "MESSAGES_UPSERT",
+    "MESSAGES_UPDATE",
+    "CONNECTION_UPDATE",
+    "CHATS_UPSERT",
+    "CHATS_UPDATE",
+]
+
+
+def set_webhook(url: str, api_key: str, instance_name: str, webhook_url: str) -> tuple[bool, str]:
+    """Devuelve (ok, mensaje_error_o_exito).
+    Intenta primero el formato v2 con wrapper 'webhook', luego sin wrapper (v1/v2 alternativo)."""
+    endpoint = f"{url}/webhook/set/{instance_name}"
+    headers = _headers(api_key)
+
+    bodies = [
+        # Formato v2 con wrapper
+        {"webhook": {
+            "enabled": True,
+            "url": webhook_url,
+            "webhookByEvents": False,
+            "webhookBase64": False,
+            "events": _WEBHOOK_EVENTS,
+        }},
+        # Formato v1/alternativo sin wrapper
+        {
+            "enabled": True,
+            "url": webhook_url,
+            "webhookByEvents": False,
+            "webhookBase64": False,
+            "events": _WEBHOOK_EVENTS,
+        },
+    ]
+
+    last_error = ""
+    for body in bodies:
+        try:
+            r = requests.post(endpoint, headers=headers, json=body, timeout=TIMEOUT, verify=VERIFY_SSL)
+            if r.ok:
+                log.info("set_webhook OK para %s", instance_name)
+                return True, ""
+            last_error = f"HTTP {r.status_code}: {r.text[:300]}"
+            log.warning("set_webhook intento fallido: %s", last_error)
+        except Exception as exc:
+            last_error = str(exc)
+            log.warning("set_webhook error: %s", exc)
+
+    return False, last_error
 
 
 # ── Grupos ─────────────────────────────────────────────────────────────────────

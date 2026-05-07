@@ -323,10 +323,10 @@ async def configure_webhook(
             return JSONResponse({"error": "Cuenta no encontrada"}, status_code=404)
         webhook_url = webhook_base_url.rstrip("/") + "/webhook/whatsapp"
         from app.services.whatsapp_service import set_webhook
-        ok = set_webhook(acc.evolution_api_url, acc.evolution_api_key, acc.instance_name, webhook_url)
+        ok, err = set_webhook(acc.evolution_api_url, acc.evolution_api_key, acc.instance_name, webhook_url)
         if ok:
             return JSONResponse({"ok": True, "webhook_url": webhook_url})
-        return JSONResponse({"error": "No se pudo configurar el webhook"}, status_code=500)
+        return JSONResponse({"error": f"No se pudo configurar el webhook — {err}"}, status_code=500)
     except Exception as exc:
         log.error("configure_webhook error: %s", exc)
         return JSONResponse({"error": str(exc)}, status_code=500)
