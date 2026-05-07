@@ -35,6 +35,14 @@
         {% else %}
         <span class="badge bg-secondary">Todos los WP</span>
         {% endif %}
+        {% set pm = acc.publish_mode or 'both' %}
+        {% if pm == 'wordpress_only' %}
+        <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1" title="Solo publica en WordPress"><i class="bi bi-wordpress me-1"></i>Solo WP</span>
+        {% elif pm == 'whatsapp_only' %}
+        <span class="badge bg-success-subtle text-success border border-success-subtle ms-1" title="Solo difunde por WhatsApp"><i class="bi bi-whatsapp me-1"></i>Solo WA</span>
+        {% else %}
+        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1" title="Publica en WordPress y WhatsApp"><i class="bi bi-arrow-left-right me-1"></i>Ambos</span>
+        {% endif %}
         <span class="badge bg-{% if acc.enabled %}success{% else %}secondary{% endif %} ms-1">
           {% if acc.enabled %}Activa{% else %}Inactiva{% endif %}
         </span>
@@ -78,6 +86,31 @@
                 </option>
                 {% endfor %}
               </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">Destino al recibir mensajes</label>
+              {% set pm = acc.publish_mode or 'both' %}
+              <div class="btn-group w-100" role="group" aria-label="Destino de publicación">
+                <input type="radio" class="btn-check" name="publish_mode"
+                       id="pm-both-{{ acc.id }}" value="both"
+                       {% if pm == 'both' %}checked{% endif %}>
+                <label class="btn btn-outline-secondary btn-sm" for="pm-both-{{ acc.id }}">
+                  <i class="bi bi-arrow-left-right me-1"></i>Ambos
+                </label>
+                <input type="radio" class="btn-check" name="publish_mode"
+                       id="pm-wp-{{ acc.id }}" value="wordpress_only"
+                       {% if pm == 'wordpress_only' %}checked{% endif %}>
+                <label class="btn btn-outline-primary btn-sm" for="pm-wp-{{ acc.id }}">
+                  <i class="bi bi-globe me-1"></i>Solo WordPress
+                </label>
+                <input type="radio" class="btn-check" name="publish_mode"
+                       id="pm-wa-{{ acc.id }}" value="whatsapp_only"
+                       {% if pm == 'whatsapp_only' %}checked{% endif %}>
+                <label class="btn btn-outline-success btn-sm" for="pm-wa-{{ acc.id }}">
+                  <i class="bi bi-whatsapp me-1"></i>Solo WhatsApp
+                </label>
+              </div>
+              <div class="form-text">Qué hacer con los mensajes recibidos: publicar en WordPress, difundir en grupos, o ambos.</div>
             </div>
             <div class="mb-3">
               <label class="form-label fw-semibold small">URL de Evolution API</label>
@@ -417,9 +450,27 @@
             <input class="form-check-input" type="checkbox" name="enabled" id="addEnabled">
             <label class="form-check-label" for="addEnabled">Recepción activa</label>
           </div>
-          <div class="form-check form-switch">
+          <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" name="broadcast_enabled" id="addBroadcast">
             <label class="form-check-label" for="addBroadcast">Difusión activa</label>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Destino al recibir mensajes</label>
+            <div class="btn-group w-100" role="group" aria-label="Destino de publicación">
+              <input type="radio" class="btn-check" name="publish_mode" id="addPmBoth" value="both" checked>
+              <label class="btn btn-outline-secondary btn-sm" for="addPmBoth">
+                <i class="bi bi-arrow-left-right me-1"></i>Ambos
+              </label>
+              <input type="radio" class="btn-check" name="publish_mode" id="addPmWp" value="wordpress_only">
+              <label class="btn btn-outline-primary btn-sm" for="addPmWp">
+                <i class="bi bi-globe me-1"></i>Solo WordPress
+              </label>
+              <input type="radio" class="btn-check" name="publish_mode" id="addPmWa" value="whatsapp_only">
+              <label class="btn btn-outline-success btn-sm" for="addPmWa">
+                <i class="bi bi-whatsapp me-1"></i>Solo WhatsApp
+              </label>
+            </div>
+            <div class="form-text">Qué hacer con los mensajes recibidos por esta cuenta.</div>
           </div>
         </div>
         <div class="modal-footer">

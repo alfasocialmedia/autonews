@@ -161,6 +161,7 @@ async def add_whatsapp_account(
     broadcast_enabled: str = Form("off"),
     broadcast_template: str = Form(""),
     wordpress_settings_id: str = Form(""),
+    publish_mode: str = Form("both"),
 ):
     user = _require_admin(request, db)
     if not user:
@@ -176,6 +177,7 @@ async def add_whatsapp_account(
         broadcast_enabled=broadcast_enabled == "on",
         broadcast_template=broadcast_template.strip() or "*{title}*\n\n{summary}\n\n{url}",
         wordpress_settings_id=int(wordpress_settings_id) if wordpress_settings_id.strip().isdigit() else None,
+        publish_mode=publish_mode if publish_mode in ("both", "wordpress_only", "whatsapp_only") else "both",
     )
     db.add(acc)
     db.commit()
@@ -196,6 +198,7 @@ async def edit_whatsapp_account(
     broadcast_enabled: str = Form("off"),
     broadcast_template: str = Form(""),
     wordpress_settings_id: str = Form(""),
+    publish_mode: str = Form("both"),
 ):
     user = _require_admin(request, db)
     if not user:
@@ -215,6 +218,7 @@ async def edit_whatsapp_account(
     if broadcast_template.strip():
         acc.broadcast_template = broadcast_template.strip()
     acc.wordpress_settings_id = int(wordpress_settings_id) if wordpress_settings_id.strip().isdigit() else None
+    acc.publish_mode = publish_mode if publish_mode in ("both", "wordpress_only", "whatsapp_only") else "both"
     db.commit()
     return RedirectResponse("/settings/whatsapp?saved=1", status_code=302)
 
@@ -895,26 +899,34 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
     log.info("WA: IA generó — %s", titulo)
     _log_db(db, "INFO", f"[WA] IA procesó: {titulo}")
 
-    try:
-        from app.worker import _publish_ai_result
-        wp_sites = wp_sites_for_cats
-        if wp_sites:
-            count = _publish_ai_result(db, ai_result, wp_sites,
-                                       image_url=scraped_image_url, source_name="WhatsApp",
-                                       image_bytes_payload=media_data)
-            log.info("WA → WordPress: publicado en %d sitio(s)", count)
-            if count > 0:
-                _log_db(db, "INFO", f"[WA] Publicado en WordPress: {titulo}")
-            else:
-                _log_db(db, "WARNING", f"[WA] No se pudo publicar en WordPress: {titulo}")
-        else:
-            log.info("WA → WordPress: sin sitios activos configurados")
-            _log_db(db, "WARNING", "[WA] No hay sitios WordPress activos configurados")
-    except Exception as _exc:
-        log.warning("WA → WordPress error: %s", _exc)
-        _log_db(db, "ERROR", f"[WA] Error publicando en WordPress: {_exc}")
+    publish_mode = getattr(settings, "publish_mode", "both") or "both"
 
-    _broadcast_whatsapp(db, settings, ai_result, media_data, scraped_image_url)
+    if publish_mode in ("both", "wordpress_only"):
+        try:
+            from app.worker import _publish_ai_result
+            wp_sites = wp_sites_for_cats
+            if wp_sites:
+                count = _publish_ai_result(db, ai_result, wp_sites,
+                                           image_url=scraped_image_url, source_name="WhatsApp",
+                                           image_bytes_payload=media_data)
+                log.info("WA → WordPress: publicado en %d sitio(s)", count)
+                if count > 0:
+                    _log_db(db, "INFO", f"[WA] Publicado en WordPress: {titulo}")
+                else:
+                    _log_db(db, "WARNING", f"[WA] No se pudo publicar en WordPress: {titulo}")
+            else:
+                log.info("WA → WordPress: sin sitios activos configurados")
+                _log_db(db, "WARNING", "[WA] No hay sitios WordPress activos configurados")
+        except Exception as _exc:
+            log.warning("WA → WordPress error: %s", _exc)
+            _log_db(db, "ERROR", f"[WA] Error publicando en WordPress: {_exc}")
+    else:
+        log.info("WA → WordPress: omitido (publish_mode=%s)", publish_mode)
+
+    if publish_mode in ("both", "whatsapp_only"):
+        _broadcast_whatsapp(db, settings, ai_result, media_data, scraped_image_url)
+    else:
+        log.info("WA broadcast: omitido (publish_mode=%s)", publish_mode)
 
 
 def _broadcast_whatsapp(

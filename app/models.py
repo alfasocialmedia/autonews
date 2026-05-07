@@ -218,6 +218,8 @@ class WhatsAppSettings(Base):
     authorized_numbers = Column(Text, default="")
     broadcast_enabled = Column(Boolean, default=False)
     broadcast_template = Column(Text, default="*{title}*\n\n{summary}\n\n{url}")
+    # "both" | "wordpress_only" | "whatsapp_only"
+    publish_mode = Column(String(20), default="both")
     # WordPress destino: NULL = publicar en todos los sitios activos
     wordpress_settings_id = Column(
         Integer, ForeignKey("wordpress_settings.id", ondelete="SET NULL"), nullable=True

@@ -139,6 +139,8 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE whatsapp_settings ADD COLUMN name VARCHAR(100) DEFAULT 'Principal'"))
             if "wordpress_settings_id" not in cols:
                 conn.execute(text("ALTER TABLE whatsapp_settings ADD COLUMN wordpress_settings_id INTEGER REFERENCES wordpress_settings(id) ON DELETE SET NULL"))
+            if "publish_mode" not in cols:
+                conn.execute(text("ALTER TABLE whatsapp_settings ADD COLUMN publish_mode VARCHAR(20) DEFAULT 'both'"))
         if "whatsapp_groups" in tables:
             cols = [c["name"] for c in inspector.get_columns("whatsapp_groups")]
             if "wordpress_settings_id" not in cols:
