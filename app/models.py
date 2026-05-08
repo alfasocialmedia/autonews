@@ -115,11 +115,15 @@ class Post(Base):
     category = Column(String(100), nullable=True)
     status = Column(String(50), default="draft")
     wp_link = Column(String(600), nullable=True)
-    source_name = Column(String(200), nullable=True)  # nombre del feed RSS o cuenta email
+    source_name = Column(String(200), nullable=True)
+    wordpress_settings_id = Column(
+        Integer, ForeignKey("wordpress_settings.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     processed_email = relationship("ProcessedEmail", back_populates="posts")
+    wordpress_settings = relationship("WordPressSettings", foreign_keys=[wordpress_settings_id])
 
 
 class GoogleDriveSettings(Base):

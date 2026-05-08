@@ -159,6 +159,8 @@ def _migrate_columns():
             cols = [c["name"] for c in inspector.get_columns("posts")]
             if "source_name" not in cols:
                 conn.execute(text("ALTER TABLE posts ADD COLUMN source_name VARCHAR(200)"))
+            if "wordpress_settings_id" not in cols:
+                conn.execute(text("ALTER TABLE posts ADD COLUMN wordpress_settings_id INTEGER REFERENCES wordpress_settings(id) ON DELETE SET NULL"))
         if "groq_settings" in tables:
             cols = [c["name"] for c in inspector.get_columns("groq_settings")]
             if "provider" not in cols:

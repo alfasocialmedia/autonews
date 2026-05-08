@@ -346,6 +346,7 @@ def process_emails():
                                         category=ai_result.get("category", ""),
                                         status=wp_cfg.default_status,
                                         wp_link=wp_post.get("link", ""),
+                                        wordpress_settings_id=wp_cfg.id,
                                     )
                                 )
                                 db.commit()
@@ -807,6 +808,7 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
                     status=wp_cfg.default_status,
                     wp_link=wp_post.get("link", ""),
                     source_name=source_name,
+                    wordpress_settings_id=wp_cfg.id,
                 )
             )
             db.commit()
