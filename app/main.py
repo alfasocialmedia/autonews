@@ -161,6 +161,17 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE posts ADD COLUMN source_name VARCHAR(200)"))
             if "wordpress_settings_id" not in cols:
                 conn.execute(text("ALTER TABLE posts ADD COLUMN wordpress_settings_id INTEGER REFERENCES wordpress_settings(id) ON DELETE SET NULL"))
+            # Backfill: asignar sitio WP a posts existentes cruzando wp_link con site_url
+            if "wordpress_settings" in tables:
+                conn.execute(text("""
+                    UPDATE posts SET wordpress_settings_id = (
+                        SELECT ws.id FROM wordpress_settings ws
+                        WHERE posts.wp_link LIKE ws.site_url || '%'
+                        ORDER BY LENGTH(ws.site_url) DESC
+                        LIMIT 1
+                    ) WHERE wordpress_settings_id IS NULL
+                      AND wp_link IS NOT NULL AND wp_link != ''
+                """))
         if "groq_settings" in tables:
             cols = [c["name"] for c in inspector.get_columns("groq_settings")]
             if "provider" not in cols:
