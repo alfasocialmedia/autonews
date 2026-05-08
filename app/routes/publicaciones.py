@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import re
 
+from __future__ import annotations
+
+import re
+from urllib.parse import urlparse
+
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -67,9 +72,28 @@ async def publicaciones_list(
 
     wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.name).all()
 
-    # Previews de texto plano
+    # Mapa dominio → nombre de sitio para el fallback visual
+    _domain_to_name: dict[str, str] = {}
+    for s in wp_sites:
+        try:
+            d = urlparse(s.site_url).netloc.lower().lstrip("www.")
+            _domain_to_name[d] = s.name
+        except Exception:
+            pass
+
+    # Previews de texto plano + nombre del medio para mostrar
     for p in posts:
         p._preview = _strip_html(p.content)[:220] if p.content else ""
+        if p.wordpress_settings:
+            p._site_name = p.wordpress_settings.name
+        elif p.wp_link:
+            try:
+                d = urlparse(p.wp_link).netloc.lower().lstrip("www.")
+                p._site_name = _domain_to_name.get(d, urlparse(p.wp_link).netloc)
+            except Exception:
+                p._site_name = ""
+        else:
+            p._site_name = ""
 
     return templates.TemplateResponse(
         "publicaciones.html",
