@@ -619,7 +619,9 @@ def _log_db(db, level: str, message: str):
 
 # ── Buffer de mensajes multi-parte ────────────────────────────────────────────
 
-_BUFFER_SECS = 15
+_BUFFER_SECS = 15        # Espera inicial para mensajes de texto multi-parte
+_BUFFER_QUICK_SECS = 3  # Espera tras texto+imagen para capturar imágenes adicionales
+_MAX_IMAGES = 4          # 1 portada + hasta 3 inline
 
 # key: "{instance_name}:{sender_number}"
 _wa_buffers: dict[str, dict] = {}
@@ -633,13 +635,13 @@ def _flush_wa_buffer(buf_key: str):
         return
 
     text = buf["text"]
-    media_data = buf["media_data"]
+    media_list = buf.get("media_list", [])
     source_url = buf["source_url"]
     jid = buf["jid"]
     instance_name = buf.get("instance_name", "")
     wa_title_hint = buf.get("wa_title_hint", "")
 
-    if not text and not media_data:
+    if not text and not media_list:
         return
 
     from app.database import SessionLocal
@@ -651,7 +653,7 @@ def _flush_wa_buffer(buf_key: str):
             s = db.query(WhatsAppSettings).first()
         if s:
             _publish_whatsapp_news(db, s, text or "Foto compartida vía WhatsApp",
-                                   media_data, source_url, sender_jid=jid,
+                                   media_list, source_url, sender_jid=jid,
                                    wa_title_hint=wa_title_hint)
     except Exception as exc:
         log.error("_flush_wa_buffer error: %s", exc)
@@ -659,7 +661,8 @@ def _flush_wa_buffer(buf_key: str):
         db.close()
 
 
-def _buffer_wa_content(buf_key: str, jid: str, text: str, media_data, source_url: str | None, instance_name: str, wa_title_hint: str = ""):
+def _buffer_wa_content(buf_key: str, jid: str, text: str, media_payload, source_url: str | None, instance_name: str, wa_title_hint: str = ""):
+    """media_payload = (bytes, name, mime) de una sola imagen, o None."""
     with _wa_buf_lock:
         existing = _wa_buffers.get(buf_key)
 
@@ -668,27 +671,32 @@ def _buffer_wa_content(buf_key: str, jid: str, text: str, media_data, source_url
             combined_text = existing["text"] or text
             if existing["text"] and text and text != existing["text"]:
                 combined_text = existing["text"] + "\n\n" + text
-            combined_media = existing["media_data"] or media_data
             combined_url = existing["source_url"] or source_url
             combined_hint = existing.get("wa_title_hint", "") or wa_title_hint
 
-            has_text = bool(combined_text and combined_text.strip())
-            has_media = combined_media is not None
-            if has_text and has_media:
-                del _wa_buffers[buf_key]
-                log.info("WA buffer: texto + imagen listos — procesando de inmediato (%s)", buf_key)
-                t = threading.Thread(
-                    target=_flush_immediately,
-                    args=(buf_key, jid, combined_text, combined_media, combined_url, instance_name, combined_hint),
-                    daemon=True,
-                )
-                t.start()
-                return
+            # Acumular imágenes en la lista (sin superar el máximo)
+            combined_media = list(existing.get("media_list", []))
+            if media_payload and len(combined_media) < _MAX_IMAGES:
+                combined_media.append(media_payload)
 
-            existing.update({"text": combined_text, "media_data": combined_media,
-                             "source_url": combined_url, "ts": time.time(),
-                             "wa_title_hint": combined_hint})
-            timer = threading.Timer(_BUFFER_SECS, _flush_wa_buffer, args=[buf_key])
+            existing.update({
+                "text": combined_text,
+                "media_list": combined_media,
+                "source_url": combined_url,
+                "ts": time.time(),
+                "wa_title_hint": combined_hint,
+            })
+
+            has_text = bool(combined_text and combined_text.strip())
+            has_media = bool(combined_media)
+            if has_text and has_media:
+                # Espera breve para capturar imágenes adicionales del mismo envío
+                delay = _BUFFER_QUICK_SECS
+                log.info("WA buffer: texto+imagen(s) listos, esperando %ds para más imágenes (%s)", delay, buf_key)
+            else:
+                delay = _BUFFER_SECS
+
+            timer = threading.Timer(delay, _flush_wa_buffer, args=[buf_key])
             timer.daemon = True
             existing["timer"] = timer
             timer.start()
@@ -696,32 +704,17 @@ def _buffer_wa_content(buf_key: str, jid: str, text: str, media_data, source_url
             timer = threading.Timer(_BUFFER_SECS, _flush_wa_buffer, args=[buf_key])
             timer.daemon = True
             _wa_buffers[buf_key] = {
-                "text": text, "media_data": media_data,
-                "source_url": source_url, "jid": jid,
+                "text": text,
+                "media_list": [media_payload] if media_payload else [],
+                "source_url": source_url,
+                "jid": jid,
                 "instance_name": instance_name,
-                "timer": timer, "ts": time.time(),
+                "timer": timer,
+                "ts": time.time(),
                 "wa_title_hint": wa_title_hint,
             }
             timer.start()
             log.info("WA buffer: iniciado para %s (espera %ds más mensajes)", buf_key, _BUFFER_SECS)
-
-
-def _flush_immediately(buf_key: str, jid: str, text: str, media_data, source_url: str | None, instance_name: str, wa_title_hint: str = ""):
-    from app.database import SessionLocal
-    db = SessionLocal()
-    try:
-        if instance_name:
-            s = db.query(WhatsAppSettings).filter(WhatsAppSettings.instance_name == instance_name).first()
-        else:
-            s = db.query(WhatsAppSettings).first()
-        if s:
-            _publish_whatsapp_news(db, s, text or "Foto compartida vía WhatsApp",
-                                   media_data, source_url, sender_jid=jid,
-                                   wa_title_hint=wa_title_hint)
-    except Exception as exc:
-        log.error("_flush_immediately error: %s", exc)
-    finally:
-        db.close()
 
 
 # ── Procesamiento del webhook ──────────────────────────────────────────────────
@@ -816,8 +809,8 @@ def _process_wa_message(payload: dict):
                     log.info("WA: transcripción (%d chars): %s…", len(audio_transcript), audio_transcript[:80])
             if not audio_transcript:
                 audio_transcript = text or "Nota de voz recibida por WhatsApp"
-            _publish_whatsapp_news(db, s, audio_transcript, None, None, sender_jid=msg["jid"])
-            return  # Audio no lleva title_hint
+            _publish_whatsapp_news(db, s, audio_transcript, [], None, sender_jid=msg["jid"])
+            return
 
         final_text = text
         if not final_text and not media_data:
@@ -833,7 +826,8 @@ def _process_wa_message(payload: dict):
             return
 
         if source_url:
-            _publish_whatsapp_news(db, s, final_text, media_data, source_url,
+            _publish_whatsapp_news(db, s, final_text,
+                                   [media_data] if media_data else [], source_url,
                                    sender_jid=msg["jid"], wa_title_hint=wa_title_hint)
             return
 
@@ -851,7 +845,7 @@ def _process_wa_message(payload: dict):
         db.close()
 
 
-def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str | None, sender_jid: str | None = None, wa_title_hint: str = ""):
+def _publish_whatsapp_news(db, settings, text: str, media_list: list, source_url: str | None, sender_jid: str | None = None, wa_title_hint: str = ""):
     from app.models import GroqSettings
     from app.crypto import decrypt_value
 
@@ -955,14 +949,20 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
 
     publish_mode = getattr(settings, "publish_mode", "both") or "both"
 
+    featured_media = media_list[0] if media_list else None
+    extra_media = media_list[1:] if len(media_list) > 1 else None
+
     if publish_mode in ("both", "wordpress_only"):
         try:
             from app.worker import _publish_ai_result
             wp_sites = wp_sites_for_cats
             if wp_sites:
+                if extra_media:
+                    log.info("WA → WordPress: %d imagen(es) adicionales se incluirán en la nota", len(extra_media))
                 count = _publish_ai_result(db, ai_result, wp_sites,
                                            image_url=scraped_image_url, source_name="WhatsApp",
-                                           image_bytes_payload=media_data)
+                                           image_bytes_payload=featured_media,
+                                           extra_image_payloads=extra_media)
                 log.info("WA → WordPress: publicado en %d sitio(s)", count)
                 if count > 0:
                     _log_db(db, "INFO", f"[WA] Publicado en WordPress: {titulo}")
@@ -978,7 +978,7 @@ def _publish_whatsapp_news(db, settings, text: str, media_data, source_url: str 
         log.info("WA → WordPress: omitido (publish_mode=%s)", publish_mode)
 
     if publish_mode in ("both", "whatsapp_only"):
-        _broadcast_whatsapp(db, settings, ai_result, media_data, scraped_image_url)
+        _broadcast_whatsapp(db, settings, ai_result, featured_media, scraped_image_url)
     else:
         log.info("WA broadcast: omitido (publish_mode=%s)", publish_mode)
 

@@ -707,7 +707,7 @@ def _prepend_audio(
     return content
 
 
-def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = None, source_name: str | None = None, inline_images: list | None = None, embeds: list | None = None, image_bytes_payload: tuple | None = None):
+def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = None, source_name: str | None = None, inline_images: list | None = None, embeds: list | None = None, image_bytes_payload: tuple | None = None, extra_image_payloads: list | None = None):
     """Publica un resultado de Groq en todos los sitios WP activos. Devuelve cantidad publicada."""
     published_count = 0
 
@@ -760,6 +760,19 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
             if inline_images:
                 wp_inline_imgs = _upload_inline_images(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, list(inline_images))
                 content = _inject_images_into_content(content, wp_inline_imgs)
+            if extra_image_payloads:
+                extra_wp_urls = []
+                for img_b, img_n, img_m in extra_image_payloads:
+                    try:
+                        res = upload_media(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, img_b, img_n, img_m)
+                        if res:
+                            _, wp_url = res
+                            extra_wp_urls.append(wp_url)
+                            log.info("  🖼 Imagen adicional subida a WP: %s", wp_url[:80])
+                    except Exception as _exc:
+                        log.warning("No se pudo subir imagen extra a %s: %s", wp_cfg.name, _exc)
+                if extra_wp_urls:
+                    content = _inject_images_into_content(content, extra_wp_urls)
             if embeds:
                 embed_blocks = _embeds_to_wp_blocks(embeds)
                 if embed_blocks:
