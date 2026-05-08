@@ -6,11 +6,11 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Post, ProcessedRssItem
+from app.models import Post, ProcessedRssItem, WordPressSettings
 
 router = APIRouter(prefix="/publicaciones")
 templates = Jinja2Templates(directory="app/templates")
@@ -29,6 +29,7 @@ async def publicaciones_list(
     fuente: str = Query(""),   # "rss" | "email" | ""
     categoria: str = Query(""),
     search: str = Query(""),
+    site_id: int = Query(0),
     db: Session = Depends(get_db),
 ):
     user = get_current_user(request, db)
@@ -38,7 +39,7 @@ async def publicaciones_list(
     per_page = 20
     offset = (page - 1) * per_page
 
-    q = db.query(Post).order_by(desc(Post.created_at))
+    q = db.query(Post).options(joinedload(Post.wordpress_settings)).order_by(desc(Post.created_at))
 
     if fuente == "rss":
         q = q.filter(Post.processed_email_id.is_(None))
@@ -51,6 +52,9 @@ async def publicaciones_list(
     if search:
         q = q.filter(Post.title.ilike(f"%{search}%"))
 
+    if site_id:
+        q = q.filter(Post.wordpress_settings_id == site_id)
+
     total = q.count()
     posts = q.offset(offset).limit(per_page).all()
     total_pages = max(1, (total + per_page - 1) // per_page)
@@ -60,6 +64,8 @@ async def publicaciones_list(
         r[0] for r in db.query(Post.category).filter(Post.category.isnot(None)).distinct().all()
         if r[0]
     ]
+
+    wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.name).all()
 
     # Previews de texto plano
     for p in posts:
@@ -78,6 +84,8 @@ async def publicaciones_list(
             "categoria_filter": categoria,
             "search": search,
             "categorias": categorias,
+            "wp_sites": wp_sites,
+            "site_filter": site_id,
         },
     )
 
