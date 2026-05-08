@@ -1,10 +1,6 @@
 from __future__ import annotations
 
 import re
-
-from __future__ import annotations
-
-import re
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -27,11 +23,21 @@ def _strip_html(html: str) -> str:
     return _TAG_RE.sub(" ", html or "").strip()
 
 
+def _normalize_domain(url: str) -> str:
+    try:
+        netloc = urlparse(url).netloc.lower()
+        if netloc.startswith("www."):
+            netloc = netloc[4:]
+        return netloc
+    except Exception:
+        return ""
+
+
 @router.get("/", response_class=HTMLResponse)
 async def publicaciones_list(
     request: Request,
     page: int = Query(1, ge=1),
-    fuente: str = Query(""),   # "rss" | "email" | ""
+    fuente: str = Query(""),
     categoria: str = Query(""),
     search: str = Query(""),
     site_id: int = Query(0),
@@ -64,34 +70,32 @@ async def publicaciones_list(
     posts = q.offset(offset).limit(per_page).all()
     total_pages = max(1, (total + per_page - 1) // per_page)
 
-    # Categorías únicas para el filtro
     categorias = [
         r[0] for r in db.query(Post.category).filter(Post.category.isnot(None)).distinct().all()
         if r[0]
     ]
 
-    wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.name).all()
+    # Todos los sitios WP (activos e inactivos) para el mapa de dominio → nombre
+    all_wp_sites = db.query(WordPressSettings).all()
+    domain_to_name: dict[str, str] = {}
+    domain_to_id: dict[str, int] = {}
+    for s in all_wp_sites:
+        d = _normalize_domain(s.site_url)
+        if d:
+            domain_to_name[d] = s.name
+            domain_to_id[d] = s.id
 
-    # Mapa dominio → nombre de sitio para el fallback visual
-    _domain_to_name: dict[str, str] = {}
-    for s in wp_sites:
-        try:
-            d = urlparse(s.site_url).netloc.lower().lstrip("www.")
-            _domain_to_name[d] = s.name
-        except Exception:
-            pass
+    # Solo los activos para el filtro del desplegable
+    wp_sites = [s for s in all_wp_sites if s.is_active]
+    wp_sites.sort(key=lambda s: s.name or "")
 
-    # Previews de texto plano + nombre del medio para mostrar
     for p in posts:
         p._preview = _strip_html(p.content)[:220] if p.content else ""
         if p.wordpress_settings:
             p._site_name = p.wordpress_settings.name
         elif p.wp_link:
-            try:
-                d = urlparse(p.wp_link).netloc.lower().lstrip("www.")
-                p._site_name = _domain_to_name.get(d, urlparse(p.wp_link).netloc)
-            except Exception:
-                p._site_name = ""
+            d = _normalize_domain(p.wp_link)
+            p._site_name = domain_to_name.get(d, "")
         else:
             p._site_name = ""
 
