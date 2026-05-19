@@ -71,6 +71,7 @@ async def add_email(
     username: str = Form(...),
     password: str = Form(...),
     wp_site_ids: List[str] = Form([]),
+    publish_status: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user = _require_auth(request, db)
@@ -86,6 +87,7 @@ async def add_email(
         username=username,
         encrypted_password=encrypt_value(password),
         wp_site_ids=json.dumps(ids) if ids else None,
+        publish_status=publish_status if publish_status in ("publish", "draft") else None,
     )
     db.add(acc)
     db.commit()
@@ -103,6 +105,7 @@ async def edit_email(
     username: str = Form(...),
     password: str = Form(""),
     wp_site_ids: List[str] = Form([]),
+    publish_status: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user = _require_auth(request, db)
@@ -120,6 +123,7 @@ async def edit_email(
     acc.imap_port = imap_port
     acc.username = username
     acc.wp_site_ids = json.dumps(ids) if ids else None
+    acc.publish_status = publish_status if publish_status in ("publish", "draft") else None
     if password.strip():
         acc.encrypted_password = encrypt_value(password)
     db.commit()

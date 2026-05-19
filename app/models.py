@@ -33,6 +33,8 @@ class EmailAccount(Base):
     is_active = Column(Boolean, default=True)
     # JSON array de IDs: "[1,3]" = solo esos sitios, NULL = todos los activos
     wp_site_ids = Column(Text, nullable=True)
+    # NULL = usar el default_status de cada sitio WordPress
+    publish_status = Column(String(20), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

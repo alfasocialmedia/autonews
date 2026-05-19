@@ -328,13 +328,14 @@ def process_emails():
                                         _email_content,
                                     )
 
+                                post_status = account.publish_status or wp_cfg.default_status
                                 wp_post = create_post(
                                     wp_cfg.site_url,
                                     wp_cfg.api_user,
                                     wp_pwd,
                                     ai_result.get("title", mail_data["subject"]),
                                     _email_content,
-                                    wp_cfg.default_status,
+                                    post_status,
                                     category_ids,
                                     featured_media_id,
                                     excerpt=ai_result.get("summary", ""),
@@ -349,7 +350,7 @@ def process_emails():
                                         title=ai_result.get("title", ""),
                                         content=ai_result.get("content", ""),
                                         category=ai_result.get("category", ""),
-                                        status=wp_cfg.default_status,
+                                        status=post_status,
                                         wp_link=wp_post.get("link", ""),
                                         wordpress_settings_id=wp_cfg.id,
                                     )
