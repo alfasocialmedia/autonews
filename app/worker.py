@@ -23,6 +23,7 @@ from app.models import (
     EmailAccount,
     GoogleDriveSettings,
     GroqSettings,
+    InstagramSettings,
     Log,
     Post,
     ProcessedEmail,
@@ -825,7 +826,123 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
 
         except Exception as exc:
             log.error("Error publicando RSS en %s: %s", wp_cfg.name, exc)
+
+    # Publicar en Instagram una sola vez (independiente de cuántos sitios WP haya)
+    if published_count > 0:
+        try:
+            groq_cfg = db.query(GroqSettings).filter(GroqSettings.is_active == True).first()
+            if groq_cfg:
+                _publish_instagram(
+                    db, ai_result, img_payload,
+                    wp_image_url=image_url or "",
+                    groq_key=decrypt_value(groq_cfg.encrypted_api_key),
+                    groq_model=groq_cfg.model,
+                )
+        except Exception as exc:
+            log.warning("[IG] No se pudo publicar en Instagram: %s", exc)
+
     return published_count
+
+
+def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_url: str, groq_key: str, groq_model: str):
+    """Publica en Instagram si está configurado y activo.
+    Genera imagen 1080×1350 con título+logo, caption con Groq y sube vía Graph API.
+    """
+    try:
+        from app.services.image_template_service import build_instagram_image
+        from app.services.instagram_service import publish_image
+
+        ig = db.query(InstagramSettings).filter(InstagramSettings.is_active == True).first()
+        if not ig or not ig.ig_user_id or not ig.encrypted_access_token:
+            return
+
+        # Verificar límite diario usando logs de Instagram
+        from datetime import date, datetime, timezone as tz
+        today_start = datetime.now(tz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_count = db.query(Log).filter(
+            Log.source == "instagram",
+            Log.level == "INFO",
+            Log.created_at >= today_start,
+        ).count()
+        if today_count >= ig.max_posts_per_day:
+            log.info("[IG] Límite diario alcanzado (%d/%d)", today_count, ig.max_posts_per_day)
+            return
+
+        # Necesitamos bytes de imagen para procesar con Pillow
+        if img_payload:
+            img_data, _, _ = img_payload
+        elif wp_image_url:
+            downloaded = _download_image(wp_image_url)
+            if not downloaded:
+                log.warning("[IG] No se pudo descargar imagen para Instagram")
+                return
+            img_data, _, _ = downloaded
+        else:
+            log.info("[IG] Sin imagen disponible — saltando publicación IG")
+            return
+
+        title = ai_result.get("title", "")
+
+        # Generar imagen 1080×1350 con título y logo
+        ig_image_bytes = build_instagram_image(
+            img_data,
+            title,
+            logo_path=ig.logo_path,
+            logo_position=ig.logo_position or "bottom-right",
+        )
+
+        # Generar caption con Groq
+        caption = _generate_ig_caption(groq_key, groq_model, title, ai_result.get("summary", ""))
+
+        # Subir la imagen procesada al primer sitio WP activo para obtener URL pública
+        wp = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).first()
+        if not wp:
+            log.warning("[IG] No hay sitio WordPress activo para subir imagen de Instagram")
+            return
+
+        wp_pwd = decrypt_value(wp.encrypted_app_password)
+        media_result = upload_media(
+            wp.site_url, wp.api_user, wp_pwd,
+            ig_image_bytes, "instagram_post.jpg", "image/jpeg",
+        )
+        if not media_result:
+            log.warning("[IG] No se pudo subir imagen de Instagram a WordPress")
+            return
+
+        _, public_url = media_result
+        token = decrypt_value(ig.encrypted_access_token)
+        result = publish_image(ig.ig_user_id, token, public_url, caption)
+
+        if result["ok"]:
+            log.info("  📸 [IG] Publicado en Instagram: %s", title[:80])
+            _log_db(db, "INFO", f"[Instagram] Publicado: {title[:120]}", source="instagram")
+        else:
+            log.warning("  ⚠️ [IG] Error publicando en Instagram: %s", result["error"])
+            _log_db(db, "WARN", f"[Instagram] Error: {result['error']}", source="instagram")
+
+    except Exception as exc:
+        log.error("[IG] Excepción en _publish_instagram: %s", exc)
+
+
+def _generate_ig_caption(groq_key: str, groq_model: str, title: str, summary: str) -> str:
+    """Genera un caption corto con hasta 5 hashtags usando Groq."""
+    try:
+        from app.services.groq_service import _get_client
+        client = _get_client(groq_key)
+        prompt = (
+            f"Escribí un caption para Instagram de máximo 150 caracteres para esta noticia. "
+            f"Luego agregá exactamente 5 hashtags relevantes en español. "
+            f"Solo devolvé el caption y los hashtags, sin explicaciones.\n\n"
+            f"Título: {title}\nResumen: {summary}"
+        )
+        resp = client.chat.completions.create(
+            model=groq_model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=200,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception:
+        return f"{title}\n\n#noticias #argentina #informacion #actualidad #hoy"
 
 
 def _broadcast_whatsapp(db, ai_result: dict, wp_url: str, wp_site_id: int | None = None):

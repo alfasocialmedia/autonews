@@ -13,7 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.database import SessionLocal, engine
 from app.models import Base, User
-from app.routes import auth, dashboard, posts, publicaciones, rss, settings, users, whatsapp
+from app.routes import auth, dashboard, instagram, posts, publicaciones, rss, settings, users, whatsapp
 
 
 def _create_default_admin():
@@ -191,6 +191,9 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE groq_settings ADD COLUMN provider VARCHAR(50) DEFAULT 'groq'"))
             if "api_base_url" not in cols:
                 conn.execute(text("ALTER TABLE groq_settings ADD COLUMN api_base_url VARCHAR(300)"))
+        # instagram_settings se crea con create_all; solo aseguramos el directorio de logos
+        import pathlib
+        pathlib.Path("app/static/uploads/logos").mkdir(parents=True, exist_ok=True)
 
 
 @asynccontextmanager
@@ -237,6 +240,7 @@ app.include_router(posts.router)
 app.include_router(publicaciones.router)
 app.include_router(users.router)
 app.include_router(whatsapp.router)
+app.include_router(instagram.router)
 
 
 @app.get("/health")

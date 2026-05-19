@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}Instagram — AutoNews{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+  <div>
+    <h2 class="page-title"><i class="bi bi-instagram me-2 text-danger"></i>Instagram</h2>
+    <span class="text-muted small">Publica automáticamente en Instagram después de cada post en WordPress</span>
+  </div>
+  {% if cfg %}
+  <div class="form-check form-switch mb-0">
+    <input class="form-check-input" type="checkbox" role="switch" id="toggleIG"
+           {% if cfg.is_active %}checked{% endif %} title="Activar / desactivar publicación en Instagram">
+    <label class="form-check-label fw-semibold" for="toggleIG">
+      {% if cfg.is_active %}<span class="text-success">Activo</span>{% else %}<span class="text-muted">Inactivo</span>{% endif %}
+    </label>
+  </div>
+  {% endif %}
+</div>
+
+{% with messages = request.query_params %}
+{% if messages.get('msg') %}
+<div class="alert alert-success alert-dismissible fade show d-flex align-items-center">
+  <i class="bi bi-check-circle-fill me-2"></i>{{ messages.get('msg') | replace('+', ' ') }}
+  <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+</div>
+{% elif messages.get('err') %}
+<div class="alert alert-danger alert-dismissible fade show d-flex align-items-center">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ messages.get('err') | replace('+', ' ') }}
+  <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+</div>
+{% endif %}
+{% endwith %}
+
+<div class="row g-4">
+  <!-- Formulario de configuración -->
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-gear me-2"></i>Configuración</h6>
+      </div>
+      <div class="card-body">
+        <form method="post" action="/settings/instagram/save" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nombre descriptivo</label>
+            <input type="text" name="name" class="form-control"
+                   value="{{ cfg.name if cfg else 'Instagram' }}" placeholder="Ej: Instagram Canal 7">
+          </div>
+
+          <hr class="my-3">
+          <p class="text-muted small mb-3">
+            <i class="bi bi-info-circle me-1"></i>
+            Obtené estos datos siguiendo los pasos del
+            <strong>Panel → Configuración → Instagram → Guía de configuración</strong>.
+          </p>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Instagram Business Account ID</label>
+            <input type="text" name="ig_user_id" class="form-control font-monospace"
+                   value="{{ cfg.ig_user_id if cfg and cfg.ig_user_id else '' }}"
+                   placeholder="17841400000000000">
+            <div class="form-text">El ID numérico de tu cuenta IG Business (no el @usuario).</div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">App ID</label>
+              <input type="text" name="app_id" class="form-control font-monospace"
+                     value="{{ cfg.app_id if cfg and cfg.app_id else '' }}"
+                     placeholder="123456789012345">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">App Secret</label>
+              <input type="password" name="app_secret" class="form-control"
+                     placeholder="{{ '••••••••' if cfg and cfg.encrypted_app_secret else 'Ingresar App Secret' }}">
+              <div class="form-text">Dejar vacío para no cambiar.</div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Access Token (long-lived)</label>
+            <input type="password" name="access_token" class="form-control"
+                   placeholder="{{ '••••••••' if cfg and cfg.encrypted_access_token else 'Pegar token de larga duración' }}">
+            {% if cfg and cfg.token_expires_at %}
+            <div class="form-text">
+              <i class="bi bi-clock me-1"></i>Expira: <strong>{{ cfg.token_expires_at.strftime('%d/%m/%Y') }}</strong>
+              &nbsp;
+              <button type="button" class="btn btn-link btn-sm p-0 text-warning" id="btnRefreshToken">
+                <i class="bi bi-arrow-clockwise me-1"></i>Renovar ahora
+              </button>
+            </div>
+            {% else %}
+            <div class="form-text">Dejar vacío para no cambiar. Token válido por ~60 días.</div>
+            {% endif %}
+          </div>
+
+          <hr class="my-3">
+          <h6 class="fw-semibold mb-3"><i class="bi bi-image me-2"></i>Imagen para Instagram</h6>
+
+          <div class="row g-3 mb-3">
+            <div class="col-8">
+              <label class="form-label fw-semibold">Logo del medio</label>
+              <input type="file" name="logo" class="form-control" accept=".png,.jpg,.jpeg,.webp">
+              <div class="form-text">PNG con transparencia recomendado. Se superpone en la imagen.</div>
+              {% if cfg and cfg.logo_path %}
+              <div class="mt-2">
+                <img src="/static/uploads/logos/{{ cfg.logo_path | basename }}"
+                     class="img-thumbnail" title="Logo actual" style="max-height:60px">
+                <span class="text-muted small ms-2">Logo actual</span>
+              </div>
+              {% endif %}
+            </div>
+            <div class="col-4">
+              <label class="form-label fw-semibold">Posición del logo</label>
+              <select name="logo_position" class="form-select" title="Posición del logo en la imagen">
+                {% for pos, label in [('top-left','↖ Sup. izq.'),('top-right','↗ Sup. der.'),('bottom-left','↙ Inf. izq.'),('bottom-right','↘ Inf. der.')] %}
+                <option value="{{ pos }}" {% if cfg and cfg.logo_position == pos %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Máx. posts por día</label>
+            <input type="number" name="max_posts_per_day" class="form-control"
+                   value="{{ cfg.max_posts_per_day if cfg else 10 }}" min="1" max="25" style="max-width:120px">
+            <div class="form-text">Límite de Meta: 25 posts/día.</div>
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-save me-1"></i>Guardar configuración
+            </button>
+            {% if cfg and cfg.ig_user_id and cfg.encrypted_access_token %}
+            <button type="button" class="btn btn-outline-info" id="btnTest">
+              <i class="bi bi-plug me-1"></i>Probar conexión
+            </button>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel de estado -->
+  <div class="col-lg-5">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-transparent border-0">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-activity me-2"></i>Estado</h6>
+      </div>
+      <div class="card-body">
+        {% if cfg and cfg.ig_user_id %}
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted">Cuenta</dt>
+          <dd class="col-7">{{ cfg.ig_user_id }}</dd>
+          <dt class="col-5 text-muted">Estado</dt>
+          <dd class="col-7">
+            {% if cfg.is_active %}
+            <span class="badge bg-success">Activo</span>
+            {% else %}
+            <span class="badge bg-secondary">Inactivo</span>
+            {% endif %}
+          </dd>
+          <dt class="col-5 text-muted">Token</dt>
+          <dd class="col-7">
+            {% if cfg.encrypted_access_token %}
+            <span class="badge bg-primary">Configurado</span>
+            {% else %}
+            <span class="badge bg-danger">Sin token</span>
+            {% endif %}
+          </dd>
+          {% if cfg.token_expires_at %}
+          <dt class="col-5 text-muted">Expira</dt>
+          <dd class="col-7">{{ cfg.token_expires_at.strftime('%d/%m/%Y') }}</dd>
+          {% endif %}
+          <dt class="col-5 text-muted">Máx./día</dt>
+          <dd class="col-7">{{ cfg.max_posts_per_day }}</dd>
+        </dl>
+        {% else %}
+        <p class="text-muted mb-0 small">Completá la configuración para ver el estado.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-question-circle me-2"></i>Cómo obtener el token</h6>
+      </div>
+      <div class="card-body small text-muted">
+        <ol class="ps-3 mb-0">
+          <li class="mb-1">Convertí tu cuenta IG a <strong>Business o Creator</strong></li>
+          <li class="mb-1">Vinculá la cuenta IG a una <strong>Página de Facebook</strong></li>
+          <li class="mb-1">Creá una App en <strong>developers.facebook.com</strong> (tipo Business)</li>
+          <li class="mb-1">Agregá el producto <strong>Instagram Graph API</strong></li>
+          <li class="mb-1">Generá el token en <strong>Graph API Explorer</strong> con permisos:
+            <code>instagram_content_publish</code>, <code>pages_read_engagement</code>, <code>instagram_basic</code>
+          </li>
+          <li class="mb-1">Convertí el token a <strong>long-lived</strong> (~60 días)</li>
+          <li>Obtené el <strong>Instagram Business Account ID</strong> via Graph API</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="testResult" class="mt-3" style="display:none"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const btnTest = document.getElementById('btnTest');
+if (btnTest) {
+  btnTest.addEventListener('click', async () => {
+    btnTest.disabled = true;
+    btnTest.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Probando...';
+    const resp = await fetch('/settings/instagram/test', { method: 'POST' });
+    const data = await resp.json();
+    const div = document.getElementById('testResult');
+    div.style.display = 'block';
+    if (data.ok) {
+      div.innerHTML = `<div class="alert alert-success"><i class="bi bi-check-circle-fill me-2"></i>Conexión exitosa — <strong>@${data.username}</strong> (${data.name})</div>`;
+    } else {
+      div.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle-fill me-2"></i>${data.error}</div>`;
+    }
+    btnTest.disabled = false;
+    btnTest.innerHTML = '<i class="bi bi-plug me-1"></i>Probar conexión';
+  });
+}
+
+const btnRefresh = document.getElementById('btnRefreshToken');
+if (btnRefresh) {
+  btnRefresh.addEventListener('click', async () => {
+    btnRefresh.disabled = true;
+    btnRefresh.textContent = 'Renovando...';
+    const resp = await fetch('/settings/instagram/refresh-token', { method: 'POST' });
+    const data = await resp.json();
+    if (data.ok) {
+      showToast('Token renovado correctamente', 'success');
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      showToast('Error: ' + data.error, 'danger');
+      btnRefresh.disabled = false;
+      btnRefresh.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Renovar ahora';
+    }
+  });
+}
+
+document.getElementById('toggleIG')?.addEventListener('change', async function () {
+  const resp = await fetch('/settings/instagram/toggle', { method: 'POST' });
+  const data = await resp.json();
+  showToast(data.active ? 'Instagram activado' : 'Instagram desactivado', data.active ? 'success' : 'secondary');
+});
+</script>
+{% endblock %}

@@ -276,3 +276,24 @@ class WhatsAppChannel(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     whatsapp_settings = relationship("WhatsAppSettings", back_populates="channels", foreign_keys=[whatsapp_settings_id])
+
+
+class InstagramSettings(Base):
+    __tablename__ = "instagram_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), default="Instagram")
+    # Credenciales Graph API
+    ig_user_id = Column(String(50), nullable=True)          # Instagram Business Account ID
+    app_id = Column(String(50), nullable=True)
+    encrypted_app_secret = Column(Text, nullable=True)
+    encrypted_access_token = Column(Text, nullable=True)
+    token_expires_at = Column(DateTime(timezone=True), nullable=True)
+    # Logo para superposición en imágenes
+    logo_path = Column(String(300), nullable=True)          # ruta relativa en static/
+    logo_position = Column(String(20), default="bottom-right")  # top-left|top-right|bottom-left|bottom-right
+    # Control
+    is_active = Column(Boolean, default=False)
+    max_posts_per_day = Column(Integer, default=10)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
