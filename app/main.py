@@ -133,6 +133,17 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE rss_feeds ADD COLUMN feed_type VARCHAR(20) DEFAULT 'rss'"))
             if "wordpress_settings_id" not in cols:
                 conn.execute(text("ALTER TABLE rss_feeds ADD COLUMN wordpress_settings_id INTEGER REFERENCES wordpress_settings(id) ON DELETE SET NULL"))
+            if "wp_site_ids" not in cols:
+                conn.execute(text("ALTER TABLE rss_feeds ADD COLUMN wp_site_ids TEXT"))
+                # Migrar wordpress_settings_id existente a wp_site_ids
+                conn.execute(text("""
+                    UPDATE rss_feeds SET wp_site_ids = json_array(wordpress_settings_id)
+                    WHERE wordpress_settings_id IS NOT NULL AND wp_site_ids IS NULL
+                """))
+        if "email_accounts" in tables:
+            cols = [c["name"] for c in inspector.get_columns("email_accounts")]
+            if "wp_site_ids" not in cols:
+                conn.execute(text("ALTER TABLE email_accounts ADD COLUMN wp_site_ids TEXT"))
         if "whatsapp_settings" in tables:
             cols = [c["name"] for c in inspector.get_columns("whatsapp_settings")]
             if "name" not in cols:

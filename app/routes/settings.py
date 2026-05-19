@@ -1,3 +1,6 @@
+import json
+from typing import List
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -49,9 +52,12 @@ async def email_settings(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/login", status_code=302)
 
     accounts = db.query(EmailAccount).all()
+    wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.id).all()
+    for acc in accounts:
+        acc._wp_site_ids = json.loads(acc.wp_site_ids) if acc.wp_site_ids else []
     return templates.TemplateResponse(
         "settings_email.html",
-        {"request": request, "user": user, "accounts": accounts, "mask": mask_value},
+        {"request": request, "user": user, "accounts": accounts, "wp_sites": wp_sites, "mask": mask_value},
     )
 
 
@@ -64,12 +70,14 @@ async def add_email(
     imap_port: int = Form(993),
     username: str = Form(...),
     password: str = Form(...),
+    wp_site_ids: List[str] = Form([]),
     db: Session = Depends(get_db),
 ):
     user = _require_auth(request, db)
     if not user:
         return RedirectResponse("/login", status_code=302)
 
+    ids = [int(x) for x in wp_site_ids if x.isdigit()]
     acc = EmailAccount(
         name=name,
         email=email,
@@ -77,6 +85,7 @@ async def add_email(
         imap_port=imap_port,
         username=username,
         encrypted_password=encrypt_value(password),
+        wp_site_ids=json.dumps(ids) if ids else None,
     )
     db.add(acc)
     db.commit()
@@ -93,6 +102,7 @@ async def edit_email(
     imap_port: int = Form(993),
     username: str = Form(...),
     password: str = Form(""),
+    wp_site_ids: List[str] = Form([]),
     db: Session = Depends(get_db),
 ):
     user = _require_auth(request, db)
@@ -103,11 +113,13 @@ async def edit_email(
     if not acc:
         return RedirectResponse("/settings/email?err=Cuenta+no+encontrada", status_code=302)
 
+    ids = [int(x) for x in wp_site_ids if x.isdigit()]
     acc.name = name
     acc.email = email
     acc.imap_server = imap_server
     acc.imap_port = imap_port
     acc.username = username
+    acc.wp_site_ids = json.dumps(ids) if ids else None
     if password.strip():
         acc.encrypted_password = encrypt_value(password)
     db.commit()

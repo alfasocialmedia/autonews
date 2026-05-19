@@ -262,3 +262,6 @@ body {
 
 /* ── Fetched list picker (grupos / canales WA) ── */
 .fetched-list-scroll { max-height: 200px; overflow-y: auto; }
+
+/* ── Selector de sitios WordPress (checkboxes) ── */
+.wp-site-picker { max-height: 130px; overflow-y: auto; }

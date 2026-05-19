@@ -118,6 +118,28 @@
                      placeholder="Dejar vacío para no cambiar">
               <div class="form-text">Solo rellena si quieres cambiar la contraseña actual.</div>
             </div>
+            <div class="mb-1">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-globe me-1 text-info"></i>Publicar en WordPress
+              </label>
+              {% if wp_sites %}
+              <div class="border rounded p-2 wp-site-picker">
+                {% for wp in wp_sites %}
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="wp_site_ids"
+                         value="{{ wp.id }}" id="edit_email_wp_{{ acc.id }}_{{ wp.id }}"
+                         {% if wp.id in acc._wp_site_ids %}checked{% endif %}>
+                  <label class="form-check-label small" for="edit_email_wp_{{ acc.id }}_{{ wp.id }}">
+                    {{ wp.name }} <span class="text-muted">({{ wp.site_url }})</span>
+                  </label>
+                </div>
+                {% endfor %}
+              </div>
+              <div class="form-text">Sin selección = publica en todos los sitios activos.</div>
+              {% else %}
+              <div class="text-muted small">No hay sitios WordPress activos configurados.</div>
+              {% endif %}
+            </div>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -178,6 +200,27 @@
             <label class="form-label fw-semibold">Contraseña</label>
             <input type="password" name="password" class="form-control" placeholder="Contraseña de aplicación" required>
             <div class="form-text">Para Gmail usa una contraseña de aplicación (App Password).</div>
+          </div>
+          <div class="mb-1">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-globe me-1 text-info"></i>Publicar en WordPress
+            </label>
+            {% if wp_sites %}
+            <div class="border rounded p-2" style="max-height:130px;overflow-y:auto">
+              {% for wp in wp_sites %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="wp_site_ids"
+                       value="{{ wp.id }}" id="add_email_wp_{{ wp.id }}">
+                <label class="form-check-label small" for="add_email_wp_{{ wp.id }}">
+                  {{ wp.name }} <span class="text-muted">({{ wp.site_url }})</span>
+                </label>
+              </div>
+              {% endfor %}
+            </div>
+            <div class="form-text">Sin selección = publica en todos los sitios activos.</div>
+            {% else %}
+            <div class="text-muted small">No hay sitios WordPress activos configurados.</div>
+            {% endif %}
           </div>
         </div>
         <div class="modal-footer">

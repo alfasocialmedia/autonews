@@ -254,9 +254,14 @@ def process_emails():
                         # Generar audio TTS una sola vez (antes del loop de sitios WP)
                         _email_audio = _generate_tts_audio(db, ai_result)
 
-                        # Publicar en cada sitio WordPress activo
+                        # Publicar solo en los sitios asignados a esta cuenta (o todos si no tiene asignación)
+                        account_wp_sites = (
+                            [s for s in wp_sites if s.id in json.loads(account.wp_site_ids)]
+                            if account.wp_site_ids
+                            else wp_sites
+                        )
                         published_count = 0
-                        for wp_cfg in wp_sites:
+                        for wp_cfg in account_wp_sites:
                             try:
                                 wp_pwd = decrypt_value(wp_cfg.encrypted_app_password)
                                 category_ids = _resolve_categories(
@@ -1072,10 +1077,10 @@ def process_rss_feeds():
                         rss_item.status = "processed"
                         db.commit()
 
-                        # Publicar solo en el WP asignado al feed (o en todos si no tiene asignación)
+                        # Publicar solo en los sitios asignados al feed (o todos si no tiene asignación)
                         feed_wp_sites = (
-                            [s for s in wp_sites if s.id == feed.wordpress_settings_id]
-                            if feed.wordpress_settings_id
+                            [s for s in wp_sites if s.id in json.loads(feed.wp_site_ids)]
+                            if feed.wp_site_ids
                             else wp_sites
                         )
                         count = _publish_ai_result(db, ai_result, feed_wp_sites, image_url=image_url, source_name=feed.name, inline_images=inline_images, embeds=embeds)
@@ -1195,8 +1200,8 @@ def confirm_publish_rss_item(db, feed: RssFeed, cached: dict) -> dict:
         db.refresh(rss_item)
 
     feed_wp_sites = (
-        [s for s in wp_sites if s.id == feed.wordpress_settings_id]
-        if feed.wordpress_settings_id
+        [s for s in wp_sites if s.id in json.loads(feed.wp_site_ids)]
+        if feed.wp_site_ids
         else wp_sites
     )
     count = _publish_ai_result(
@@ -1285,8 +1290,8 @@ def publish_rss_item_now(db, feed: RssFeed, item: dict) -> dict:
         db.refresh(rss_item)
 
     feed_wp_sites = (
-        [s for s in wp_sites if s.id == feed.wordpress_settings_id]
-        if feed.wordpress_settings_id
+        [s for s in wp_sites if s.id in json.loads(feed.wp_site_ids)]
+        if feed.wp_site_ids
         else wp_sites
     )
     count = _publish_ai_result(db, ai_result, feed_wp_sites, image_url=image_url, source_name=feed.name, inline_images=inline_images, embeds=embeds)

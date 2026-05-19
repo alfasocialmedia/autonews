@@ -31,6 +31,8 @@ class EmailAccount(Base):
     username = Column(String(150), nullable=False)
     encrypted_password = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
+    # JSON array de IDs: "[1,3]" = solo esos sitios, NULL = todos los activos
+    wp_site_ids = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -160,10 +162,12 @@ class RssFeed(Base):
     keyword_filter = Column(Text, nullable=True)
     wp_category_id = Column(Integer, nullable=True)
     wp_category_name = Column(String(100), nullable=True)
-    # WordPress destino: NULL = publicar en todos los sitios activos
+    # wordpress_settings_id mantenido por compatibilidad; usar wp_site_ids para nuevas asignaciones
     wordpress_settings_id = Column(
         Integer, ForeignKey("wordpress_settings.id", ondelete="SET NULL"), nullable=True
     )
+    # JSON array de IDs: "[1,3]" = solo esos sitios, NULL = todos los activos
+    wp_site_ids = Column(Text, nullable=True)
     last_checked_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

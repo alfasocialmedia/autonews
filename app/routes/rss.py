@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import uuid
+from typing import List
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -32,6 +34,7 @@ async def rss_page(request: Request, db: Session = Depends(get_db)):
             ProcessedRssItem.rss_feed_id == feed.id,
             ProcessedRssItem.status == "published",
         ).count()
+        feed._wp_site_ids = json.loads(feed.wp_site_ids) if feed.wp_site_ids else []
 
     wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.id).all()
 
@@ -58,13 +61,14 @@ async def add_feed(
     keyword_filter: str = Form(""),
     wp_category_id: str = Form(""),
     wp_category_name: str = Form(""),
-    wordpress_settings_id: str = Form(""),
+    wp_site_ids: List[str] = Form([]),
     db: Session = Depends(get_db),
 ):
     user = get_current_user(request, db)
     if not user or user.role != "admin":
         return RedirectResponse("/", status_code=302)
 
+    ids = [int(x) for x in wp_site_ids if x.isdigit()]
     feed = RssFeed(
         name=name.strip(),
         url=url.strip(),
@@ -75,7 +79,7 @@ async def add_feed(
         keyword_filter=_parse_keyword_filter(keyword_filter),
         wp_category_id=int(wp_category_id) if wp_category_id.strip().isdigit() else None,
         wp_category_name=wp_category_name.strip() or None,
-        wordpress_settings_id=int(wordpress_settings_id) if wordpress_settings_id.strip().isdigit() else None,
+        wp_site_ids=json.dumps(ids) if ids else None,
     )
     db.add(feed)
     db.commit()
@@ -95,7 +99,7 @@ async def edit_feed(
     keyword_filter: str = Form(""),
     wp_category_id: str = Form(""),
     wp_category_name: str = Form(""),
-    wordpress_settings_id: str = Form(""),
+    wp_site_ids: List[str] = Form([]),
     db: Session = Depends(get_db),
 ):
     user = get_current_user(request, db)
@@ -104,6 +108,7 @@ async def edit_feed(
 
     feed = db.query(RssFeed).filter(RssFeed.id == feed_id).first()
     if feed:
+        ids = [int(x) for x in wp_site_ids if x.isdigit()]
         feed.name = name.strip()
         feed.url = url.strip()
         feed.feed_type = feed_type if feed_type in ("rss", "web") else "rss"
@@ -113,7 +118,7 @@ async def edit_feed(
         feed.keyword_filter = _parse_keyword_filter(keyword_filter)
         feed.wp_category_id = int(wp_category_id) if wp_category_id.strip().isdigit() else None
         feed.wp_category_name = wp_category_name.strip() or None
-        feed.wordpress_settings_id = int(wordpress_settings_id) if wordpress_settings_id.strip().isdigit() else None
+        feed.wp_site_ids = json.dumps(ids) if ids else None
         db.commit()
         db.refresh(feed)
         saved_type = feed.feed_type or "rss"
