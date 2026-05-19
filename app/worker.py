@@ -1194,8 +1194,13 @@ def confirm_publish_rss_item(db, feed: RssFeed, cached: dict) -> dict:
         db.commit()
         db.refresh(rss_item)
 
+    feed_wp_sites = (
+        [s for s in wp_sites if s.id == feed.wordpress_settings_id]
+        if feed.wordpress_settings_id
+        else wp_sites
+    )
     count = _publish_ai_result(
-        db, ai_result, wp_sites,
+        db, ai_result, feed_wp_sites,
         image_url=image_url, source_name=feed.name,
         inline_images=inline_images, embeds=embeds,
     )
@@ -1279,7 +1284,12 @@ def publish_rss_item_now(db, feed: RssFeed, item: dict) -> dict:
         db.commit()
         db.refresh(rss_item)
 
-    count = _publish_ai_result(db, ai_result, wp_sites, image_url=image_url, source_name=feed.name, inline_images=inline_images, embeds=embeds)
+    feed_wp_sites = (
+        [s for s in wp_sites if s.id == feed.wordpress_settings_id]
+        if feed.wordpress_settings_id
+        else wp_sites
+    )
+    count = _publish_ai_result(db, ai_result, feed_wp_sites, image_url=image_url, source_name=feed.name, inline_images=inline_images, embeds=embeds)
 
     if count > 0:
         rss_item.status = "published"
