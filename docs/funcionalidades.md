@@ -132,7 +132,17 @@ La imagen destacada se descarga y sube al media library de WordPress:
 - Se guarda el `media_id` para asignarlo como `featured_media` del post.
 - El nombre de archivo se deriva de la URL original (caracteres especiales reemplazados).
 
-### 3.6 Imágenes desde Google Drive
+### 3.6 Múltiples imágenes desde WhatsApp
+
+Cuando un número autorizado envía varias imágenes al número conectado, el sistema acumula los mensajes en un buffer:
+
+1. Al llegar el primer par texto + imagen, se inicia un temporizador de **3 segundos** en lugar de procesar de inmediato.
+2. Las imágenes adicionales que lleguen en esa ventana se acumulan (máximo **4 imágenes** en total).
+3. La **primera imagen** se usa como imagen destacada (portada) del post.
+4. Las imágenes **2 a 4** se suben al media library de WordPress y se inyectan como bloques `wp:image` de Gutenberg distribuidos entre los párrafos del contenido.
+5. La imagen de portada **no se repite** en el cuerpo del artículo.
+
+### 3.7 Imágenes desde Google Drive
 
 Soporte para carpetas de Google Drive como fuente de imágenes (configuración por feed):
 - Formato especial de URL: `gdrive-folder:FOLDER_ID`
@@ -243,8 +253,14 @@ Cuando un número autorizado envía un mensaje al número conectado:
 | Imagen                               | Se descarga; si el caption es corto, se extrae texto con OCR (visión)  |
 | Audio                                | Se transcribe con Whisper (Groq) y se procesa como texto               |
 | Texto + imagen (mensajes separados)  | Se combinan en un buffer de 15 segundos antes de procesar              |
+| Varias imágenes (hasta 4)            | La primera va de portada; las siguientes se inyectan inline en el post |
 
 Si el scraping de una URL falla o produce menos de 300 caracteres, se notifica al remitente por WhatsApp.
+
+**Formato negrita de WhatsApp**: los mensajes de texto entrantes son preprocesados antes de pasar a la IA:
+
+- Los marcadores `*texto*` se eliminan del texto final publicado.
+- Si la primera línea del mensaje estaba completamente en negrita (más de 15 caracteres), se toma como *título sugerido* y se pasa a la IA como referencia para generar un título más potente y clickeable.
 
 ### 7.4 Difusión outbound
 
@@ -263,6 +279,25 @@ Tras publicar en WordPress se envía el artículo a los grupos de cada cuenta:
 - Se pueden cargar desde Evolution API (botón "Cargar de WA") o agregar manualmente con el JID.
 - Cada grupo tiene su propio **WordPress destino** (filtro de qué noticias recibe).
 - Los canales reciben el mismo mensaje que los grupos.
+
+### 7.6 Modo de destino y procesamiento por cuenta
+
+Cada cuenta WhatsApp tiene dos opciones de comportamiento configurables desde el panel:
+
+**Modo de destino (`publish_mode`)**
+
+| Valor                        | Comportamiento                                          |
+| ---------------------------- | ------------------------------------------------------- |
+| `both` (ambos — por defecto) | Publica en WordPress Y difunde a grupos/canales         |
+| `wordpress_only`             | Solo publica en WordPress; no difunde por WhatsApp      |
+| `whatsapp_only`              | Solo difunde a grupos/canales; no publica en WordPress  |
+
+**Modo de reescritura IA (`rewrite_mode`)**
+
+- **`rewrite`** (por defecto): La IA reescribe el articulo completo sin plagio.
+- **`title_only`**: Genera titulo, resumen y tags; el cuerpo original no se reescribe.
+
+El modo `title_only` es útil cuando el contenido enviado ya tiene la redacción deseada y solo se necesita el encabezado SEO optimizado.
 
 ---
 
