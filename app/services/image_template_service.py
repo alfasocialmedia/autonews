@@ -4,6 +4,7 @@ Genera la imagen para Instagram:
   - Agrega degradado oscuro en la parte inferior
   - Superpone el texto del título (con ajuste de línea automático)
   - Superpone el logo del medio (si existe) en la esquina configurada
+  - Dibuja franja de color en la parte inferior con texto personalizado
 Retorna bytes JPEG listos para subir.
 """
 from __future__ import annotations
@@ -12,17 +13,18 @@ import io
 import os
 import textwrap
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 
 TARGET_W = 1080
 TARGET_H = 1440
 FONT_DIR = os.path.join(os.path.dirname(__file__), "..", "static", "fonts")
 LOGO_MARGIN = 40
 LOGO_MAX_SIZE = 180   # px — lado máximo del logo
+BANNER_HEIGHT = 72    # px — alto de la franja inferior
+BANNER_MARGIN = 28    # px — margen horizontal del banner respecto al borde
 
 
 def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    """Intenta cargar una fuente TrueType; si no existe usa la built-in."""
     candidates = [
         os.path.join(FONT_DIR, "NotoSans-Bold.ttf"),
         os.path.join(FONT_DIR, "DejaVuSans-Bold.ttf"),
@@ -43,7 +45,6 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
 
 
 def _crop_center(img: Image.Image, target_w: int, target_h: int) -> Image.Image:
-    """Redimensiona manteniendo aspecto y recorta al centro."""
     src_w, src_h = img.size
     scale = max(target_w / src_w, target_h / src_h)
     new_w = int(src_w * scale)
@@ -60,7 +61,6 @@ def _add_gradient(
     color: str = "#000000",
     max_opacity: int = 200,
 ) -> Image.Image:
-    """Agrega degradado de `color` de abajo hacia arriba en los últimos `height` px."""
     r, g, b = _hex_to_rgb(color)
     gradient = Image.new("RGBA", (img.width, height), (r, g, b, 0))
     draw = ImageDraw.Draw(gradient)
@@ -78,8 +78,9 @@ def _draw_title(
     title: str,
     font_size: int = 62,
     text_color: str = "#ffffff",
+    bottom_offset: int = 80,
 ) -> Image.Image:
-    """Dibuja el título con sombra en la zona inferior de la imagen."""
+    """Dibuja el título con sombra. bottom_offset controla cuánto sube desde abajo."""
     draw = ImageDraw.Draw(img)
     font = _load_font(font_size)
     tr, tg, tb = _hex_to_rgb(text_color)
@@ -87,7 +88,7 @@ def _draw_title(
     lines = textwrap.wrap(title, width=max_chars)[:4]
     line_height = font_size + 10
     total_height = len(lines) * line_height
-    y = img.height - total_height - 80
+    y = img.height - total_height - bottom_offset
     padding_x = 50
 
     for line in lines:
@@ -97,8 +98,54 @@ def _draw_title(
     return img
 
 
+def _draw_banner(
+    img: Image.Image,
+    text: str,
+    bg_color: str = "#e53935",
+    text_color: str = "#ffffff",
+) -> Image.Image:
+    """Dibuja una franja de color con texto centrado en la parte inferior, estilo píldora."""
+    if not text or not text.strip():
+        return img
+
+    draw = ImageDraw.Draw(img)
+    font_size = 34
+    font = _load_font(font_size)
+
+    # Medir el ancho del texto para determinar el tamaño de la píldora
+    try:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+    except AttributeError:
+        text_w, text_h = draw.textsize(text, font=font)
+
+    pad_x = 48
+    pad_y = 14
+    pill_w = min(text_w + pad_x * 2, img.width - BANNER_MARGIN * 2)
+    pill_h = text_h + pad_y * 2
+    radius = pill_h // 2
+
+    # Centrar la píldora horizontalmente, posicionar en la parte inferior
+    x0 = (img.width - pill_w) // 2
+    y0 = img.height - pill_h - BANNER_MARGIN
+    x1 = x0 + pill_w
+    y1 = y0 + pill_h
+
+    br, bg, bb = _hex_to_rgb(bg_color)
+    tr, tg, tb = _hex_to_rgb(text_color)
+
+    # Dibujar la píldora con bordes redondeados
+    draw.rounded_rectangle([x0, y0, x1, y1], radius=radius, fill=(br, bg, bb))
+
+    # Texto centrado dentro de la píldora
+    tx = x0 + (pill_w - text_w) // 2
+    ty = y0 + (pill_h - text_h) // 2 - (bbox[1] if 'bbox' in dir() else 0)
+    draw.text((tx, ty), text, font=font, fill=(tr, tg, tb))
+    return img
+
+
 def _paste_logo(img: Image.Image, logo_path: str, position: str) -> Image.Image:
-    """Superpone el logo con tamaño máximo LOGO_MAX_SIZE en la esquina indicada."""
     if not logo_path or not os.path.exists(logo_path):
         return img
     try:
@@ -130,15 +177,25 @@ def build_instagram_image(
     gradient_height: int = 480,
     font_size: int = 62,
     text_color: str = "#ffffff",
+    banner_text: str | None = None,
+    banner_color: str = "#e53935",
+    banner_text_color: str = "#ffffff",
 ) -> bytes:
     """
     Pipeline completo: recibe bytes de imagen, devuelve JPEG 1080×1440 con
-    título y logo superpuestos.
+    título, logo y franja inferior superpuestos.
     """
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img = _crop_center(img, TARGET_W, TARGET_H)
     img = _add_gradient(img, gradient_height, color=gradient_color, max_opacity=gradient_opacity)
-    img = _draw_title(img, title, font_size=font_size, text_color=text_color)
+
+    # Si hay banner, el título sube para no tapar la franja
+    title_bottom = (BANNER_HEIGHT + BANNER_MARGIN + 20) if banner_text else 80
+    img = _draw_title(img, title, font_size=font_size, text_color=text_color, bottom_offset=title_bottom)
+
+    if banner_text:
+        img = _draw_banner(img, banner_text, bg_color=banner_color, text_color=banner_text_color)
+
     if logo_path:
         img = _paste_logo(img, logo_path, logo_position)
 

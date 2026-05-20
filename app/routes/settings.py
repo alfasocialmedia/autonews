@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.crypto import decrypt_value, encrypt_value, mask_value
 from app.database import get_db
-from app.models import CategoryMapping, EdgeTTSSettings, ElevenLabsSettings, EmailAccount, GoogleDriveSettings, GroqSettings, WordPressSettings
+from app.models import CategoryMapping, EdgeTTSSettings, ElevenLabsSettings, EmailAccount, GoogleDriveSettings, GroqSettings, InstagramSettings, WordPressSettings
 from app.services.email_service import test_imap_connection
 from app.services.groq_service import PROVIDERS, test_groq_connection
 from app.services.wordpress_service import get_categories, test_wordpress_connection
@@ -53,11 +53,12 @@ async def email_settings(request: Request, db: Session = Depends(get_db)):
 
     accounts = db.query(EmailAccount).all()
     wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.id).all()
+    ig_accounts = db.query(InstagramSettings).order_by(InstagramSettings.id).all()
     for acc in accounts:
         acc._wp_site_ids = json.loads(acc.wp_site_ids) if acc.wp_site_ids else []
     return templates.TemplateResponse(
         "settings_email.html",
-        {"request": request, "user": user, "accounts": accounts, "wp_sites": wp_sites, "mask": mask_value},
+        {"request": request, "user": user, "accounts": accounts, "wp_sites": wp_sites, "ig_accounts": ig_accounts, "mask": mask_value},
     )
 
 
@@ -72,6 +73,7 @@ async def add_email(
     password: str = Form(...),
     wp_site_ids: List[str] = Form([]),
     publish_status: str = Form(""),
+    instagram_settings_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user = _require_auth(request, db)
@@ -88,6 +90,7 @@ async def add_email(
         encrypted_password=encrypt_value(password),
         wp_site_ids=json.dumps(ids) if ids else None,
         publish_status=publish_status if publish_status in ("publish", "draft") else None,
+        instagram_settings_id=int(instagram_settings_id) if instagram_settings_id.strip().isdigit() else None,
     )
     db.add(acc)
     db.commit()
@@ -106,6 +109,7 @@ async def edit_email(
     password: str = Form(""),
     wp_site_ids: List[str] = Form([]),
     publish_status: str = Form(""),
+    instagram_settings_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user = _require_auth(request, db)
@@ -124,6 +128,7 @@ async def edit_email(
     acc.username = username
     acc.wp_site_ids = json.dumps(ids) if ids else None
     acc.publish_status = publish_status if publish_status in ("publish", "draft") else None
+    acc.instagram_settings_id = int(instagram_settings_id) if instagram_settings_id.strip().isdigit() else None
     if password.strip():
         acc.encrypted_password = encrypt_value(password)
     db.commit()

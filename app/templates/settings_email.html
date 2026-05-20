@@ -150,6 +150,21 @@
                 <option value="draft" {% if acc.publish_status == 'draft' %}selected{% endif %}>Guardar como borrador</option>
               </select>
             </div>
+            <div class="mb-1 mt-2">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-instagram me-1 text-danger"></i>Publicar en Instagram
+              </label>
+              {% if ig_accounts %}
+              <select name="instagram_settings_id" class="form-select form-select-sm" title="Cuenta de Instagram donde publicar">
+                <option value="">— Sin Instagram —</option>
+                {% for ig in ig_accounts %}
+                <option value="{{ ig.id }}" {% if acc.instagram_settings_id == ig.id %}selected{% endif %}>{{ ig.name }}</option>
+                {% endfor %}
+              </select>
+              {% else %}
+              <div class="text-muted small">No hay cuentas de Instagram. <a href="/settings/instagram/new">Crear una</a>.</div>
+              {% endif %}
+            </div>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -241,6 +256,21 @@
               <option value="publish">Publicar directamente</option>
               <option value="draft">Guardar como borrador</option>
             </select>
+          </div>
+          <div class="mb-1 mt-2">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-instagram me-1 text-danger"></i>Publicar en Instagram
+            </label>
+            {% if ig_accounts %}
+            <select name="instagram_settings_id" class="form-select form-select-sm" title="Cuenta de Instagram donde publicar">
+              <option value="">— Sin Instagram —</option>
+              {% for ig in ig_accounts %}
+              <option value="{{ ig.id }}">{{ ig.name }}</option>
+              {% endfor %}
+            </select>
+            {% else %}
+            <div class="text-muted small">No hay cuentas de Instagram. <a href="/settings/instagram/new">Crear una</a>.</div>
+            {% endif %}
           </div>
         </div>
         <div class="modal-footer">

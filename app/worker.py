@@ -371,6 +371,23 @@ def process_emails():
                         processed.status = "published" if published_count > 0 else "error"
                         db.commit()
 
+                        if published_count > 0 and account.instagram_settings_id:
+                            try:
+                                groq_cfg = db.query(GroqSettings).filter(GroqSettings.is_active == True).first()
+                                if groq_cfg:
+                                    img_payload_imap = None
+                                    if featured_media_url := locals().get("featured_media_source_url") or ai_result.get("image_url", ""):
+                                        img_payload_imap = _download_image(featured_media_url)
+                                    _publish_instagram(
+                                        db, ai_result, img_payload_imap,
+                                        wp_image_url="",
+                                        groq_key=decrypt_value(groq_cfg.encrypted_api_key),
+                                        groq_model=groq_cfg.model,
+                                        instagram_settings_id=account.instagram_settings_id,
+                                    )
+                            except Exception as ig_exc:
+                                log.warning("[IG/IMAP] No se pudo publicar en Instagram: %s", ig_exc)
+
                     except Exception as exc:
                         processed.status = "error"
                         processed.error_message = str(exc)
@@ -715,7 +732,7 @@ def _prepend_audio(
     return content
 
 
-def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = None, source_name: str | None = None, inline_images: list | None = None, embeds: list | None = None, image_bytes_payload: tuple | None = None, extra_image_payloads: list | None = None):
+def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = None, source_name: str | None = None, inline_images: list | None = None, embeds: list | None = None, image_bytes_payload: tuple | None = None, extra_image_payloads: list | None = None, instagram_settings_id: int | None = None):
     """Publica un resultado de Groq en todos los sitios WP activos. Devuelve cantidad publicada."""
     published_count = 0
 
@@ -837,6 +854,7 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
                     wp_image_url=image_url or "",
                     groq_key=decrypt_value(groq_cfg.encrypted_api_key),
                     groq_model=groq_cfg.model,
+                    instagram_settings_id=instagram_settings_id,
                 )
         except Exception as exc:
             log.warning("[IG] No se pudo publicar en Instagram: %s", exc)
@@ -844,15 +862,20 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
     return published_count
 
 
-def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_url: str, groq_key: str, groq_model: str):
-    """Publica en Instagram si está configurado y activo.
-    Genera imagen 1080×1350 con título+logo, caption con Groq y sube vía Graph API.
-    """
+def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_url: str, groq_key: str, groq_model: str, instagram_settings_id: int | None = None):
+    """Publica en Instagram usando la cuenta vinculada al feed/IMAP (o la primera activa como fallback)."""
     try:
         from app.services.image_template_service import build_instagram_image
         from app.services.instagram_service import publish_image
 
-        ig = db.query(InstagramSettings).filter(InstagramSettings.is_active == True).first()
+        if instagram_settings_id:
+            ig = db.query(InstagramSettings).filter(
+                InstagramSettings.id == instagram_settings_id,
+                InstagramSettings.is_active == True,
+            ).first()
+        else:
+            ig = db.query(InstagramSettings).filter(InstagramSettings.is_active == True).first()
+
         if not ig or not ig.ig_user_id or not ig.encrypted_access_token:
             return
 
@@ -883,12 +906,19 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
 
         title = ai_result.get("title", "")
 
-        # Generar imagen 1080×1350 con título y logo
         ig_image_bytes = build_instagram_image(
             img_data,
             title,
             logo_path=ig.logo_path,
             logo_position=ig.logo_position or "bottom-right",
+            gradient_color=ig.gradient_color or "#000000",
+            gradient_opacity=ig.gradient_opacity or 200,
+            gradient_height=ig.gradient_height or 480,
+            font_size=ig.font_size or 62,
+            text_color=ig.text_color or "#ffffff",
+            banner_text=ig.banner_text or None,
+            banner_color=ig.banner_color or "#e53935",
+            banner_text_color=ig.banner_text_color or "#ffffff",
         )
 
         # Generar caption con Groq
@@ -1201,7 +1231,7 @@ def process_rss_feeds():
                             if feed.wp_site_ids
                             else wp_sites
                         )
-                        count = _publish_ai_result(db, ai_result, feed_wp_sites, image_url=image_url, source_name=feed.name, inline_images=inline_images, embeds=embeds)
+                        count = _publish_ai_result(db, ai_result, feed_wp_sites, image_url=image_url, source_name=feed.name, inline_images=inline_images, embeds=embeds, instagram_settings_id=feed.instagram_settings_id)
                         rss_item.status = "published" if count > 0 else "error"
                         db.commit()
 
@@ -1326,6 +1356,7 @@ def confirm_publish_rss_item(db, feed: RssFeed, cached: dict) -> dict:
         db, ai_result, feed_wp_sites,
         image_url=image_url, source_name=feed.name,
         inline_images=inline_images, embeds=embeds,
+        instagram_settings_id=feed.instagram_settings_id,
     )
 
     if count > 0:
@@ -1412,7 +1443,7 @@ def publish_rss_item_now(db, feed: RssFeed, item: dict) -> dict:
         if feed.wp_site_ids
         else wp_sites
     )
-    count = _publish_ai_result(db, ai_result, feed_wp_sites, image_url=image_url, source_name=feed.name, inline_images=inline_images, embeds=embeds)
+    count = _publish_ai_result(db, ai_result, feed_wp_sites, image_url=image_url, source_name=feed.name, inline_images=inline_images, embeds=embeds, instagram_settings_id=feed.instagram_settings_id)
 
     if count > 0:
         rss_item.status = "published"

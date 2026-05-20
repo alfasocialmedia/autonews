@@ -35,6 +35,9 @@ class EmailAccount(Base):
     wp_site_ids = Column(Text, nullable=True)
     # NULL = usar el default_status de cada sitio WordPress
     publish_status = Column(String(20), nullable=True)
+    instagram_settings_id = Column(
+        Integer, ForeignKey("instagram_settings.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -170,6 +173,9 @@ class RssFeed(Base):
     )
     # JSON array de IDs: "[1,3]" = solo esos sitios, NULL = todos los activos
     wp_site_ids = Column(Text, nullable=True)
+    instagram_settings_id = Column(
+        Integer, ForeignKey("instagram_settings.id", ondelete="SET NULL"), nullable=True
+    )
     last_checked_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -298,6 +304,10 @@ class InstagramSettings(Base):
     gradient_height = Column(Integer, default=480)
     font_size = Column(Integer, default=62)
     text_color = Column(String(10), default="#ffffff")
+    # Franja inferior (banner)
+    banner_text = Column(String(300), nullable=True)
+    banner_color = Column(String(10), default="#e53935")
+    banner_text_color = Column(String(10), default="#ffffff")
     # Control
     is_active = Column(Boolean, default=False)
     max_posts_per_day = Column(Integer, default=10)

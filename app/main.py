@@ -203,6 +203,20 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN font_size INTEGER DEFAULT 62"))
             if "text_color" not in ig_cols:
                 conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN text_color VARCHAR(10) DEFAULT '#ffffff'"))
+            if "banner_text" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN banner_text VARCHAR(300)"))
+            if "banner_color" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN banner_color VARCHAR(10) DEFAULT '#e53935'"))
+            if "banner_text_color" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN banner_text_color VARCHAR(10) DEFAULT '#ffffff'"))
+        if "rss_feeds" in tables:
+            rss_cols = [c["name"] for c in inspector.get_columns("rss_feeds")]
+            if "instagram_settings_id" not in rss_cols:
+                conn.execute(text("ALTER TABLE rss_feeds ADD COLUMN instagram_settings_id INTEGER REFERENCES instagram_settings(id) ON DELETE SET NULL"))
+        if "email_accounts" in tables:
+            email_cols = [c["name"] for c in inspector.get_columns("email_accounts")]
+            if "instagram_settings_id" not in email_cols:
+                conn.execute(text("ALTER TABLE email_accounts ADD COLUMN instagram_settings_id INTEGER REFERENCES instagram_settings(id) ON DELETE SET NULL"))
         import pathlib
         pathlib.Path("app/static/uploads/logos").mkdir(parents=True, exist_ok=True)
 

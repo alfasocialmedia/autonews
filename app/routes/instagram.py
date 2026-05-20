@@ -25,7 +25,7 @@ OAUTH_SCOPES = "instagram_business_basic,instagram_content_publish"
 IG_OAUTH_URL   = "https://www.instagram.com/oauth/authorize"
 IG_TOKEN_URL   = "https://api.instagram.com/oauth/access_token"
 IG_GRAPH_BASE  = "https://graph.instagram.com"
-GRAPH_BASE     = "https://graph.facebook.com/v19.0"  # solo para debug_token legacy
+GRAPH_BASE     = "https://graph.facebook.com/v19.0"
 
 router = APIRouter(prefix="/settings/instagram")
 templates = Jinja2Templates(directory="app/templates")
@@ -41,26 +41,39 @@ def _require_admin(request: Request, db: Session):
     return user
 
 
+def _get_account(db: Session, account_id: int) -> InstagramSettings | None:
+    return db.query(InstagramSettings).filter(InstagramSettings.id == account_id).first()
+
+
+# ─── Lista de cuentas ────────────────────────────────────────────────────────
+
 @router.get("", response_class=HTMLResponse)
-async def instagram_page(request: Request, db: Session = Depends(get_db)):
+async def instagram_list(request: Request, db: Session = Depends(get_db)):
     user = _require_admin(request, db)
     if not user:
         return RedirectResponse("/", status_code=302)
-
-    try:
-        cfg = db.query(InstagramSettings).first()
-    except Exception as exc:
-        log.error("Error cargando configuración de Instagram: %s", exc, exc_info=True)
-        cfg = None
-
+    accounts = db.query(InstagramSettings).order_by(InstagramSettings.id).all()
     return templates.TemplateResponse(
-        "settings_instagram.html",
-        {"request": request, "user": user, "cfg": cfg, "mask": mask_value},
+        "settings_instagram_list.html",
+        {"request": request, "user": user, "accounts": accounts},
     )
 
 
-@router.post("/save")
-async def save_instagram(
+# ─── Nueva cuenta ────────────────────────────────────────────────────────────
+
+@router.get("/new", response_class=HTMLResponse)
+async def instagram_new_page(request: Request, db: Session = Depends(get_db)):
+    user = _require_admin(request, db)
+    if not user:
+        return RedirectResponse("/", status_code=302)
+    return templates.TemplateResponse(
+        "settings_instagram_edit.html",
+        {"request": request, "user": user, "cfg": None, "mask": mask_value},
+    )
+
+
+@router.post("/new")
+async def instagram_create(
     request: Request,
     name: str = Form("Instagram"),
     ig_user_id: str = Form(""),
@@ -74,6 +87,9 @@ async def save_instagram(
     gradient_height: int = Form(480),
     font_size: int = Form(62),
     text_color: str = Form("#ffffff"),
+    banner_text: str = Form(""),
+    banner_color: str = Form("#e53935"),
+    banner_text_color: str = Form("#ffffff"),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -81,78 +97,167 @@ async def save_instagram(
     if not user:
         return RedirectResponse("/", status_code=302)
 
+    cfg = InstagramSettings(name=name.strip() or "Instagram")
+    db.add(cfg)
+    db.flush()
+
+    _apply_form_to_cfg(cfg, ig_user_id, app_id, app_secret, access_token,
+                       logo_position, max_posts_per_day,
+                       gradient_color, gradient_opacity, gradient_height,
+                       font_size, text_color, banner_text, banner_color, banner_text_color,
+                       logo, db)
+    db.commit()
+    return RedirectResponse(f"/settings/instagram/{cfg.id}?msg=Cuenta+creada+correctamente", status_code=302)
+
+
+# ─── Editar cuenta ───────────────────────────────────────────────────────────
+
+@router.get("/{account_id}", response_class=HTMLResponse)
+async def instagram_edit_page(account_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _require_admin(request, db)
+    if not user:
+        return RedirectResponse("/", status_code=302)
+    cfg = _get_account(db, account_id)
+    if not cfg:
+        return RedirectResponse("/settings/instagram", status_code=302)
+    return templates.TemplateResponse(
+        "settings_instagram_edit.html",
+        {"request": request, "user": user, "cfg": cfg, "mask": mask_value},
+    )
+
+
+@router.post("/{account_id}/save")
+async def instagram_save(
+    account_id: int,
+    request: Request,
+    name: str = Form("Instagram"),
+    ig_user_id: str = Form(""),
+    app_id: str = Form(""),
+    app_secret: str = Form(""),
+    access_token: str = Form(""),
+    logo_position: str = Form("bottom-right"),
+    max_posts_per_day: int = Form(10),
+    gradient_color: str = Form("#000000"),
+    gradient_opacity: int = Form(200),
+    gradient_height: int = Form(480),
+    font_size: int = Form(62),
+    text_color: str = Form("#ffffff"),
+    banner_text: str = Form(""),
+    banner_color: str = Form("#e53935"),
+    banner_text_color: str = Form("#ffffff"),
+    logo: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+):
+    user = _require_admin(request, db)
+    if not user:
+        return RedirectResponse("/", status_code=302)
+
+    cfg = _get_account(db, account_id)
+    if not cfg:
+        return RedirectResponse("/settings/instagram", status_code=302)
+
     try:
-        cfg = db.query(InstagramSettings).first()
-        if not cfg:
-            cfg = InstagramSettings()
-            db.add(cfg)
-            db.flush()  # genera el id para usar en el nombre del logo
-
         cfg.name = name.strip() or "Instagram"
-        cfg.ig_user_id = ig_user_id.strip() or None
-        cfg.app_id = app_id.strip() or None
-        cfg.max_posts_per_day = max(1, min(25, max_posts_per_day))
-        cfg.logo_position = logo_position if logo_position in ("top-left", "top-right", "bottom-left", "bottom-right") else "bottom-right"
-        cfg.gradient_color = gradient_color if gradient_color.startswith("#") else "#000000"
-        cfg.gradient_opacity = max(0, min(255, gradient_opacity))
-        cfg.gradient_height = max(100, min(1440, gradient_height))
-        cfg.font_size = max(20, min(120, font_size))
-        cfg.text_color = text_color if text_color.startswith("#") else "#ffffff"
-
-        if app_secret.strip():
-            cfg.encrypted_app_secret = encrypt_value(app_secret.strip())
-        if access_token.strip():
-            cfg.encrypted_access_token = encrypt_value(access_token.strip())
-            try:
-                if cfg.app_id and cfg.encrypted_app_secret:
-                    secret = decrypt_value(cfg.encrypted_app_secret)
-                    cfg.token_expires_at = token_expires_at(cfg.app_id, secret, access_token.strip())
-            except Exception:
-                pass
-
-        if logo and logo.filename:
-            try:
-                ext = os.path.splitext(logo.filename)[1].lower()
-                if ext in (".png", ".jpg", ".jpeg", ".webp"):
-                    logo_filename = f"ig_logo_{cfg.id}{ext}"
-                    logo_path = os.path.join(LOGO_DIR, logo_filename)
-                    with open(logo_path, "wb") as f:
-                        shutil.copyfileobj(logo.file, f)
-                    cfg.logo_path = logo_path
-            except Exception as logo_exc:
-                log.warning("No se pudo guardar el logo: %s", logo_exc)
-
+        _apply_form_to_cfg(cfg, ig_user_id, app_id, app_secret, access_token,
+                           logo_position, max_posts_per_day,
+                           gradient_color, gradient_opacity, gradient_height,
+                           font_size, text_color, banner_text, banner_color, banner_text_color,
+                           logo, db)
         db.commit()
-        return RedirectResponse("/settings/instagram?msg=Configuracion+guardada", status_code=302)
-
+        return RedirectResponse(
+            f"/settings/instagram/{account_id}?msg=Configuracion+guardada", status_code=302
+        )
     except Exception as exc:
-        log.error("Error guardando configuración de Instagram: %s", exc, exc_info=True)
+        log.error("Error guardando Instagram %s: %s", account_id, exc, exc_info=True)
         db.rollback()
-        import urllib.parse
-        err_msg = urllib.parse.quote(str(exc)[:200])
-        return RedirectResponse(f"/settings/instagram?err={err_msg}", status_code=302)
+        err = urllib.parse.quote(str(exc)[:200])
+        return RedirectResponse(f"/settings/instagram/{account_id}?err={err}", status_code=302)
 
 
-@router.post("/toggle")
-async def toggle_instagram(request: Request, db: Session = Depends(get_db)):
+def _apply_form_to_cfg(
+    cfg: InstagramSettings,
+    ig_user_id: str, app_id: str, app_secret: str, access_token: str,
+    logo_position: str, max_posts_per_day: int,
+    gradient_color: str, gradient_opacity: int, gradient_height: int,
+    font_size: int, text_color: str,
+    banner_text: str, banner_color: str, banner_text_color: str,
+    logo: Optional[UploadFile], db: Session,
+):
+    cfg.ig_user_id = ig_user_id.strip() or None
+    cfg.app_id = app_id.strip() or None
+    cfg.max_posts_per_day = max(1, min(25, max_posts_per_day))
+    cfg.logo_position = logo_position if logo_position in (
+        "top-left", "top-right", "bottom-left", "bottom-right"
+    ) else "bottom-right"
+    cfg.gradient_color = gradient_color if gradient_color.startswith("#") else "#000000"
+    cfg.gradient_opacity = max(0, min(255, gradient_opacity))
+    cfg.gradient_height = max(100, min(1440, gradient_height))
+    cfg.font_size = max(20, min(120, font_size))
+    cfg.text_color = text_color if text_color.startswith("#") else "#ffffff"
+    cfg.banner_text = banner_text.strip() or None
+    cfg.banner_color = banner_color if banner_color.startswith("#") else "#e53935"
+    cfg.banner_text_color = banner_text_color if banner_text_color.startswith("#") else "#ffffff"
+
+    if app_secret.strip():
+        cfg.encrypted_app_secret = encrypt_value(app_secret.strip())
+    if access_token.strip():
+        cfg.encrypted_access_token = encrypt_value(access_token.strip())
+        try:
+            if cfg.app_id and cfg.encrypted_app_secret:
+                secret = decrypt_value(cfg.encrypted_app_secret)
+                cfg.token_expires_at = token_expires_at(cfg.app_id, secret, access_token.strip())
+        except Exception:
+            pass
+
+    if logo and logo.filename:
+        try:
+            ext = os.path.splitext(logo.filename)[1].lower()
+            if ext in (".png", ".jpg", ".jpeg", ".webp"):
+                logo_filename = f"ig_logo_{cfg.id}{ext}"
+                logo_path = os.path.join(LOGO_DIR, logo_filename)
+                with open(logo_path, "wb") as f:
+                    shutil.copyfileobj(logo.file, f)
+                cfg.logo_path = logo_path
+        except Exception as logo_exc:
+            log.warning("No se pudo guardar el logo: %s", logo_exc)
+
+
+# ─── Eliminar cuenta ─────────────────────────────────────────────────────────
+
+@router.post("/{account_id}/delete")
+async def instagram_delete(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    cfg = db.query(InstagramSettings).first()
+    cfg = _get_account(db, account_id)
+    if cfg:
+        db.delete(cfg)
+        db.commit()
+    return RedirectResponse("/settings/instagram?msg=Cuenta+eliminada", status_code=302)
+
+
+# ─── Toggle activo ───────────────────────────────────────────────────────────
+
+@router.post("/{account_id}/toggle")
+async def toggle_instagram(account_id: int, request: Request, db: Session = Depends(get_db)):
+    if not _require_admin(request, db):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    cfg = _get_account(db, account_id)
     if not cfg:
-        return JSONResponse({"error": "no configurado"}, status_code=404)
+        return JSONResponse({"error": "no encontrado"}, status_code=404)
     cfg.is_active = not cfg.is_active
     db.commit()
     return JSONResponse({"active": cfg.is_active})
 
 
-@router.get("/preview-image")
-async def preview_image(request: Request, db: Session = Depends(get_db)):
-    """Genera y devuelve una imagen de preview 1080×1440 con el logo y posición actuales."""
+# ─── Vista previa ────────────────────────────────────────────────────────────
+
+@router.get("/{account_id}/preview-image")
+async def preview_image(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
         from fastapi.responses import Response
         return Response(status_code=403)
 
-    cfg = db.query(InstagramSettings).first()
+    cfg = _get_account(db, account_id)
     from fastapi.responses import Response
     import urllib.request as _ur
     from app.services.image_template_service import build_instagram_image
@@ -178,34 +283,31 @@ async def preview_image(request: Request, db: Session = Depends(get_db)):
         gradient_height=(cfg.gradient_height or 480) if cfg else 480,
         font_size=(cfg.font_size or 62) if cfg else 62,
         text_color=(cfg.text_color or "#ffffff") if cfg else "#ffffff",
+        banner_text=(cfg.banner_text or None) if cfg else None,
+        banner_color=(cfg.banner_color or "#e53935") if cfg else "#e53935",
+        banner_text_color=(cfg.banner_text_color or "#ffffff") if cfg else "#ffffff",
     )
     return Response(content=ig_bytes, media_type="image/jpeg")
 
 
-@router.post("/fetch-ig-id")
-async def fetch_ig_id(request: Request, db: Session = Depends(get_db)):
-    """Busca el Instagram Business Account ID real usando el token guardado.
-    Estrategia 1: GET /me/accounts (requiere pages_show_list — nuevo token con scopes ampliados).
-    Estrategia 2: GET /me (funciona con solo instagram_content_publish).
-    """
+# ─── Detectar IG ID ──────────────────────────────────────────────────────────
+
+@router.post("/{account_id}/fetch-ig-id")
+async def fetch_ig_id(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-
-    cfg = db.query(InstagramSettings).first()
+    cfg = _get_account(db, account_id)
     if not cfg or not cfg.encrypted_access_token:
-        return JSONResponse({"ok": False, "error": "No hay token guardado — conectá con Meta primero"})
+        return JSONResponse({"ok": False, "error": "No hay token guardado"})
 
     token = decrypt_value(cfg.encrypted_access_token)
-
     try:
-        # Con Instagram Login, /me devuelve directamente la cuenta de Instagram
         r = http_requests.get(
             f"{IG_GRAPH_BASE}/me",
             params={"fields": "id,username,name", "access_token": token},
             timeout=20,
         )
         me = r.json()
-
         if "error" not in me and me.get("id"):
             return JSONResponse({"ok": True, "accounts": [{
                 "ig_id": me["id"],
@@ -213,84 +315,67 @@ async def fetch_ig_id(request: Request, db: Session = Depends(get_db)):
                 "name": me.get("name", ""),
                 "page_name": "Instagram Login",
             }]})
-
         err_msg = me.get("error", {}).get("message", "Error desconocido") if "error" in me else "No se pudo obtener el ID"
         return JSONResponse({
-            "ok": False,
-            "no_pages": True,
-            "fb_user": "",
+            "ok": False, "no_pages": True, "fb_user": "",
             "error": f"No se pudo obtener el ID: {err_msg}. Reconectá con el botón 'Conectar con Meta'.",
         })
-
     except Exception as exc:
-        log.error("Error en fetch_ig_id: %s", exc, exc_info=True)
         return JSONResponse({"ok": False, "error": str(exc)[:300]})
 
 
-@router.post("/fetch-ig-id-by-business")
-async def fetch_ig_id_by_business(request: Request, db: Session = Depends(get_db)):
-    """Busca la cuenta de Instagram Business usando el ID del Business Portfolio de Meta."""
+@router.post("/{account_id}/fetch-ig-id-by-business")
+async def fetch_ig_id_by_business(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-
     body = await request.json()
     business_id = str(body.get("business_id", "")).strip()
     if not business_id:
         return JSONResponse({"ok": False, "error": "Falta el Business ID"})
 
-    cfg = db.query(InstagramSettings).first()
+    cfg = _get_account(db, account_id)
     if not cfg or not cfg.encrypted_access_token:
         return JSONResponse({"ok": False, "error": "No hay token guardado"})
 
     token = decrypt_value(cfg.encrypted_access_token)
-
     try:
-        # Obtener cuentas de Instagram vinculadas al Business Portfolio
         r = http_requests.get(
             f"{GRAPH_BASE}/{business_id}/instagram_accounts",
             params={"access_token": token, "fields": "id,username,name"},
             timeout=20,
         )
         data = r.json()
-
         if "error" in data:
-            # Intentar con owned_instagram_accounts
             r2 = http_requests.get(
                 f"{GRAPH_BASE}/{business_id}/owned_instagram_accounts",
                 params={"access_token": token, "fields": "id,username,name"},
                 timeout=20,
             )
             data = r2.json()
-
         if "error" in data:
-            return JSONResponse({"ok": False, "error": data["error"].get("message", "Error de Meta al consultar el Business ID")})
-
+            return JSONResponse({"ok": False, "error": data["error"].get("message", "Error de Meta")})
         accounts = [
             {"ig_id": a["id"], "username": a.get("username", ""), "name": a.get("name", ""), "page_name": "Business Portfolio"}
             for a in data.get("data", []) if a.get("id")
         ]
-
         if not accounts:
             return JSONResponse({"ok": False, "error": "No se encontraron cuentas de Instagram en ese Business Portfolio"})
-
         return JSONResponse({"ok": True, "accounts": accounts})
-
     except Exception as exc:
-        log.error("Error en fetch_ig_id_by_business: %s", exc, exc_info=True)
         return JSONResponse({"ok": False, "error": str(exc)[:300]})
 
 
-@router.post("/test-publish")
-async def test_publish_instagram(request: Request, db: Session = Depends(get_db)):
-    """Publica una imagen de prueba real en Instagram para verificar el flujo completo."""
+# ─── Publicar prueba ─────────────────────────────────────────────────────────
+
+@router.post("/{account_id}/test-publish")
+async def test_publish_instagram(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-
-    cfg = db.query(InstagramSettings).first()
+    cfg = _get_account(db, account_id)
     if not cfg or not cfg.ig_user_id or not cfg.encrypted_access_token:
-        return JSONResponse({"ok": False, "error": "Configurá Instagram (ID de cuenta y token) antes de publicar"})
+        return JSONResponse({"ok": False, "error": "Configurá el ID de cuenta y el token antes de publicar"})
     if not cfg.is_active:
-        return JSONResponse({"ok": False, "error": "Instagram está inactivo — activalo antes de publicar"})
+        return JSONResponse({"ok": False, "error": "Esta cuenta está inactiva — activala antes de publicar"})
 
     try:
         import urllib.request as _ur
@@ -299,12 +384,10 @@ async def test_publish_instagram(request: Request, db: Session = Depends(get_db)
         from app.services.instagram_service import publish_image as ig_publish
         from app.services.wordpress_service import upload_media
 
-        test_title = "Prueba de publicación automática — AutoNews"
         img_url = (
             "https://image.pollinations.ai/prompt/professional%20news%20photo%20editorial%20style"
             "?width=1200&height=630&seed=42&nologo=true&model=flux"
         )
-
         try:
             req = _ur.Request(img_url, headers={"User-Agent": "AutoNews/1.0"})
             with _ur.urlopen(req, timeout=40) as r:
@@ -314,7 +397,7 @@ async def test_publish_instagram(request: Request, db: Session = Depends(get_db)
 
         ig_bytes = build_instagram_image(
             img_bytes,
-            test_title,
+            "Prueba de publicación automática — AutoNews",
             logo_path=cfg.logo_path,
             logo_position=cfg.logo_position or "bottom-right",
             gradient_color=cfg.gradient_color or "#000000",
@@ -322,6 +405,9 @@ async def test_publish_instagram(request: Request, db: Session = Depends(get_db)
             gradient_height=cfg.gradient_height or 480,
             font_size=cfg.font_size or 62,
             text_color=cfg.text_color or "#ffffff",
+            banner_text=cfg.banner_text or None,
+            banner_color=cfg.banner_color or "#e53935",
+            banner_text_color=cfg.banner_text_color or "#ffffff",
         )
 
         wp = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).first()
@@ -336,13 +422,11 @@ async def test_publish_instagram(request: Request, db: Session = Depends(get_db)
         _, public_url = media_result
         token = decrypt_value(cfg.encrypted_access_token)
         caption = "🔧 Prueba de publicación automática — AutoNews\n\n#autonews #prueba #test"
-
         result = ig_publish(cfg.ig_user_id, token, public_url, caption)
 
         if result["ok"]:
-            db.add(Log(level="INFO", message="[Instagram] Prueba publicada correctamente", source="instagram"))
+            db.add(Log(level="INFO", message=f"[Instagram:{cfg.name}] Prueba publicada", source="instagram"))
             db.commit()
-
         return JSONResponse(result)
 
     except Exception as exc:
@@ -350,23 +434,26 @@ async def test_publish_instagram(request: Request, db: Session = Depends(get_db)
         return JSONResponse({"ok": False, "error": str(exc)[:300]})
 
 
-@router.post("/test")
-async def test_instagram(request: Request, db: Session = Depends(get_db)):
+# ─── Probar conexión ─────────────────────────────────────────────────────────
+
+@router.post("/{account_id}/test")
+async def test_instagram(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    cfg = db.query(InstagramSettings).first()
+    cfg = _get_account(db, account_id)
     if not cfg or not cfg.ig_user_id or not cfg.encrypted_access_token:
         return JSONResponse({"ok": False, "error": "Completá todos los campos antes de probar"})
     token = decrypt_value(cfg.encrypted_access_token)
-    result = test_connection(cfg.ig_user_id, token)
-    return JSONResponse(result)
+    return JSONResponse(test_connection(cfg.ig_user_id, token))
 
 
-@router.post("/refresh-token")
-async def do_refresh_token(request: Request, db: Session = Depends(get_db)):
+# ─── Renovar token ───────────────────────────────────────────────────────────
+
+@router.post("/{account_id}/refresh-token")
+async def do_refresh_token(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    cfg = db.query(InstagramSettings).first()
+    cfg = _get_account(db, account_id)
     if not cfg or not cfg.encrypted_access_token or not cfg.app_id or not cfg.encrypted_app_secret:
         return JSONResponse({"ok": False, "error": "Faltan credenciales para renovar el token"})
     token = decrypt_value(cfg.encrypted_access_token)
@@ -379,24 +466,24 @@ async def do_refresh_token(request: Request, db: Session = Depends(get_db)):
     return JSONResponse(result)
 
 
+# ─── OAuth ───────────────────────────────────────────────────────────────────
+
 def _oauth_callback_url(request: Request) -> str:
-    """Construye la URL de callback OAuth forzando HTTPS (requerido por Meta)."""
     base = str(request.base_url).rstrip("/")
-    # Forzar HTTPS: nginx termina SSL y el app recibe HTTP internamente
     if base.startswith("http://") and not base.startswith("http://localhost"):
         base = "https://" + base[len("http://"):]
     return f"{base}/settings/instagram/oauth-callback"
 
 
-@router.get("/oauth-start")
-async def oauth_start(request: Request, db: Session = Depends(get_db)):
-    """Inicia el flujo OAuth con Instagram Login para obtener el token."""
+@router.get("/{account_id}/oauth-start")
+async def oauth_start(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
         return RedirectResponse("/", status_code=302)
-    cfg = db.query(InstagramSettings).first()
+    cfg = _get_account(db, account_id)
     if not cfg or not cfg.app_id or not cfg.encrypted_app_secret:
         return RedirectResponse(
-            "/settings/instagram?err=Primero+guarda+el+App+ID+y+App+Secret", status_code=302
+            f"/settings/instagram/{account_id}?err=Primero+guarda+el+App+ID+y+App+Secret",
+            status_code=302,
         )
     callback = _oauth_callback_url(request)
     url = (
@@ -405,34 +492,26 @@ async def oauth_start(request: Request, db: Session = Depends(get_db)):
         f"&redirect_uri={urllib.parse.quote(callback, safe='')}"
         f"&scope={OAUTH_SCOPES}"
         f"&response_type=code"
+        f"&state={account_id}"
     )
     return RedirectResponse(url, status_code=302)
 
 
-def _popup_response(ok: bool, message: str) -> HTMLResponse:
-    """Devuelve HTML que cierra el popup y actualiza la ventana padre."""
+def _popup_response(ok: bool, message: str, account_id: int | None = None) -> HTMLResponse:
+    base = f"/settings/instagram/{account_id}" if account_id else "/settings/instagram"
     escaped = message.replace("'", "\\'").replace("\n", " ")
+    key = "msg" if ok else "err"
+    dest = f"{base}?{key}={urllib.parse.quote(message)}"
     if ok:
-        script = (
-            "if(window.opener&&!window.opener.closed){"
-            f"window.opener.location.href='/settings/instagram?msg={urllib.parse.quote(message)}';"
-            "setTimeout(()=>window.close(),300);"
-            "}else{"
-            f"window.location.href='/settings/instagram?msg={urllib.parse.quote(message)}';"
-            "}"
-        )
         body_html = f"<p style='color:green'>✓ {escaped}</p>"
     else:
-        script = (
-            "if(window.opener&&!window.opener.closed){"
-            f"window.opener.location.href='/settings/instagram?err={urllib.parse.quote(message)}';"
-            "setTimeout(()=>window.close(),300);"
-            "}else{"
-            f"window.location.href='/settings/instagram?err={urllib.parse.quote(message)}';"
-            "}"
-        )
         body_html = f"<p style='color:red'>✗ {escaped}</p>"
-
+    script = (
+        f"if(window.opener&&!window.opener.closed){{"
+        f"window.opener.location.href='{dest}';"
+        f"setTimeout(()=>window.close(),300);"
+        f"}}else{{window.location.href='{dest}';}}"
+    )
     return HTMLResponse(
         f"<!doctype html><html><body style='font-family:sans-serif;text-align:center;padding:60px'>"
         f"{body_html}<p style='color:#888;font-size:.9em'>Cerrando...</p>"
@@ -445,24 +524,25 @@ async def oauth_callback(
     request: Request,
     code: Optional[str] = None,
     error: Optional[str] = None,
+    state: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    """Recibe el código OAuth de Meta, lo intercambia por un long-lived token y lo guarda."""
     if not _require_admin(request, db):
         return RedirectResponse("/", status_code=302)
 
-    if error or not code:
-        return _popup_response(False, f"OAuth cancelado: {error or 'sin codigo'}")
+    account_id = int(state) if state and state.isdigit() else None
 
-    cfg = db.query(InstagramSettings).first()
+    if error or not code:
+        return _popup_response(False, f"OAuth cancelado: {error or 'sin codigo'}", account_id)
+
+    cfg = _get_account(db, account_id) if account_id else None
     if not cfg or not cfg.app_id or not cfg.encrypted_app_secret:
-        return _popup_response(False, "Configuracion incompleta: falta App ID o App Secret")
+        return _popup_response(False, "Configuracion incompleta: falta App ID o App Secret", account_id)
 
     try:
         app_secret = decrypt_value(cfg.encrypted_app_secret)
         callback = _oauth_callback_url(request)
 
-        # 1) Intercambiar code por token corto (Instagram Login)
         r = http_requests.post(
             IG_TOKEN_URL,
             data={
@@ -478,30 +558,25 @@ async def oauth_callback(
         if "error" in data or "error_type" in data:
             err_msg = data.get("error_message") or data.get("error", {}).get("message", "Error de Meta")
             hint = " — verificá que el App Secret sea correcto" if "secret" in str(err_msg).lower() else ""
-            return _popup_response(False, err_msg + hint)
+            return _popup_response(False, err_msg + hint, account_id)
 
         short_token = data.get("access_token", "")
         ig_user_id  = str(data.get("user_id", ""))
         if not short_token:
-            return _popup_response(False, "Instagram no devolvió el token")
+            return _popup_response(False, "Instagram no devolvió el token", account_id)
 
-        # 2) Intercambiar por long-lived (~60 días)
         r2 = http_requests.get(
             f"{IG_GRAPH_BASE}/access_token",
-            params={
-                "grant_type": "ig_exchange_token",
-                "client_secret": app_secret,
-                "access_token": short_token,
-            },
+            params={"grant_type": "ig_exchange_token", "client_secret": app_secret, "access_token": short_token},
             timeout=30,
         )
         data2 = r2.json()
-        long_token  = data2.get("access_token", short_token)
-        expires_in  = data2.get("expires_in")
+        long_token = data2.get("access_token", short_token)
+        expires_in = data2.get("expires_in")
 
         cfg.encrypted_access_token = encrypt_value(long_token)
         if ig_user_id and not cfg.ig_user_id:
-            cfg.ig_user_id = ig_user_id  # auto-guardar el IG user ID
+            cfg.ig_user_id = ig_user_id
         if expires_in:
             from datetime import timedelta
             cfg.token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=int(expires_in))
@@ -512,9 +587,9 @@ async def oauth_callback(
                 pass
         db.commit()
 
-        extra = f" (ID de cuenta guardado: {ig_user_id})" if ig_user_id and not cfg.ig_user_id else ""
-        return _popup_response(True, f"Token obtenido y guardado correctamente{extra}")
+        extra = f" (ID: {ig_user_id})" if ig_user_id and not cfg.ig_user_id else ""
+        return _popup_response(True, f"Token obtenido y guardado correctamente{extra}", account_id)
 
     except Exception as exc:
         log.error("OAuth callback error: %s", exc, exc_info=True)
-        return _popup_response(False, str(exc)[:200])
+        return _popup_response(False, str(exc)[:200], account_id)
