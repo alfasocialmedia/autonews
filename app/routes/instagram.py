@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import pathlib
 import shutil
 import urllib.parse
 from datetime import datetime, timezone
@@ -30,8 +31,15 @@ GRAPH_BASE     = "https://graph.facebook.com/v19.0"
 router = APIRouter(prefix="/settings/instagram")
 templates = Jinja2Templates(directory="app/templates")
 
-LOGO_DIR = os.path.join("app", "static", "uploads", "logos")
-os.makedirs(LOGO_DIR, exist_ok=True)
+def _logo_dir() -> str:
+    """Returns persistent logo storage dir: /app/data/logos in Docker, app/static/uploads/logos in dev."""
+    pdir = pathlib.Path("/app/data/logos")
+    if pdir.parent.exists():
+        pdir.mkdir(exist_ok=True)
+        return str(pdir)
+    ldir = pathlib.Path("app/static/uploads/logos")
+    ldir.mkdir(parents=True, exist_ok=True)
+    return str(ldir)
 
 
 def _require_admin(request: Request, db: Session):
@@ -214,7 +222,7 @@ def _apply_form_to_cfg(
             ext = os.path.splitext(logo.filename)[1].lower()
             if ext in (".png", ".jpg", ".jpeg", ".webp"):
                 logo_filename = f"ig_logo_{cfg.id}{ext}"
-                logo_path = os.path.join(LOGO_DIR, logo_filename)
+                logo_path = os.path.join(_logo_dir(), logo_filename)
                 with open(logo_path, "wb") as f:
                     shutil.copyfileobj(logo.file, f)
                 cfg.logo_path = logo_path
@@ -247,6 +255,24 @@ async def toggle_instagram(account_id: int, request: Request, db: Session = Depe
     cfg.is_active = not cfg.is_active
     db.commit()
     return JSONResponse({"active": cfg.is_active})
+
+
+# ─── Servir logo ─────────────────────────────────────────────────────────────
+
+@router.get("/{account_id}/logo")
+async def serve_logo(account_id: int, request: Request, db: Session = Depends(get_db)):
+    from fastapi.responses import FileResponse, Response as FR
+    if not _require_admin(request, db):
+        return FR(status_code=403)
+    cfg = _get_account(db, account_id)
+    if not cfg or not cfg.logo_path:
+        return FR(status_code=404)
+    logo_path = pathlib.Path(cfg.logo_path)
+    if not logo_path.exists():
+        return FR(status_code=404)
+    ext = logo_path.suffix.lower()
+    media_types = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+    return FileResponse(str(logo_path), media_type=media_types.get(ext, "image/png"))
 
 
 # ─── Vista previa ────────────────────────────────────────────────────────────

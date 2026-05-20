@@ -134,7 +134,7 @@
               <div class="form-text">PNG con transparencia recomendado.</div>
               {% if cfg and cfg.logo_path %}
               <div class="mt-2">
-                <img src="/static/uploads/logos/{{ cfg.logo_path.split('/')[-1].split('\\')[-1] }}"
+                <img src="/settings/instagram/{{ cfg.id }}/logo"
                      class="img-thumbnail" style="max-height:60px">
                 <span class="text-muted small ms-2">Logo actual</span>
               </div>
@@ -325,7 +325,7 @@
 
 {% block scripts %}
 <script>
-const ACCT_ID = {{ account_id }};
+const ACCT_ID = {{ cfg.id if cfg else 0 }};
 const BASE = `/settings/instagram/${ACCT_ID}`;
 
 const btnOAuth = document.getElementById('btnOAuth');
