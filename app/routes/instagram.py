@@ -135,6 +135,38 @@ async def toggle_instagram(request: Request, db: Session = Depends(get_db)):
     return JSONResponse({"active": cfg.is_active})
 
 
+@router.get("/preview-image")
+async def preview_image(request: Request, db: Session = Depends(get_db)):
+    """Genera y devuelve una imagen de preview 1080×1440 con el logo y posición actuales."""
+    if not _require_admin(request, db):
+        from fastapi.responses import Response
+        return Response(status_code=403)
+
+    cfg = db.query(InstagramSettings).first()
+    from fastapi.responses import Response
+    import urllib.request as _ur
+    from app.services.image_template_service import build_instagram_image
+
+    img_url = (
+        "https://image.pollinations.ai/prompt/professional%20news%20photo%20editorial%20style"
+        "?width=1200&height=800&seed=7&nologo=true&model=flux"
+    )
+    try:
+        req = _ur.Request(img_url, headers={"User-Agent": "AutoNews/1.0"})
+        with _ur.urlopen(req, timeout=40) as r:
+            img_bytes = r.read()
+    except Exception:
+        return Response(b"Error descargando imagen de muestra", status_code=502, media_type="text/plain")
+
+    ig_bytes = build_instagram_image(
+        img_bytes,
+        "Vista previa — Título de la noticia de ejemplo",
+        logo_path=cfg.logo_path if cfg else None,
+        logo_position=(cfg.logo_position if cfg else "bottom-right") or "bottom-right",
+    )
+    return Response(content=ig_bytes, media_type="image/jpeg")
+
+
 @router.post("/fetch-ig-id")
 async def fetch_ig_id(request: Request, db: Session = Depends(get_db)):
     """Busca el Instagram Business Account ID real usando el token guardado.

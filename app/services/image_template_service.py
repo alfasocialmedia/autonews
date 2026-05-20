@@ -15,7 +15,7 @@ import textwrap
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 TARGET_W = 1080
-TARGET_H = 1350
+TARGET_H = 1440
 FONT_DIR = os.path.join(os.path.dirname(__file__), "..", "static", "fonts")
 LOGO_MARGIN = 40
 LOGO_MAX_SIZE = 180   # px — lado máximo del logo
