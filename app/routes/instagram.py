@@ -200,39 +200,69 @@ async def fetch_ig_id(request: Request, db: Session = Depends(get_db)):
                 "error": f"Páginas encontradas: {page_names} — pero ninguna tiene una cuenta de Instagram Business vinculada.",
             })
 
-        # Sin páginas vía /me/accounts → intentar via /me/businesses (Business Portfolio)
-        r_biz = http_requests.get(
-            f"{GRAPH_BASE}/me/businesses",
-            params={"access_token": token, "fields": "id,name,owned_pages{id,name,instagram_business_account{id,username,name}}"},
-            timeout=20,
-        )
-        biz_data = r_biz.json()
-
-        if "error" not in biz_data:
-            biz_accounts = []
-            for biz in biz_data.get("data", []):
-                for page in (biz.get("owned_pages") or {}).get("data", []):
-                    ig_biz = (page.get("instagram_business_account") or {})
-                    ig_id = ig_biz.get("id", "")
-                    if ig_id:
-                        biz_accounts.append({
-                            "ig_id": ig_id,
-                            "username": ig_biz.get("username", ""),
-                            "name": ig_biz.get("name", ""),
-                            "page_name": page.get("name", ""),
-                        })
-            if biz_accounts:
-                return JSONResponse({"ok": True, "accounts": biz_accounts})
-
+        # Sin páginas vía /me/accounts → pedir Business ID para buscar directamente
         return JSONResponse({
             "ok": False,
             "no_pages": True,
             "fb_user": fb_user_name,
-            "error": f"La cuenta de Facebook '{fb_user_name}' no tiene Páginas accesibles via API.",
+            "error": f"La cuenta de Facebook '{fb_user_name}' usa Business Portfolio.",
         })
 
     except Exception as exc:
         log.error("Error en fetch_ig_id: %s", exc, exc_info=True)
+        return JSONResponse({"ok": False, "error": str(exc)[:300]})
+
+
+@router.post("/fetch-ig-id-by-business")
+async def fetch_ig_id_by_business(request: Request, db: Session = Depends(get_db)):
+    """Busca la cuenta de Instagram Business usando el ID del Business Portfolio de Meta."""
+    if not _require_admin(request, db):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    body = await request.json()
+    business_id = str(body.get("business_id", "")).strip()
+    if not business_id:
+        return JSONResponse({"ok": False, "error": "Falta el Business ID"})
+
+    cfg = db.query(InstagramSettings).first()
+    if not cfg or not cfg.encrypted_access_token:
+        return JSONResponse({"ok": False, "error": "No hay token guardado"})
+
+    token = decrypt_value(cfg.encrypted_access_token)
+
+    try:
+        # Obtener cuentas de Instagram vinculadas al Business Portfolio
+        r = http_requests.get(
+            f"{GRAPH_BASE}/{business_id}/instagram_accounts",
+            params={"access_token": token, "fields": "id,username,name"},
+            timeout=20,
+        )
+        data = r.json()
+
+        if "error" in data:
+            # Intentar con owned_instagram_accounts
+            r2 = http_requests.get(
+                f"{GRAPH_BASE}/{business_id}/owned_instagram_accounts",
+                params={"access_token": token, "fields": "id,username,name"},
+                timeout=20,
+            )
+            data = r2.json()
+
+        if "error" in data:
+            return JSONResponse({"ok": False, "error": data["error"].get("message", "Error de Meta al consultar el Business ID")})
+
+        accounts = [
+            {"ig_id": a["id"], "username": a.get("username", ""), "name": a.get("name", ""), "page_name": "Business Portfolio"}
+            for a in data.get("data", []) if a.get("id")
+        ]
+
+        if not accounts:
+            return JSONResponse({"ok": False, "error": "No se encontraron cuentas de Instagram en ese Business Portfolio"})
+
+        return JSONResponse({"ok": True, "accounts": accounts})
+
+    except Exception as exc:
+        log.error("Error en fetch_ig_id_by_business: %s", exc, exc_info=True)
         return JSONResponse({"ok": False, "error": str(exc)[:300]})
 
 
