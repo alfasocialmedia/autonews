@@ -4,6 +4,7 @@ import logging
 import os
 import shutil
 import urllib.parse
+from datetime import datetime, timezone
 from typing import Optional
 
 import requests as http_requests
@@ -20,8 +21,11 @@ from app.services.instagram_service import refresh_token, test_connection, token
 
 log = logging.getLogger(__name__)
 
-OAUTH_SCOPES = "instagram_content_publish,pages_show_list,pages_read_engagement,business_management"
-GRAPH_BASE = "https://graph.facebook.com/v19.0"
+OAUTH_SCOPES = "instagram_business_basic,instagram_content_publish"
+IG_OAUTH_URL   = "https://www.instagram.com/oauth/authorize"
+IG_TOKEN_URL   = "https://api.instagram.com/oauth/access_token"
+IG_GRAPH_BASE  = "https://graph.instagram.com"
+GRAPH_BASE     = "https://graph.facebook.com/v19.0"  # solo para debug_token legacy
 
 router = APIRouter(prefix="/settings/instagram")
 templates = Jinja2Templates(directory="app/templates")
@@ -147,65 +151,28 @@ async def fetch_ig_id(request: Request, db: Session = Depends(get_db)):
     token = decrypt_value(cfg.encrypted_access_token)
 
     try:
-        # Paso 0: verificar que el token sea válido y obtener el usuario de Facebook
-        r_me = http_requests.get(
-            f"{GRAPH_BASE}/me",
-            params={"fields": "id,name", "access_token": token},
-            timeout=20,
-        )
-        me_basic = r_me.json()
-        if "error" in me_basic:
-            return JSONResponse({"ok": False, "error": f"Token inválido o expirado: {me_basic['error'].get('message', 'Error desconocido')}"})
-        fb_user_name = me_basic.get("name", "")
-
-        # Paso 1: listar páginas de Facebook y sus cuentas IG vinculadas
+        # Con Instagram Login, /me devuelve directamente la cuenta de Instagram
         r = http_requests.get(
-            f"{GRAPH_BASE}/me/accounts",
-            params={"access_token": token, "fields": "id,name,instagram_business_account{id,username,name}"},
+            f"{IG_GRAPH_BASE}/me",
+            params={"fields": "id,username,name", "access_token": token},
             timeout=20,
         )
-        data = r.json()
+        me = r.json()
 
-        if "error" in data:
-            return JSONResponse({
-                "ok": False,
-                "need_reauth": True,
-                "fb_user": fb_user_name,
-                "error": "El token no tiene permiso para listar páginas. Hacé clic en 'Conectar con Meta' para renovar el token y volvé a intentar.",
-            })
+        if "error" not in me and me.get("id"):
+            return JSONResponse({"ok": True, "accounts": [{
+                "ig_id": me["id"],
+                "username": me.get("username", ""),
+                "name": me.get("name", ""),
+                "page_name": "Instagram Login",
+            }]})
 
-        pages = data.get("data", [])
-        accounts = []
-        for page in pages:
-            ig_biz = (page.get("instagram_business_account") or {})
-            ig_id = ig_biz.get("id", "")
-            if ig_id:
-                accounts.append({
-                    "ig_id": ig_id,
-                    "username": ig_biz.get("username", ""),
-                    "name": ig_biz.get("name", ""),
-                    "page_name": page.get("name", ""),
-                })
-
-        if accounts:
-            return JSONResponse({"ok": True, "accounts": accounts})
-
-        if pages:
-            page_names = ", ".join(p.get("name", "") for p in pages)
-            return JSONResponse({
-                "ok": False,
-                "no_ig_linked": True,
-                "fb_user": fb_user_name,
-                "page_names": page_names,
-                "error": f"Páginas encontradas: {page_names} — pero ninguna tiene una cuenta de Instagram Business vinculada.",
-            })
-
-        # Sin páginas vía /me/accounts → pedir Business ID para buscar directamente
+        err_msg = me.get("error", {}).get("message", "Error desconocido") if "error" in me else "No se pudo obtener el ID"
         return JSONResponse({
             "ok": False,
             "no_pages": True,
-            "fb_user": fb_user_name,
-            "error": f"La cuenta de Facebook '{fb_user_name}' usa Business Portfolio.",
+            "fb_user": "",
+            "error": f"No se pudo obtener el ID: {err_msg}. Reconectá con el botón 'Conectar con Meta'.",
         })
 
     except Exception as exc:
@@ -371,7 +338,7 @@ def _oauth_callback_url(request: Request) -> str:
 
 @router.get("/oauth-start")
 async def oauth_start(request: Request, db: Session = Depends(get_db)):
-    """Inicia el flujo OAuth con Meta para obtener el token de Instagram."""
+    """Inicia el flujo OAuth con Instagram Login para obtener el token."""
     if not _require_admin(request, db):
         return RedirectResponse("/", status_code=302)
     cfg = db.query(InstagramSettings).first()
@@ -381,7 +348,7 @@ async def oauth_start(request: Request, db: Session = Depends(get_db)):
         )
     callback = _oauth_callback_url(request)
     url = (
-        f"https://www.facebook.com/dialog/oauth"
+        f"{IG_OAUTH_URL}"
         f"?client_id={cfg.app_id}"
         f"&redirect_uri={urllib.parse.quote(callback, safe='')}"
         f"&scope={OAUTH_SCOPES}"
@@ -443,49 +410,58 @@ async def oauth_callback(
         app_secret = decrypt_value(cfg.encrypted_app_secret)
         callback = _oauth_callback_url(request)
 
-        # 1) Intercambiar code por token corto
-        r = http_requests.get(
-            f"{GRAPH_BASE}/oauth/access_token",
-            params={
+        # 1) Intercambiar code por token corto (Instagram Login)
+        r = http_requests.post(
+            IG_TOKEN_URL,
+            data={
                 "client_id": cfg.app_id,
-                "redirect_uri": callback,
                 "client_secret": app_secret,
+                "grant_type": "authorization_code",
+                "redirect_uri": callback,
                 "code": code,
             },
             timeout=30,
         )
         data = r.json()
-        if "error" in data:
-            meta_err = data["error"].get("message", "Error de Meta")
-            hint = " — verificá que el App Secret sea correcto" if "client secret" in meta_err.lower() else ""
-            return _popup_response(False, meta_err + hint)
+        if "error" in data or "error_type" in data:
+            err_msg = data.get("error_message") or data.get("error", {}).get("message", "Error de Meta")
+            hint = " — verificá que el App Secret sea correcto" if "secret" in str(err_msg).lower() else ""
+            return _popup_response(False, err_msg + hint)
 
         short_token = data.get("access_token", "")
+        ig_user_id  = str(data.get("user_id", ""))
         if not short_token:
-            return _popup_response(False, "Meta no devolvio el token")
+            return _popup_response(False, "Instagram no devolvió el token")
 
         # 2) Intercambiar por long-lived (~60 días)
         r2 = http_requests.get(
-            f"{GRAPH_BASE}/oauth/access_token",
+            f"{IG_GRAPH_BASE}/access_token",
             params={
-                "grant_type": "fb_exchange_token",
-                "client_id": cfg.app_id,
+                "grant_type": "ig_exchange_token",
                 "client_secret": app_secret,
-                "fb_exchange_token": short_token,
+                "access_token": short_token,
             },
             timeout=30,
         )
         data2 = r2.json()
-        long_token = data2.get("access_token") if "error" not in data2 else short_token
+        long_token  = data2.get("access_token", short_token)
+        expires_in  = data2.get("expires_in")
 
         cfg.encrypted_access_token = encrypt_value(long_token)
-        try:
-            cfg.token_expires_at = token_expires_at(cfg.app_id, app_secret, long_token)
-        except Exception:
-            pass
+        if ig_user_id and not cfg.ig_user_id:
+            cfg.ig_user_id = ig_user_id  # auto-guardar el IG user ID
+        if expires_in:
+            from datetime import timedelta
+            cfg.token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=int(expires_in))
+        else:
+            try:
+                cfg.token_expires_at = token_expires_at(cfg.app_id, app_secret, long_token)
+            except Exception:
+                pass
         db.commit()
 
-        return _popup_response(True, "Token obtenido y guardado correctamente")
+        extra = f" (ID de cuenta guardado: {ig_user_id})" if ig_user_id and not cfg.ig_user_id else ""
+        return _popup_response(True, f"Token obtenido y guardado correctamente{extra}")
 
     except Exception as exc:
         log.error("OAuth callback error: %s", exc, exc_info=True)
