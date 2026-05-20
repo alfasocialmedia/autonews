@@ -20,7 +20,7 @@ from app.services.instagram_service import refresh_token, test_connection, token
 
 log = logging.getLogger(__name__)
 
-OAUTH_SCOPES = "instagram_content_publish,pages_read_engagement"
+OAUTH_SCOPES = "instagram_content_publish"
 GRAPH_BASE = "https://graph.facebook.com/v19.0"
 
 router = APIRouter(prefix="/settings/instagram")
