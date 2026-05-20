@@ -104,7 +104,7 @@
               <div class="form-text">PNG con transparencia recomendado. Se superpone en la imagen.</div>
               {% if cfg and cfg.logo_path %}
               <div class="mt-2">
-                <img src="/static/uploads/logos/{{ cfg.logo_path | basename }}"
+                <img src="/static/uploads/logos/{{ cfg.logo_path.split('/')[-1].split('\\')[-1] }}"
                      class="img-thumbnail" title="Logo actual" style="max-height:60px">
                 <span class="text-muted small ms-2">Logo actual</span>
               </div>

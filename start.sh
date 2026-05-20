@@ -1,10 +1,7 @@
 #!/bin/bash
 set -e
 
-# Arrancar el worker en background
-python -m app.worker &
-WORKER_PID=$!
-echo "[AutoNews] Worker iniciado (PID $WORKER_PID)"
+# El worker se inicia dentro de main.py (start_background) después de crear las tablas.
+# No lanzar un proceso worker separado para evitar conflictos de escritura en SQLite.
 
-# Arrancar uvicorn en foreground
 exec uvicorn app.main:app --host 0.0.0.0 --port 3000

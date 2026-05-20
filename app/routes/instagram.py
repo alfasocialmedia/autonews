@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import os
 import shutil
+from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -13,6 +15,8 @@ from app.crypto import decrypt_value, encrypt_value, mask_value
 from app.database import get_db
 from app.models import InstagramSettings
 from app.services.instagram_service import refresh_token, test_connection, token_expires_at
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/settings/instagram")
 templates = Jinja2Templates(directory="app/templates")
@@ -34,7 +38,12 @@ async def instagram_page(request: Request, db: Session = Depends(get_db)):
     if not user:
         return RedirectResponse("/", status_code=302)
 
-    cfg = db.query(InstagramSettings).first()
+    try:
+        cfg = db.query(InstagramSettings).first()
+    except Exception as exc:
+        log.error("Error cargando configuración de Instagram: %s", exc, exc_info=True)
+        cfg = None
+
     return templates.TemplateResponse(
         "settings_instagram.html",
         {"request": request, "user": user, "cfg": cfg, "mask": mask_value},
@@ -51,52 +60,58 @@ async def save_instagram(
     access_token: str = Form(""),
     logo_position: str = Form("bottom-right"),
     max_posts_per_day: int = Form(10),
-    logo: UploadFile = File(None),
+    logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
     user = _require_admin(request, db)
     if not user:
         return RedirectResponse("/", status_code=302)
 
-    cfg = db.query(InstagramSettings).first()
-    if not cfg:
-        cfg = InstagramSettings()
-        db.add(cfg)
-        db.flush()  # genera el id sin commitear
+    try:
+        cfg = db.query(InstagramSettings).first()
+        if not cfg:
+            cfg = InstagramSettings()
+            db.add(cfg)
+            db.flush()  # genera el id para usar en el nombre del logo
 
-    cfg.name = name.strip() or "Instagram"
-    cfg.ig_user_id = ig_user_id.strip() or None
-    cfg.app_id = app_id.strip() or None
-    cfg.max_posts_per_day = max(1, min(25, max_posts_per_day))
-    cfg.logo_position = logo_position if logo_position in ("top-left", "top-right", "bottom-left", "bottom-right") else "bottom-right"
+        cfg.name = name.strip() or "Instagram"
+        cfg.ig_user_id = ig_user_id.strip() or None
+        cfg.app_id = app_id.strip() or None
+        cfg.max_posts_per_day = max(1, min(25, max_posts_per_day))
+        cfg.logo_position = logo_position if logo_position in ("top-left", "top-right", "bottom-left", "bottom-right") else "bottom-right"
 
-    if app_secret.strip():
-        cfg.encrypted_app_secret = encrypt_value(app_secret.strip())
-    if access_token.strip():
-        cfg.encrypted_access_token = encrypt_value(access_token.strip())
-        # Intentar consultar expiración (no crítico si falla)
-        try:
-            if cfg.app_id and cfg.encrypted_app_secret:
-                secret = decrypt_value(cfg.encrypted_app_secret)
-                cfg.token_expires_at = token_expires_at(cfg.app_id, secret, access_token.strip())
-        except Exception:
-            pass
+        if app_secret.strip():
+            cfg.encrypted_app_secret = encrypt_value(app_secret.strip())
+        if access_token.strip():
+            cfg.encrypted_access_token = encrypt_value(access_token.strip())
+            try:
+                if cfg.app_id and cfg.encrypted_app_secret:
+                    secret = decrypt_value(cfg.encrypted_app_secret)
+                    cfg.token_expires_at = token_expires_at(cfg.app_id, secret, access_token.strip())
+            except Exception:
+                pass
 
-    # Guardar logo si se subió uno
-    if logo and logo.filename:
-        try:
-            ext = os.path.splitext(logo.filename)[1].lower()
-            if ext in (".png", ".jpg", ".jpeg", ".webp"):
-                logo_filename = f"ig_logo_{cfg.id}{ext}"
-                logo_path = os.path.join(LOGO_DIR, logo_filename)
-                with open(logo_path, "wb") as f:
-                    shutil.copyfileobj(logo.file, f)
-                cfg.logo_path = logo_path
-        except Exception:
-            pass
+        if logo and logo.filename:
+            try:
+                ext = os.path.splitext(logo.filename)[1].lower()
+                if ext in (".png", ".jpg", ".jpeg", ".webp"):
+                    logo_filename = f"ig_logo_{cfg.id}{ext}"
+                    logo_path = os.path.join(LOGO_DIR, logo_filename)
+                    with open(logo_path, "wb") as f:
+                        shutil.copyfileobj(logo.file, f)
+                    cfg.logo_path = logo_path
+            except Exception as logo_exc:
+                log.warning("No se pudo guardar el logo: %s", logo_exc)
 
-    db.commit()
-    return RedirectResponse("/settings/instagram?msg=Configuracion+guardada", status_code=302)
+        db.commit()
+        return RedirectResponse("/settings/instagram?msg=Configuracion+guardada", status_code=302)
+
+    except Exception as exc:
+        log.error("Error guardando configuración de Instagram: %s", exc, exc_info=True)
+        db.rollback()
+        import urllib.parse
+        err_msg = urllib.parse.quote(str(exc)[:200])
+        return RedirectResponse(f"/settings/instagram?err={err_msg}", status_code=302)
 
 
 @router.post("/toggle")
