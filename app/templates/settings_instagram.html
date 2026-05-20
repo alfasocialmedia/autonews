@@ -56,10 +56,18 @@
 
           <div class="mb-3">
             <label class="form-label fw-semibold">Instagram Business Account ID</label>
-            <input type="text" name="ig_user_id" class="form-control font-monospace"
-                   value="{{ cfg.ig_user_id if cfg and cfg.ig_user_id else '' }}"
-                   placeholder="17841400000000000">
+            <div class="input-group">
+              <input type="text" name="ig_user_id" id="igUserId" class="form-control font-monospace"
+                     value="{{ cfg.ig_user_id if cfg and cfg.ig_user_id else '' }}"
+                     placeholder="17841400000000000">
+              {% if cfg and cfg.encrypted_access_token %}
+              <button type="button" class="btn btn-outline-secondary" id="btnFetchIgId" title="Detectar ID automáticamente desde el token">
+                <i class="bi bi-search me-1"></i>Detectar
+              </button>
+              {% endif %}
+            </div>
             <div class="form-text">El ID numérico de tu cuenta IG Business (no el @usuario).</div>
+            <div id="igIdResult" class="mt-2" style="display:none"></div>
           </div>
 
           <div class="row g-2 mb-3">
@@ -100,7 +108,7 @@
           <div class="row g-3 mb-3">
             <div class="col-8">
               <label class="form-label fw-semibold">Logo del medio</label>
-              <input type="file" name="logo" class="form-control" accept=".png,.jpg,.jpeg,.webp">
+              <input type="file" name="logo" class="form-control" accept=".png,.jpg,.jpeg,.webp" title="Subir logo del medio">
               <div class="form-text">PNG con transparencia recomendado. Se superpone en la imagen.</div>
               {% if cfg and cfg.logo_path %}
               <div class="mt-2">
@@ -123,7 +131,8 @@
           <div class="mb-3">
             <label class="form-label fw-semibold">Máx. posts por día</label>
             <input type="number" name="max_posts_per_day" class="form-control"
-                   value="{{ cfg.max_posts_per_day if cfg else 10 }}" min="1" max="25" style="max-width:120px">
+                   value="{{ cfg.max_posts_per_day if cfg else 10 }}" min="1" max="25"
+                   style="max-width:120px" title="Máximo de posts por día">
             <div class="form-text">Límite de Meta: 25 posts/día.</div>
           </div>
 
@@ -292,6 +301,43 @@ if (btnRefresh) {
       btnRefresh.disabled = false;
       btnRefresh.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Renovar ahora';
     }
+  });
+}
+
+const btnFetchIgId = document.getElementById('btnFetchIgId');
+if (btnFetchIgId) {
+  btnFetchIgId.addEventListener('click', async () => {
+    btnFetchIgId.disabled = true;
+    btnFetchIgId.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Buscando...';
+    const resp = await fetch('/settings/instagram/fetch-ig-id', { method: 'POST' });
+    const data = await resp.json();
+    const div = document.getElementById('igIdResult');
+    div.style.display = 'block';
+    if (data.ok) {
+      const accounts = data.accounts;
+      if (accounts.length === 1) {
+        document.getElementById('igUserId').value = accounts[0].ig_id;
+        div.innerHTML = `<div class="alert alert-success py-2 small"><i class="bi bi-check-circle-fill me-1"></i>ID detectado: <strong>${accounts[0].ig_id}</strong> (@${accounts[0].username}) — página: ${accounts[0].page_name}. Guardá la configuración para aplicarlo.</div>`;
+      } else {
+        let html = '<div class="alert alert-info py-2 small"><strong>Seleccioná la cuenta:</strong><ul class="mb-0 mt-1">';
+        accounts.forEach(a => {
+          html += `<li><a href="#" class="ig-pick-link" data-id="${a.ig_id}"><strong>${a.ig_id}</strong> — @${a.username} (página: ${a.page_name})</a></li>`;
+        });
+        html += '</ul></div>';
+        div.innerHTML = html;
+        div.querySelectorAll('.ig-pick-link').forEach(link => {
+          link.addEventListener('click', e => {
+            e.preventDefault();
+            document.getElementById('igUserId').value = link.dataset.id;
+            div.innerHTML = `<div class="alert alert-success py-2 small"><i class="bi bi-check-circle-fill me-1"></i>ID seleccionado: <strong>${link.dataset.id}</strong>. Guardá la configuración para aplicarlo.</div>`;
+          });
+        });
+      }
+    } else {
+      div.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle-fill me-1"></i>${data.error}</div>`;
+    }
+    btnFetchIgId.disabled = false;
+    btnFetchIgId.innerHTML = '<i class="bi bi-search me-1"></i>Detectar';
   });
 }
 

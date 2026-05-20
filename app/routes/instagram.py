@@ -131,6 +131,62 @@ async def toggle_instagram(request: Request, db: Session = Depends(get_db)):
     return JSONResponse({"active": cfg.is_active})
 
 
+@router.post("/fetch-ig-id")
+async def fetch_ig_id(request: Request, db: Session = Depends(get_db)):
+    """Busca el Instagram Business Account ID real usando el token guardado."""
+    if not _require_admin(request, db):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    cfg = db.query(InstagramSettings).first()
+    if not cfg or not cfg.encrypted_access_token:
+        return JSONResponse({"ok": False, "error": "No hay token guardado — conectá con Meta primero"})
+
+    token = decrypt_value(cfg.encrypted_access_token)
+
+    try:
+        # Obtener las páginas de Facebook vinculadas al token
+        r = http_requests.get(
+            f"{GRAPH_BASE}/me/accounts",
+            params={"access_token": token, "fields": "id,name,instagram_business_account"},
+            timeout=20,
+        )
+        data = r.json()
+        if "error" in data:
+            return JSONResponse({"ok": False, "error": data["error"].get("message", "Error de Meta")})
+
+        pages = data.get("data", [])
+        if not pages:
+            return JSONResponse({"ok": False, "error": "No se encontraron Páginas de Facebook vinculadas al token. Verificá que tu cuenta de Meta tenga una Página."})
+
+        accounts = []
+        for page in pages:
+            ig_biz = page.get("instagram_business_account")
+            if ig_biz:
+                ig_id = ig_biz.get("id", "")
+                # Obtener username de la cuenta IG
+                r2 = http_requests.get(
+                    f"{GRAPH_BASE}/{ig_id}",
+                    params={"fields": "id,username,name", "access_token": token},
+                    timeout=20,
+                )
+                ig_data = r2.json()
+                accounts.append({
+                    "ig_id": ig_id,
+                    "username": ig_data.get("username", ""),
+                    "name": ig_data.get("name", ""),
+                    "page_name": page.get("name", ""),
+                })
+
+        if not accounts:
+            return JSONResponse({"ok": False, "error": "Las páginas de Facebook encontradas no tienen una cuenta de Instagram Business vinculada. Vinculá tu cuenta IG a una Página de Facebook."})
+
+        return JSONResponse({"ok": True, "accounts": accounts})
+
+    except Exception as exc:
+        log.error("Error en fetch_ig_id: %s", exc, exc_info=True)
+        return JSONResponse({"ok": False, "error": str(exc)[:300]})
+
+
 @router.post("/test-publish")
 async def test_publish_instagram(request: Request, db: Session = Depends(get_db)):
     """Publica una imagen de prueba real en Instagram para verificar el flujo completo."""
