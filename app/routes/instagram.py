@@ -161,8 +161,11 @@ async def do_refresh_token(request: Request, db: Session = Depends(get_db)):
 
 
 def _oauth_callback_url(request: Request) -> str:
-    """Construye la URL de callback OAuth usando la base URL del servidor."""
+    """Construye la URL de callback OAuth forzando HTTPS (requerido por Meta)."""
     base = str(request.base_url).rstrip("/")
+    # Forzar HTTPS: nginx termina SSL y el app recibe HTTP internamente
+    if base.startswith("http://") and not base.startswith("http://localhost"):
+        base = "https://" + base[len("http://"):]
     return f"{base}/settings/instagram/oauth-callback"
 
 
