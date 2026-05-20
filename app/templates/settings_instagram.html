@@ -338,13 +338,20 @@ if (btnFetchIgId) {
     } else if (data.no_pages) {
       div.innerHTML = `<div class="alert alert-warning py-2 small">
         <i class="bi bi-exclamation-triangle-fill me-1"></i>
-        <strong>La cuenta de Facebook '${data.fb_user}' no administra ninguna Página.</strong><br>
-        Para usar Instagram Content API necesitás:<br>
+        <strong>No se encontraron Páginas accesibles para '${data.fb_user}'.</strong><br><br>
+        Si usás <strong>Meta Business Suite (portafolio comercial)</strong>, obtené el ID manualmente:<br>
         <ol class="mb-1 mt-1">
-          <li>Crear una <a href="https://www.facebook.com/pages/create" target="_blank">Página de Facebook</a> (si no tenés una)</li>
-          <li>Ser administrador de esa Página</li>
-          <li>Vincular tu cuenta de Instagram Business a la Página: en la Página ir a <strong>Configuración → Instagram → Conectar cuenta</strong></li>
-          <li>Volver a conectar con el botón <strong>Conectar con Meta</strong></li>
+          <li>Ir a <strong>business.facebook.com → Configuración → Cuentas → Cuentas de Instagram</strong></li>
+          <li>Hacer clic en tu cuenta de Instagram</li>
+          <li>El ID de 17-18 dígitos aparece en la <strong>URL del navegador</strong> o en los detalles de la cuenta</li>
+          <li>Pegarlo en el campo <strong>Instagram Business Account ID</strong> y guardar</li>
+        </ol>
+        También podés obtenerlo con Graph API Explorer:<br>
+        <ol class="mb-0 mt-1">
+          <li>Ir a <a href="https://developers.facebook.com/tools/explorer" target="_blank">developers.facebook.com/tools/explorer</a></li>
+          <li>Seleccionar tu App → cambiar el token a <strong>tu Página de Facebook</strong></li>
+          <li>Consultar: <code>GET /me?fields=instagram_business_account</code></li>
+          <li>Copiar el <code>id</code> del resultado</li>
         </ol>
       </div>`;
     } else if (data.no_ig_linked) {

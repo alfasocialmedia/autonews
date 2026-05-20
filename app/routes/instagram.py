@@ -20,7 +20,7 @@ from app.services.instagram_service import refresh_token, test_connection, token
 
 log = logging.getLogger(__name__)
 
-OAUTH_SCOPES = "instagram_content_publish,pages_show_list,pages_read_engagement"
+OAUTH_SCOPES = "instagram_content_publish,pages_show_list,pages_read_engagement,business_management"
 GRAPH_BASE = "https://graph.facebook.com/v19.0"
 
 router = APIRouter(prefix="/settings/instagram")
@@ -200,12 +200,35 @@ async def fetch_ig_id(request: Request, db: Session = Depends(get_db)):
                 "error": f"Páginas encontradas: {page_names} — pero ninguna tiene una cuenta de Instagram Business vinculada.",
             })
 
-        # Sin páginas: el usuario de Facebook autenticado no administra ninguna Página
+        # Sin páginas vía /me/accounts → intentar via /me/businesses (Business Portfolio)
+        r_biz = http_requests.get(
+            f"{GRAPH_BASE}/me/businesses",
+            params={"access_token": token, "fields": "id,name,owned_pages{id,name,instagram_business_account{id,username,name}}"},
+            timeout=20,
+        )
+        biz_data = r_biz.json()
+
+        if "error" not in biz_data:
+            biz_accounts = []
+            for biz in biz_data.get("data", []):
+                for page in (biz.get("owned_pages") or {}).get("data", []):
+                    ig_biz = (page.get("instagram_business_account") or {})
+                    ig_id = ig_biz.get("id", "")
+                    if ig_id:
+                        biz_accounts.append({
+                            "ig_id": ig_id,
+                            "username": ig_biz.get("username", ""),
+                            "name": ig_biz.get("name", ""),
+                            "page_name": page.get("name", ""),
+                        })
+            if biz_accounts:
+                return JSONResponse({"ok": True, "accounts": biz_accounts})
+
         return JSONResponse({
             "ok": False,
             "no_pages": True,
             "fb_user": fb_user_name,
-            "error": f"La cuenta de Facebook '{fb_user_name}' no administra ninguna Página de Facebook.",
+            "error": f"La cuenta de Facebook '{fb_user_name}' no tiene Páginas accesibles via API.",
         })
 
     except Exception as exc:
