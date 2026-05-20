@@ -317,7 +317,7 @@ if (btnFetchIgId) {
       const accounts = data.accounts;
       if (accounts.length === 1) {
         document.getElementById('igUserId').value = accounts[0].ig_id;
-        div.innerHTML = `<div class="alert alert-success py-2 small"><i class="bi bi-check-circle-fill me-1"></i>ID detectado: <strong>${accounts[0].ig_id}</strong> (@${accounts[0].username}) — página: ${accounts[0].page_name}. Guardá la configuración para aplicarlo.</div>`;
+        div.innerHTML = `<div class="alert alert-success py-2 small"><i class="bi bi-check-circle-fill me-1"></i>ID detectado: <strong>${accounts[0].ig_id}</strong> (@${accounts[0].username || accounts[0].name}) — tipo: ${accounts[0].page_name}. Guardá la configuración para aplicarlo.</div>`;
       } else {
         let html = '<div class="alert alert-info py-2 small"><strong>Seleccioná la cuenta:</strong><ul class="mb-0 mt-1">';
         accounts.forEach(a => {
@@ -333,6 +333,8 @@ if (btnFetchIgId) {
           });
         });
       }
+    } else if (data.need_reauth) {
+      div.innerHTML = `<div class="alert alert-warning py-2 small"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.error}</div>`;
     } else {
       div.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle-fill me-1"></i>${data.error}</div>`;
     }

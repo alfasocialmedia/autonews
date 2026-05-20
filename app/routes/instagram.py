@@ -20,7 +20,7 @@ from app.services.instagram_service import refresh_token, test_connection, token
 
 log = logging.getLogger(__name__)
 
-OAUTH_SCOPES = "instagram_content_publish"
+OAUTH_SCOPES = "instagram_content_publish,pages_show_list,pages_read_engagement"
 GRAPH_BASE = "https://graph.facebook.com/v19.0"
 
 router = APIRouter(prefix="/settings/instagram")
@@ -133,7 +133,10 @@ async def toggle_instagram(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/fetch-ig-id")
 async def fetch_ig_id(request: Request, db: Session = Depends(get_db)):
-    """Busca el Instagram Business Account ID real usando el token guardado."""
+    """Busca el Instagram Business Account ID real usando el token guardado.
+    Estrategia 1: GET /me/accounts (requiere pages_show_list — nuevo token con scopes ampliados).
+    Estrategia 2: GET /me (funciona con solo instagram_content_publish).
+    """
     if not _require_admin(request, db):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
 
@@ -144,43 +147,67 @@ async def fetch_ig_id(request: Request, db: Session = Depends(get_db)):
     token = decrypt_value(cfg.encrypted_access_token)
 
     try:
-        # Obtener las páginas de Facebook vinculadas al token
+        # — Estrategia 1: /me/accounts (necesita pages_show_list) —
         r = http_requests.get(
             f"{GRAPH_BASE}/me/accounts",
             params={"access_token": token, "fields": "id,name,instagram_business_account"},
             timeout=20,
         )
         data = r.json()
-        if "error" in data:
-            return JSONResponse({"ok": False, "error": data["error"].get("message", "Error de Meta")})
 
-        pages = data.get("data", [])
-        if not pages:
-            return JSONResponse({"ok": False, "error": "No se encontraron Páginas de Facebook vinculadas al token. Verificá que tu cuenta de Meta tenga una Página."})
+        if "error" not in data:
+            pages = data.get("data", [])
+            accounts = []
+            for page in pages:
+                ig_biz = page.get("instagram_business_account")
+                if ig_biz:
+                    ig_id = ig_biz.get("id", "")
+                    r2 = http_requests.get(
+                        f"{GRAPH_BASE}/{ig_id}",
+                        params={"fields": "id,username,name", "access_token": token},
+                        timeout=20,
+                    )
+                    ig_data = r2.json()
+                    accounts.append({
+                        "ig_id": ig_id,
+                        "username": ig_data.get("username", ""),
+                        "name": ig_data.get("name", ""),
+                        "page_name": page.get("name", ""),
+                    })
+            if accounts:
+                return JSONResponse({"ok": True, "accounts": accounts})
+            if pages:
+                return JSONResponse({"ok": False, "error": "Las páginas de Facebook no tienen cuenta de Instagram Business vinculada. Vinculá tu cuenta IG a una Página de Facebook y volvé a intentar."})
 
-        accounts = []
-        for page in pages:
-            ig_biz = page.get("instagram_business_account")
-            if ig_biz:
-                ig_id = ig_biz.get("id", "")
-                # Obtener username de la cuenta IG
-                r2 = http_requests.get(
-                    f"{GRAPH_BASE}/{ig_id}",
-                    params={"fields": "id,username,name", "access_token": token},
-                    timeout=20,
-                )
-                ig_data = r2.json()
-                accounts.append({
-                    "ig_id": ig_id,
-                    "username": ig_data.get("username", ""),
-                    "name": ig_data.get("name", ""),
-                    "page_name": page.get("name", ""),
-                })
+        # — Estrategia 2: /me directamente (token con solo instagram_content_publish) —
+        r_me = http_requests.get(
+            f"{GRAPH_BASE}/me",
+            params={"fields": "id,username,name,account_type", "access_token": token},
+            timeout=20,
+        )
+        me = r_me.json()
 
-        if not accounts:
-            return JSONResponse({"ok": False, "error": "Las páginas de Facebook encontradas no tienen una cuenta de Instagram Business vinculada. Vinculá tu cuenta IG a una Página de Facebook."})
+        if "error" not in me and me.get("id"):
+            account_type = me.get("account_type", "")
+            if account_type in ("BUSINESS", "MEDIA_CREATOR"):
+                return JSONResponse({"ok": True, "accounts": [{
+                    "ig_id": me["id"],
+                    "username": me.get("username", ""),
+                    "name": me.get("name", ""),
+                    "page_name": account_type,
+                }]})
+            # Token es Facebook User (no Instagram) — el id de /me NO es el IG id
+            return JSONResponse({
+                "ok": False,
+                "error": (
+                    "El token actual no tiene el permiso pages_show_list necesario para detectar el ID. "
+                    "Hacé clic en 'Conectar con Meta' para renovar el token con los permisos ampliados y volvé a intentar."
+                ),
+                "need_reauth": True,
+            })
 
-        return JSONResponse({"ok": True, "accounts": accounts})
+        err_msg = me.get("error", {}).get("message", "Error desconocido de Meta") if "error" in me else "No se pudo obtener la información del token"
+        return JSONResponse({"ok": False, "error": err_msg})
 
     except Exception as exc:
         log.error("Error en fetch_ig_id: %s", exc, exc_info=True)
