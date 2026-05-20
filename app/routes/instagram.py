@@ -251,6 +251,23 @@ async def toggle_instagram(account_id: int, request: Request, db: Session = Depe
 
 # ─── Vista previa ────────────────────────────────────────────────────────────
 
+def _make_fallback_image_bytes(w: int = 1200, h: int = 800) -> bytes:
+    """Genera un degradado azul-oscuro como imagen de fondo cuando Pollinations no responde."""
+    from PIL import Image, ImageDraw
+    import io as _io
+    img = Image.new("RGB", (w, h))
+    draw = ImageDraw.Draw(img)
+    for y in range(h):
+        ratio = y / h
+        r = int(20 + 30 * ratio)
+        g = int(30 + 40 * ratio)
+        b = int(80 + 60 * ratio)
+        draw.line([(0, y), (w, y)], fill=(r, g, b))
+    buf = _io.BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
+
+
 @router.get("/{account_id}/preview-image")
 async def preview_image(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
@@ -262,31 +279,42 @@ async def preview_image(account_id: int, request: Request, db: Session = Depends
     import urllib.request as _ur
     from app.services.image_template_service import build_instagram_image
 
+    # Intentar descargar imagen de muestra desde Pollinations (timeout corto)
+    img_bytes = None
     img_url = (
         "https://image.pollinations.ai/prompt/professional%20news%20photo%20editorial%20style"
         "?width=1200&height=800&seed=7&nologo=true&model=flux"
     )
     try:
         req = _ur.Request(img_url, headers={"User-Agent": "AutoNews/1.0"})
-        with _ur.urlopen(req, timeout=40) as r:
+        with _ur.urlopen(req, timeout=12) as r:
             img_bytes = r.read()
     except Exception:
-        return Response(b"Error descargando imagen de muestra", status_code=502, media_type="text/plain")
+        pass
 
-    ig_bytes = build_instagram_image(
-        img_bytes,
-        "Vista previa — Título de la noticia de ejemplo",
-        logo_path=cfg.logo_path if cfg else None,
-        logo_position=(cfg.logo_position if cfg else "bottom-right") or "bottom-right",
-        gradient_color=(cfg.gradient_color or "#000000") if cfg else "#000000",
-        gradient_opacity=(cfg.gradient_opacity or 200) if cfg else 200,
-        gradient_height=(cfg.gradient_height or 480) if cfg else 480,
-        font_size=(cfg.font_size or 62) if cfg else 62,
-        text_color=(cfg.text_color or "#ffffff") if cfg else "#ffffff",
-        banner_text=(cfg.banner_text or None) if cfg else None,
-        banner_color=(cfg.banner_color or "#e53935") if cfg else "#e53935",
-        banner_text_color=(cfg.banner_text_color or "#ffffff") if cfg else "#ffffff",
-    )
+    # Fallback: degradado generado localmente
+    if not img_bytes:
+        img_bytes = _make_fallback_image_bytes()
+
+    try:
+        ig_bytes = build_instagram_image(
+            img_bytes,
+            "Vista previa — Título de la noticia de ejemplo",
+            logo_path=cfg.logo_path if cfg else None,
+            logo_position=(cfg.logo_position if cfg else "bottom-right") or "bottom-right",
+            gradient_color=(cfg.gradient_color or "#000000") if cfg else "#000000",
+            gradient_opacity=(cfg.gradient_opacity or 200) if cfg else 200,
+            gradient_height=(cfg.gradient_height or 480) if cfg else 480,
+            font_size=(cfg.font_size or 62) if cfg else 62,
+            text_color=(cfg.text_color or "#ffffff") if cfg else "#ffffff",
+            banner_text=(cfg.banner_text or None) if cfg else None,
+            banner_color=(cfg.banner_color or "#e53935") if cfg else "#e53935",
+            banner_text_color=(cfg.banner_text_color or "#ffffff") if cfg else "#ffffff",
+        )
+    except Exception as exc:
+        log.error("Error generando imagen de preview: %s", exc, exc_info=True)
+        return Response(b"Error generando imagen", status_code=500, media_type="text/plain")
+
     return Response(content=ig_bytes, media_type="image/jpeg")
 
 

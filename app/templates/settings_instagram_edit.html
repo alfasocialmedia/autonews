@@ -464,7 +464,6 @@ if (btnPreview) {
     spinner.style.display = 'block';
     btnPreview.disabled = true;
     btnPreview.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generando…';
-    img.src = `${BASE}/preview-image?t=${Date.now()}`;
     img.onload = () => {
       spinner.style.display = 'none'; img.style.display = 'block';
       btnPreview.disabled = false; btnPreview.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Actualizar';
@@ -474,6 +473,7 @@ if (btnPreview) {
       container.innerHTML = '<p class="text-danger small p-2">Error al generar la vista previa.</p>';
       btnPreview.disabled = false; btnPreview.innerHTML = '<i class="bi bi-eye me-1"></i>Ver previa';
     };
+    img.src = `${BASE}/preview-image?t=${Date.now()}`;
   });
 }
 
