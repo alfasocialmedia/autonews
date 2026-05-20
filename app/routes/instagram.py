@@ -62,6 +62,7 @@ async def save_instagram(
     if not cfg:
         cfg = InstagramSettings()
         db.add(cfg)
+        db.flush()  # genera el id sin commitear
 
     cfg.name = name.strip() or "Instagram"
     cfg.ig_user_id = ig_user_id.strip() or None
@@ -73,20 +74,26 @@ async def save_instagram(
         cfg.encrypted_app_secret = encrypt_value(app_secret.strip())
     if access_token.strip():
         cfg.encrypted_access_token = encrypt_value(access_token.strip())
-        # Consultar expiración del token nuevo
-        if cfg.app_id and cfg.encrypted_app_secret:
-            secret = decrypt_value(cfg.encrypted_app_secret)
-            cfg.token_expires_at = token_expires_at(cfg.app_id, secret, access_token.strip())
+        # Intentar consultar expiración (no crítico si falla)
+        try:
+            if cfg.app_id and cfg.encrypted_app_secret:
+                secret = decrypt_value(cfg.encrypted_app_secret)
+                cfg.token_expires_at = token_expires_at(cfg.app_id, secret, access_token.strip())
+        except Exception:
+            pass
 
     # Guardar logo si se subió uno
     if logo and logo.filename:
-        ext = os.path.splitext(logo.filename)[1].lower()
-        if ext in (".png", ".jpg", ".jpeg", ".webp"):
-            logo_filename = f"ig_logo_{cfg.id or 'new'}{ext}"
-            logo_path = os.path.join(LOGO_DIR, logo_filename)
-            with open(logo_path, "wb") as f:
-                shutil.copyfileobj(logo.file, f)
-            cfg.logo_path = logo_path
+        try:
+            ext = os.path.splitext(logo.filename)[1].lower()
+            if ext in (".png", ".jpg", ".jpeg", ".webp"):
+                logo_filename = f"ig_logo_{cfg.id}{ext}"
+                logo_path = os.path.join(LOGO_DIR, logo_filename)
+                with open(logo_path, "wb") as f:
+                    shutil.copyfileobj(logo.file, f)
+                cfg.logo_path = logo_path
+        except Exception:
+            pass
 
     db.commit()
     return RedirectResponse("/settings/instagram?msg=Configuracion+guardada", status_code=302)
