@@ -191,7 +191,18 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE groq_settings ADD COLUMN provider VARCHAR(50) DEFAULT 'groq'"))
             if "api_base_url" not in cols:
                 conn.execute(text("ALTER TABLE groq_settings ADD COLUMN api_base_url VARCHAR(300)"))
-        # instagram_settings se crea con create_all; solo aseguramos el directorio de logos
+        if "instagram_settings" in tables:
+            ig_cols = [c["name"] for c in inspector.get_columns("instagram_settings")]
+            if "gradient_color" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN gradient_color VARCHAR(10) DEFAULT '#000000'"))
+            if "gradient_opacity" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN gradient_opacity INTEGER DEFAULT 200"))
+            if "gradient_height" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN gradient_height INTEGER DEFAULT 480"))
+            if "font_size" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN font_size INTEGER DEFAULT 62"))
+            if "text_color" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN text_color VARCHAR(10) DEFAULT '#ffffff'"))
         import pathlib
         pathlib.Path("app/static/uploads/logos").mkdir(parents=True, exist_ok=True)
 

@@ -69,6 +69,11 @@ async def save_instagram(
     access_token: str = Form(""),
     logo_position: str = Form("bottom-right"),
     max_posts_per_day: int = Form(10),
+    gradient_color: str = Form("#000000"),
+    gradient_opacity: int = Form(200),
+    gradient_height: int = Form(480),
+    font_size: int = Form(62),
+    text_color: str = Form("#ffffff"),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -88,6 +93,11 @@ async def save_instagram(
         cfg.app_id = app_id.strip() or None
         cfg.max_posts_per_day = max(1, min(25, max_posts_per_day))
         cfg.logo_position = logo_position if logo_position in ("top-left", "top-right", "bottom-left", "bottom-right") else "bottom-right"
+        cfg.gradient_color = gradient_color if gradient_color.startswith("#") else "#000000"
+        cfg.gradient_opacity = max(0, min(255, gradient_opacity))
+        cfg.gradient_height = max(100, min(1440, gradient_height))
+        cfg.font_size = max(20, min(120, font_size))
+        cfg.text_color = text_color if text_color.startswith("#") else "#ffffff"
 
         if app_secret.strip():
             cfg.encrypted_app_secret = encrypt_value(app_secret.strip())
@@ -163,6 +173,11 @@ async def preview_image(request: Request, db: Session = Depends(get_db)):
         "Vista previa — Título de la noticia de ejemplo",
         logo_path=cfg.logo_path if cfg else None,
         logo_position=(cfg.logo_position if cfg else "bottom-right") or "bottom-right",
+        gradient_color=(cfg.gradient_color or "#000000") if cfg else "#000000",
+        gradient_opacity=(cfg.gradient_opacity or 200) if cfg else 200,
+        gradient_height=(cfg.gradient_height or 480) if cfg else 480,
+        font_size=(cfg.font_size or 62) if cfg else 62,
+        text_color=(cfg.text_color or "#ffffff") if cfg else "#ffffff",
     )
     return Response(content=ig_bytes, media_type="image/jpeg")
 
@@ -302,6 +317,11 @@ async def test_publish_instagram(request: Request, db: Session = Depends(get_db)
             test_title,
             logo_path=cfg.logo_path,
             logo_position=cfg.logo_position or "bottom-right",
+            gradient_color=cfg.gradient_color or "#000000",
+            gradient_opacity=cfg.gradient_opacity or 200,
+            gradient_height=cfg.gradient_height or 480,
+            font_size=cfg.font_size or 62,
+            text_color=cfg.text_color or "#ffffff",
         )
 
         wp = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).first()

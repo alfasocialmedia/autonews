@@ -1,6 +1,6 @@
 """
 Genera la imagen para Instagram:
-  - Redimensiona a 1080×1350 (4:5) recortando desde el centro
+  - Redimensiona a 1080×1440 (4:5) recortando desde el centro
   - Agrega degradado oscuro en la parte inferior
   - Superpone el texto del título (con ajuste de línea automático)
   - Superpone el logo del medio (si existe) en la esquina configurada
@@ -19,7 +19,6 @@ TARGET_H = 1440
 FONT_DIR = os.path.join(os.path.dirname(__file__), "..", "static", "fonts")
 LOGO_MARGIN = 40
 LOGO_MAX_SIZE = 180   # px — lado máximo del logo
-GRADIENT_HEIGHT = 480  # px — alto del degradado inferior
 
 
 def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -36,6 +35,13 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    hex_color = hex_color.lstrip("#")
+    if len(hex_color) == 3:
+        hex_color = "".join(c * 2 for c in hex_color)
+    return int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+
+
 def _crop_center(img: Image.Image, target_w: int, target_h: int) -> Image.Image:
     """Redimensiona manteniendo aspecto y recorta al centro."""
     src_w, src_h = img.size
@@ -48,35 +54,45 @@ def _crop_center(img: Image.Image, target_w: int, target_h: int) -> Image.Image:
     return img.crop((left, top, left + target_w, top + target_h))
 
 
-def _add_gradient(img: Image.Image, height: int) -> Image.Image:
-    """Agrega degradado negro de abajo hacia arriba en los últimos `height` px."""
-    gradient = Image.new("RGBA", (img.width, height), (0, 0, 0, 0))
+def _add_gradient(
+    img: Image.Image,
+    height: int,
+    color: str = "#000000",
+    max_opacity: int = 200,
+) -> Image.Image:
+    """Agrega degradado de `color` de abajo hacia arriba en los últimos `height` px."""
+    r, g, b = _hex_to_rgb(color)
+    gradient = Image.new("RGBA", (img.width, height), (r, g, b, 0))
     draw = ImageDraw.Draw(gradient)
     for y in range(height):
-        alpha = int(200 * (y / height))
-        draw.line([(0, y), (img.width, y)], fill=(0, 0, 0, alpha))
+        alpha = int(max_opacity * (y / height))
+        draw.line([(0, y), (img.width, y)], fill=(r, g, b, alpha))
     base = img.convert("RGBA")
     overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
     overlay.paste(gradient, (0, base.height - height))
     return Image.alpha_composite(base, overlay).convert("RGB")
 
 
-def _draw_title(img: Image.Image, title: str, font_size: int = 62) -> Image.Image:
+def _draw_title(
+    img: Image.Image,
+    title: str,
+    font_size: int = 62,
+    text_color: str = "#ffffff",
+) -> Image.Image:
     """Dibuja el título con sombra en la zona inferior de la imagen."""
     draw = ImageDraw.Draw(img)
     font = _load_font(font_size)
+    tr, tg, tb = _hex_to_rgb(text_color)
     max_chars = max(18, int(TARGET_W / (font_size * 0.55)))
-    lines = textwrap.wrap(title, width=max_chars)[:4]  # máx 4 líneas
+    lines = textwrap.wrap(title, width=max_chars)[:4]
     line_height = font_size + 10
     total_height = len(lines) * line_height
     y = img.height - total_height - 80
     padding_x = 50
 
     for line in lines:
-        # Sombra
         draw.text((padding_x + 2, y + 2), line, font=font, fill=(0, 0, 0, 180))
-        # Texto blanco
-        draw.text((padding_x, y), line, font=font, fill=(255, 255, 255, 255))
+        draw.text((padding_x, y), line, font=font, fill=(tr, tg, tb, 255))
         y += line_height
     return img
 
@@ -109,15 +125,20 @@ def build_instagram_image(
     title: str,
     logo_path: str | None = None,
     logo_position: str = "bottom-right",
+    gradient_color: str = "#000000",
+    gradient_opacity: int = 200,
+    gradient_height: int = 480,
+    font_size: int = 62,
+    text_color: str = "#ffffff",
 ) -> bytes:
     """
-    Pipeline completo: recibe bytes de imagen, devuelve JPEG 1080×1350 con
+    Pipeline completo: recibe bytes de imagen, devuelve JPEG 1080×1440 con
     título y logo superpuestos.
     """
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img = _crop_center(img, TARGET_W, TARGET_H)
-    img = _add_gradient(img, GRADIENT_HEIGHT)
-    img = _draw_title(img, title)
+    img = _add_gradient(img, gradient_height, color=gradient_color, max_opacity=gradient_opacity)
+    img = _draw_title(img, title, font_size=font_size, text_color=text_color)
     if logo_path:
         img = _paste_logo(img, logo_path, logo_position)
 

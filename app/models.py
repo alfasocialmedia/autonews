@@ -292,6 +292,12 @@ class InstagramSettings(Base):
     # Logo para superposición en imágenes
     logo_path = Column(String(300), nullable=True)          # ruta relativa en static/
     logo_position = Column(String(20), default="bottom-right")  # top-left|top-right|bottom-left|bottom-right
+    # Estilo de imagen
+    gradient_color = Column(String(10), default="#000000")
+    gradient_opacity = Column(Integer, default=200)
+    gradient_height = Column(Integer, default=480)
+    font_size = Column(Integer, default=62)
+    text_color = Column(String(10), default="#ffffff")
     # Control
     is_active = Column(Boolean, default=False)
     max_posts_per_day = Column(Integer, default=10)
