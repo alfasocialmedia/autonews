@@ -131,6 +131,71 @@ async def toggle_instagram(request: Request, db: Session = Depends(get_db)):
     return JSONResponse({"active": cfg.is_active})
 
 
+@router.post("/test-publish")
+async def test_publish_instagram(request: Request, db: Session = Depends(get_db)):
+    """Publica una imagen de prueba real en Instagram para verificar el flujo completo."""
+    if not _require_admin(request, db):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    cfg = db.query(InstagramSettings).first()
+    if not cfg or not cfg.ig_user_id or not cfg.encrypted_access_token:
+        return JSONResponse({"ok": False, "error": "Configurá Instagram (ID de cuenta y token) antes de publicar"})
+    if not cfg.is_active:
+        return JSONResponse({"ok": False, "error": "Instagram está inactivo — activalo antes de publicar"})
+
+    try:
+        import urllib.request as _ur
+        from app.models import Log, WordPressSettings
+        from app.services.image_template_service import build_instagram_image
+        from app.services.instagram_service import publish_image as ig_publish
+        from app.services.wordpress_service import upload_media
+
+        test_title = "Prueba de publicación automática — AutoNews"
+        img_url = (
+            "https://image.pollinations.ai/prompt/professional%20news%20photo%20editorial%20style"
+            "?width=1200&height=630&seed=42&nologo=true&model=flux"
+        )
+
+        try:
+            req = _ur.Request(img_url, headers={"User-Agent": "AutoNews/1.0"})
+            with _ur.urlopen(req, timeout=40) as r:
+                img_bytes = r.read()
+        except Exception as exc:
+            return JSONResponse({"ok": False, "error": f"No se pudo descargar imagen de prueba: {exc}"})
+
+        ig_bytes = build_instagram_image(
+            img_bytes,
+            test_title,
+            logo_path=cfg.logo_path,
+            logo_position=cfg.logo_position or "bottom-right",
+        )
+
+        wp = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).first()
+        if not wp:
+            return JSONResponse({"ok": False, "error": "No hay sitio WordPress activo para hospedar la imagen"})
+
+        wp_pwd = decrypt_value(wp.encrypted_app_password)
+        media_result = upload_media(wp.site_url, wp.api_user, wp_pwd, ig_bytes, "ig_test.jpg", "image/jpeg")
+        if not media_result:
+            return JSONResponse({"ok": False, "error": "No se pudo subir la imagen de prueba a WordPress"})
+
+        _, public_url = media_result
+        token = decrypt_value(cfg.encrypted_access_token)
+        caption = "🔧 Prueba de publicación automática — AutoNews\n\n#autonews #prueba #test"
+
+        result = ig_publish(cfg.ig_user_id, token, public_url, caption)
+
+        if result["ok"]:
+            db.add(Log(level="INFO", message="[Instagram] Prueba publicada correctamente", source="instagram"))
+            db.commit()
+
+        return JSONResponse(result)
+
+    except Exception as exc:
+        log.error("Error en test_publish_instagram: %s", exc, exc_info=True)
+        return JSONResponse({"ok": False, "error": str(exc)[:300]})
+
+
 @router.post("/test")
 async def test_instagram(request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):

@@ -141,6 +141,11 @@
               <i class="bi bi-plug me-1"></i>Probar conexión
             </button>
             {% endif %}
+            {% if cfg and cfg.ig_user_id and cfg.encrypted_access_token and cfg.is_active %}
+            <button type="button" class="btn btn-outline-warning" id="btnTestPublish">
+              <i class="bi bi-send me-1"></i>Publicar prueba
+            </button>
+            {% endif %}
           </div>
           {% if cfg and cfg.app_id and cfg.encrypted_app_secret and not cfg.encrypted_access_token %}
           <div class="alert alert-info mt-3 small">
@@ -287,6 +292,26 @@ if (btnRefresh) {
       btnRefresh.disabled = false;
       btnRefresh.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Renovar ahora';
     }
+  });
+}
+
+const btnTestPublish = document.getElementById('btnTestPublish');
+if (btnTestPublish) {
+  btnTestPublish.addEventListener('click', async () => {
+    if (!confirm('¿Publicar una imagen de prueba en Instagram? Aparecerá en tu cuenta real y cuenta para el límite diario.')) return;
+    btnTestPublish.disabled = true;
+    btnTestPublish.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Publicando...';
+    const resp = await fetch('/settings/instagram/test-publish', { method: 'POST' });
+    const data = await resp.json();
+    const div = document.getElementById('testResult');
+    div.style.display = 'block';
+    if (data.ok) {
+      div.innerHTML = `<div class="alert alert-success"><i class="bi bi-check-circle-fill me-2"></i>¡Publicado en Instagram! ID: <strong>${data.media_id}</strong> — revisá tu cuenta.</div>`;
+    } else {
+      div.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle-fill me-2"></i>${data.error}</div>`;
+    }
+    btnTestPublish.disabled = false;
+    btnTestPublish.innerHTML = '<i class="bi bi-send me-1"></i>Publicar prueba';
   });
 }
 
