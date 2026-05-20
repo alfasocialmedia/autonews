@@ -190,6 +190,37 @@ async def oauth_start(request: Request, db: Session = Depends(get_db)):
     return RedirectResponse(url, status_code=302)
 
 
+def _popup_response(ok: bool, message: str) -> HTMLResponse:
+    """Devuelve HTML que cierra el popup y actualiza la ventana padre."""
+    escaped = message.replace("'", "\\'").replace("\n", " ")
+    if ok:
+        script = (
+            "if(window.opener&&!window.opener.closed){"
+            f"window.opener.location.href='/settings/instagram?msg={urllib.parse.quote(message)}';"
+            "setTimeout(()=>window.close(),300);"
+            "}else{"
+            f"window.location.href='/settings/instagram?msg={urllib.parse.quote(message)}';"
+            "}"
+        )
+        body_html = f"<p style='color:green'>✓ {escaped}</p>"
+    else:
+        script = (
+            "if(window.opener&&!window.opener.closed){"
+            f"window.opener.location.href='/settings/instagram?err={urllib.parse.quote(message)}';"
+            "setTimeout(()=>window.close(),300);"
+            "}else{"
+            f"window.location.href='/settings/instagram?err={urllib.parse.quote(message)}';"
+            "}"
+        )
+        body_html = f"<p style='color:red'>✗ {escaped}</p>"
+
+    return HTMLResponse(
+        f"<!doctype html><html><body style='font-family:sans-serif;text-align:center;padding:60px'>"
+        f"{body_html}<p style='color:#888;font-size:.9em'>Cerrando...</p>"
+        f"<script>{script}</script></body></html>"
+    )
+
+
 @router.get("/oauth-callback")
 async def oauth_callback(
     request: Request,
@@ -202,14 +233,11 @@ async def oauth_callback(
         return RedirectResponse("/", status_code=302)
 
     if error or not code:
-        msg = urllib.parse.quote(f"OAuth cancelado o error: {error or 'sin codigo'}")
-        return RedirectResponse(f"/settings/instagram?err={msg}", status_code=302)
+        return _popup_response(False, f"OAuth cancelado: {error or 'sin codigo'}")
 
     cfg = db.query(InstagramSettings).first()
     if not cfg or not cfg.app_id or not cfg.encrypted_app_secret:
-        return RedirectResponse(
-            "/settings/instagram?err=Configuracion+incompleta", status_code=302
-        )
+        return _popup_response(False, "Configuracion incompleta: falta App ID o App Secret")
 
     try:
         app_secret = decrypt_value(cfg.encrypted_app_secret)
@@ -228,14 +256,13 @@ async def oauth_callback(
         )
         data = r.json()
         if "error" in data:
-            msg = urllib.parse.quote(data["error"].get("message", "Error")[:200])
-            return RedirectResponse(f"/settings/instagram?err={msg}", status_code=302)
+            meta_err = data["error"].get("message", "Error de Meta")
+            hint = " — verificá que el App Secret sea correcto" if "client secret" in meta_err.lower() else ""
+            return _popup_response(False, meta_err + hint)
 
         short_token = data.get("access_token", "")
         if not short_token:
-            return RedirectResponse(
-                "/settings/instagram?err=No+se+recibio+token+de+Meta", status_code=302
-            )
+            return _popup_response(False, "Meta no devolvio el token")
 
         # 2) Intercambiar por long-lived (~60 días)
         r2 = http_requests.get(
@@ -258,11 +285,8 @@ async def oauth_callback(
             pass
         db.commit()
 
-        return RedirectResponse(
-            "/settings/instagram?msg=Token+obtenido+y+guardado+correctamente", status_code=302
-        )
+        return _popup_response(True, "Token obtenido y guardado correctamente")
 
     except Exception as exc:
         log.error("OAuth callback error: %s", exc, exc_info=True)
-        msg = urllib.parse.quote(str(exc)[:200])
-        return RedirectResponse(f"/settings/instagram?err={msg}", status_code=302)
+        return _popup_response(False, str(exc)[:200])

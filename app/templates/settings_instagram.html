@@ -132,9 +132,9 @@
               <i class="bi bi-save me-1"></i>Guardar configuración
             </button>
             {% if cfg and cfg.app_id and cfg.encrypted_app_secret %}
-            <a href="/settings/instagram/oauth-start" class="btn btn-outline-primary">
+            <button type="button" class="btn btn-outline-primary" id="btnOAuth">
               <i class="bi bi-facebook me-1"></i>Conectar con Meta
-            </a>
+            </button>
             {% endif %}
             {% if cfg and cfg.ig_user_id and cfg.encrypted_access_token %}
             <button type="button" class="btn btn-outline-info" id="btnTest">
@@ -227,6 +227,32 @@
 
 {% block scripts %}
 <script>
+const btnOAuth = document.getElementById('btnOAuth');
+if (btnOAuth) {
+  btnOAuth.addEventListener('click', () => {
+    const w = 620, h = 700;
+    const left = Math.round((screen.width - w) / 2);
+    const top  = Math.round((screen.height - h) / 2);
+    const popup = window.open(
+      '/settings/instagram/oauth-start',
+      'MetaOAuth',
+      `width=${w},height=${h},left=${left},top=${top},scrollbars=yes,resizable=yes`
+    );
+    if (!popup) {
+      window.location.href = '/settings/instagram/oauth-start';
+      return;
+    }
+    btnOAuth.disabled = true;
+    btnOAuth.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Conectando...';
+    const timer = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(timer);
+        location.reload();
+      }
+    }, 500);
+  });
+}
+
 const btnTest = document.getElementById('btnTest');
 if (btnTest) {
   btnTest.addEventListener('click', async () => {
