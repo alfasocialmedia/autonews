@@ -127,16 +127,27 @@
             <div class="form-text">Límite de Meta: 25 posts/día.</div>
           </div>
 
-          <div class="d-flex gap-2 mt-4">
+          <div class="d-flex gap-2 mt-4 flex-wrap">
             <button type="submit" class="btn btn-primary">
               <i class="bi bi-save me-1"></i>Guardar configuración
             </button>
+            {% if cfg and cfg.app_id and cfg.encrypted_app_secret %}
+            <a href="/settings/instagram/oauth-start" class="btn btn-outline-primary">
+              <i class="bi bi-facebook me-1"></i>Conectar con Meta
+            </a>
+            {% endif %}
             {% if cfg and cfg.ig_user_id and cfg.encrypted_access_token %}
             <button type="button" class="btn btn-outline-info" id="btnTest">
               <i class="bi bi-plug me-1"></i>Probar conexión
             </button>
             {% endif %}
           </div>
+          {% if cfg and cfg.app_id and cfg.encrypted_app_secret and not cfg.encrypted_access_token %}
+          <div class="alert alert-info mt-3 small">
+            <i class="bi bi-info-circle me-1"></i>
+            App ID y Secret guardados. Hacé clic en <strong>Conectar con Meta</strong> para obtener el token automáticamente.
+          </div>
+          {% endif %}
         </form>
       </div>
     </div>

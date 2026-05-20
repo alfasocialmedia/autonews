@@ -3,8 +3,10 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import urllib.parse
 from typing import Optional
 
+import requests as http_requests
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -17,6 +19,9 @@ from app.models import InstagramSettings
 from app.services.instagram_service import refresh_token, test_connection, token_expires_at
 
 log = logging.getLogger(__name__)
+
+OAUTH_SCOPES = "instagram_content_publish,pages_read_engagement,instagram_basic"
+GRAPH_BASE = "https://graph.facebook.com/v19.0"
 
 router = APIRouter(prefix="/settings/instagram")
 templates = Jinja2Templates(directory="app/templates")
@@ -153,3 +158,108 @@ async def do_refresh_token(request: Request, db: Session = Depends(get_db)):
         cfg.token_expires_at = token_expires_at(cfg.app_id, secret, result["access_token"])
         db.commit()
     return JSONResponse(result)
+
+
+def _oauth_callback_url(request: Request) -> str:
+    """Construye la URL de callback OAuth usando la base URL del servidor."""
+    base = str(request.base_url).rstrip("/")
+    return f"{base}/settings/instagram/oauth-callback"
+
+
+@router.get("/oauth-start")
+async def oauth_start(request: Request, db: Session = Depends(get_db)):
+    """Inicia el flujo OAuth con Meta para obtener el token de Instagram."""
+    if not _require_admin(request, db):
+        return RedirectResponse("/", status_code=302)
+    cfg = db.query(InstagramSettings).first()
+    if not cfg or not cfg.app_id or not cfg.encrypted_app_secret:
+        return RedirectResponse(
+            "/settings/instagram?err=Primero+guarda+el+App+ID+y+App+Secret", status_code=302
+        )
+    callback = _oauth_callback_url(request)
+    url = (
+        f"https://www.facebook.com/dialog/oauth"
+        f"?client_id={cfg.app_id}"
+        f"&redirect_uri={urllib.parse.quote(callback, safe='')}"
+        f"&scope={OAUTH_SCOPES}"
+        f"&response_type=code"
+    )
+    return RedirectResponse(url, status_code=302)
+
+
+@router.get("/oauth-callback")
+async def oauth_callback(
+    request: Request,
+    code: Optional[str] = None,
+    error: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Recibe el código OAuth de Meta, lo intercambia por un long-lived token y lo guarda."""
+    if not _require_admin(request, db):
+        return RedirectResponse("/", status_code=302)
+
+    if error or not code:
+        msg = urllib.parse.quote(f"OAuth cancelado o error: {error or 'sin codigo'}")
+        return RedirectResponse(f"/settings/instagram?err={msg}", status_code=302)
+
+    cfg = db.query(InstagramSettings).first()
+    if not cfg or not cfg.app_id or not cfg.encrypted_app_secret:
+        return RedirectResponse(
+            "/settings/instagram?err=Configuracion+incompleta", status_code=302
+        )
+
+    try:
+        app_secret = decrypt_value(cfg.encrypted_app_secret)
+        callback = _oauth_callback_url(request)
+
+        # 1) Intercambiar code por token corto
+        r = http_requests.get(
+            f"{GRAPH_BASE}/oauth/access_token",
+            params={
+                "client_id": cfg.app_id,
+                "redirect_uri": callback,
+                "client_secret": app_secret,
+                "code": code,
+            },
+            timeout=30,
+        )
+        data = r.json()
+        if "error" in data:
+            msg = urllib.parse.quote(data["error"].get("message", "Error")[:200])
+            return RedirectResponse(f"/settings/instagram?err={msg}", status_code=302)
+
+        short_token = data.get("access_token", "")
+        if not short_token:
+            return RedirectResponse(
+                "/settings/instagram?err=No+se+recibio+token+de+Meta", status_code=302
+            )
+
+        # 2) Intercambiar por long-lived (~60 días)
+        r2 = http_requests.get(
+            f"{GRAPH_BASE}/oauth/access_token",
+            params={
+                "grant_type": "fb_exchange_token",
+                "client_id": cfg.app_id,
+                "client_secret": app_secret,
+                "fb_exchange_token": short_token,
+            },
+            timeout=30,
+        )
+        data2 = r2.json()
+        long_token = data2.get("access_token") if "error" not in data2 else short_token
+
+        cfg.encrypted_access_token = encrypt_value(long_token)
+        try:
+            cfg.token_expires_at = token_expires_at(cfg.app_id, app_secret, long_token)
+        except Exception:
+            pass
+        db.commit()
+
+        return RedirectResponse(
+            "/settings/instagram?msg=Token+obtenido+y+guardado+correctamente", status_code=302
+        )
+
+    except Exception as exc:
+        log.error("OAuth callback error: %s", exc, exc_info=True)
+        msg = urllib.parse.quote(str(exc)[:200])
+        return RedirectResponse(f"/settings/instagram?err={msg}", status_code=302)
