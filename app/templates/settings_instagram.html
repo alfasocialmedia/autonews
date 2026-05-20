@@ -195,20 +195,28 @@
 
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-transparent border-0">
-        <h6 class="mb-0 fw-semibold"><i class="bi bi-question-circle me-2"></i>Cómo obtener el token</h6>
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-question-circle me-2"></i>Guía de configuración</h6>
       </div>
       <div class="card-body small text-muted">
-        <ol class="ps-3 mb-0">
+        <p class="fw-semibold text-dark mb-2">Requisitos previos (una sola vez)</p>
+        <ol class="ps-3 mb-3">
           <li class="mb-1">Convertí tu cuenta IG a <strong>Business o Creator</strong></li>
           <li class="mb-1">Vinculá la cuenta IG a una <strong>Página de Facebook</strong></li>
           <li class="mb-1">Creá una App en <strong>developers.facebook.com</strong> (tipo Business)</li>
-          <li class="mb-1">Agregá el producto <strong>Instagram Graph API</strong></li>
-          <li class="mb-1">Generá el token en <strong>Graph API Explorer</strong> con permisos:
-            <code>instagram_content_publish</code>, <code>pages_read_engagement</code>, <code>instagram_basic</code>
-          </li>
-          <li class="mb-1">Convertí el token a <strong>long-lived</strong> (~60 días)</li>
-          <li>Obtené el <strong>Instagram Business Account ID</strong> via Graph API</li>
+          <li class="mb-1">Agregá el caso de uso <strong>Administrar mensajes y contenido en Instagram</strong></li>
+          <li class="mb-1">En <strong>Roles → Evaluadores de Instagram</strong> agregá tu cuenta IG como evaluadora y aceptá la invitación desde la app de Instagram</li>
+          <li>Obtené el <strong>Instagram Business Account ID</strong> desde Graph API Explorer: <code>GET /{ig-user-id}?fields=id,username</code></li>
         </ol>
+        <p class="fw-semibold text-dark mb-2">Obtener el token (con el botón)</p>
+        <ol class="ps-3 mb-3">
+          <li class="mb-1">Completá <strong>App ID</strong>, <strong>App Secret</strong> e <strong>Instagram Business Account ID</strong> y guardá</li>
+          <li class="mb-1">Hacé clic en <strong>Conectar con Meta</strong> — te lleva a Facebook para autorizar</li>
+          <li class="mb-1">Autorizá los permisos → volvés automáticamente al panel con el token guardado</li>
+          <li>El token dura <strong>~60 días</strong>. Antes de que venza usá el botón <strong>Renovar ahora</strong></li>
+        </ol>
+        <p class="fw-semibold text-dark mb-1">Configuración en Meta necesaria</p>
+        <p class="mb-0">En tu app de Meta → <strong>Facebook Login → Configurar → URI de redireccionamiento de OAuth válidos</strong> agregá:<br>
+        <code>https://TU-DOMINIO/settings/instagram/oauth-callback</code></p>
       </div>
     </div>
   </div>
