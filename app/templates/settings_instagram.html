@@ -334,7 +334,25 @@ if (btnFetchIgId) {
         });
       }
     } else if (data.need_reauth) {
-      div.innerHTML = `<div class="alert alert-warning py-2 small"><i class="bi bi-exclamation-triangle-fill me-1"></i>${data.error}</div>`;
+      div.innerHTML = `<div class="alert alert-warning py-2 small"><i class="bi bi-exclamation-triangle-fill me-1"></i><strong>Token sin permisos suficientes.</strong> ${data.error}</div>`;
+    } else if (data.no_pages) {
+      div.innerHTML = `<div class="alert alert-warning py-2 small">
+        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+        <strong>La cuenta de Facebook '${data.fb_user}' no administra ninguna Página.</strong><br>
+        Para usar Instagram Content API necesitás:<br>
+        <ol class="mb-1 mt-1">
+          <li>Crear una <a href="https://www.facebook.com/pages/create" target="_blank">Página de Facebook</a> (si no tenés una)</li>
+          <li>Ser administrador de esa Página</li>
+          <li>Vincular tu cuenta de Instagram Business a la Página: en la Página ir a <strong>Configuración → Instagram → Conectar cuenta</strong></li>
+          <li>Volver a conectar con el botón <strong>Conectar con Meta</strong></li>
+        </ol>
+      </div>`;
+    } else if (data.no_ig_linked) {
+      div.innerHTML = `<div class="alert alert-warning py-2 small">
+        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+        <strong>${data.error}</strong><br>
+        Vinculá tu cuenta de Instagram Business a esa Página: en la Página ir a <strong>Configuración → Instagram → Conectar cuenta</strong>, luego volvé a hacer clic en Detectar.
+      </div>`;
     } else {
       div.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle-fill me-1"></i>${data.error}</div>`;
     }

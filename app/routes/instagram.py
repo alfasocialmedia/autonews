@@ -147,67 +147,66 @@ async def fetch_ig_id(request: Request, db: Session = Depends(get_db)):
     token = decrypt_value(cfg.encrypted_access_token)
 
     try:
-        # — Estrategia 1: /me/accounts (necesita pages_show_list) —
+        # Paso 0: verificar que el token sea válido y obtener el usuario de Facebook
+        r_me = http_requests.get(
+            f"{GRAPH_BASE}/me",
+            params={"fields": "id,name", "access_token": token},
+            timeout=20,
+        )
+        me_basic = r_me.json()
+        if "error" in me_basic:
+            return JSONResponse({"ok": False, "error": f"Token inválido o expirado: {me_basic['error'].get('message', 'Error desconocido')}"})
+        fb_user_name = me_basic.get("name", "")
+
+        # Paso 1: listar páginas de Facebook y sus cuentas IG vinculadas
         r = http_requests.get(
             f"{GRAPH_BASE}/me/accounts",
-            params={"access_token": token, "fields": "id,name,instagram_business_account"},
+            params={"access_token": token, "fields": "id,name,instagram_business_account{id,username,name}"},
             timeout=20,
         )
         data = r.json()
 
-        if "error" not in data:
-            pages = data.get("data", [])
-            accounts = []
-            for page in pages:
-                ig_biz = page.get("instagram_business_account")
-                if ig_biz:
-                    ig_id = ig_biz.get("id", "")
-                    r2 = http_requests.get(
-                        f"{GRAPH_BASE}/{ig_id}",
-                        params={"fields": "id,username,name", "access_token": token},
-                        timeout=20,
-                    )
-                    ig_data = r2.json()
-                    accounts.append({
-                        "ig_id": ig_id,
-                        "username": ig_data.get("username", ""),
-                        "name": ig_data.get("name", ""),
-                        "page_name": page.get("name", ""),
-                    })
-            if accounts:
-                return JSONResponse({"ok": True, "accounts": accounts})
-            if pages:
-                return JSONResponse({"ok": False, "error": "Las páginas de Facebook no tienen cuenta de Instagram Business vinculada. Vinculá tu cuenta IG a una Página de Facebook y volvé a intentar."})
-
-        # — Estrategia 2: /me directamente (token con solo instagram_content_publish) —
-        r_me = http_requests.get(
-            f"{GRAPH_BASE}/me",
-            params={"fields": "id,username,name,account_type", "access_token": token},
-            timeout=20,
-        )
-        me = r_me.json()
-
-        if "error" not in me and me.get("id"):
-            account_type = me.get("account_type", "")
-            if account_type in ("BUSINESS", "MEDIA_CREATOR"):
-                return JSONResponse({"ok": True, "accounts": [{
-                    "ig_id": me["id"],
-                    "username": me.get("username", ""),
-                    "name": me.get("name", ""),
-                    "page_name": account_type,
-                }]})
-            # Token es Facebook User (no Instagram) — el id de /me NO es el IG id
+        if "error" in data:
             return JSONResponse({
                 "ok": False,
-                "error": (
-                    "El token actual no tiene el permiso pages_show_list necesario para detectar el ID. "
-                    "Hacé clic en 'Conectar con Meta' para renovar el token con los permisos ampliados y volvé a intentar."
-                ),
                 "need_reauth": True,
+                "fb_user": fb_user_name,
+                "error": "El token no tiene permiso para listar páginas. Hacé clic en 'Conectar con Meta' para renovar el token y volvé a intentar.",
             })
 
-        err_msg = me.get("error", {}).get("message", "Error desconocido de Meta") if "error" in me else "No se pudo obtener la información del token"
-        return JSONResponse({"ok": False, "error": err_msg})
+        pages = data.get("data", [])
+        accounts = []
+        for page in pages:
+            ig_biz = (page.get("instagram_business_account") or {})
+            ig_id = ig_biz.get("id", "")
+            if ig_id:
+                accounts.append({
+                    "ig_id": ig_id,
+                    "username": ig_biz.get("username", ""),
+                    "name": ig_biz.get("name", ""),
+                    "page_name": page.get("name", ""),
+                })
+
+        if accounts:
+            return JSONResponse({"ok": True, "accounts": accounts})
+
+        if pages:
+            page_names = ", ".join(p.get("name", "") for p in pages)
+            return JSONResponse({
+                "ok": False,
+                "no_ig_linked": True,
+                "fb_user": fb_user_name,
+                "page_names": page_names,
+                "error": f"Páginas encontradas: {page_names} — pero ninguna tiene una cuenta de Instagram Business vinculada.",
+            })
+
+        # Sin páginas: el usuario de Facebook autenticado no administra ninguna Página
+        return JSONResponse({
+            "ok": False,
+            "no_pages": True,
+            "fb_user": fb_user_name,
+            "error": f"La cuenta de Facebook '{fb_user_name}' no administra ninguna Página de Facebook.",
+        })
 
     except Exception as exc:
         log.error("Error en fetch_ig_id: %s", exc, exc_info=True)
