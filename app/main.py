@@ -221,6 +221,17 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN text_bg_opacity INTEGER DEFAULT 0"))
             if "logo_size" not in ig_cols:
                 conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN logo_size INTEGER DEFAULT 180"))
+            if "font_weight" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN font_weight VARCHAR(20) DEFAULT 'bold'"))
+            if "banner_style" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN banner_style VARCHAR(10) DEFAULT 'pill'"))
+            if "banner_font_weight" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN banner_font_weight VARCHAR(20) DEFAULT 'bold'"))
+            # Migrar font_family legacy a nombres reales de Google Fonts
+            conn.execute(text("UPDATE instagram_settings SET font_family = 'Montserrat' WHERE font_family = 'sans' OR font_family IS NULL"))
+            conn.execute(text("UPDATE instagram_settings SET font_family = 'Playfair Display' WHERE font_family = 'serif'"))
+            conn.execute(text("UPDATE instagram_settings SET font_family = 'Oswald' WHERE font_family = 'impact'"))
+            conn.execute(text("UPDATE instagram_settings SET font_family = 'Nunito' WHERE font_family = 'rounded'"))
         if "rss_feeds" in tables:
             rss_cols = [c["name"] for c in inspector.get_columns("rss_feeds")]
             if "instagram_settings_id" not in rss_cols:

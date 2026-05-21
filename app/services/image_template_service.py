@@ -23,71 +23,31 @@ LOGO_MAX_SIZE = 180
 BANNER_HEIGHT = 72
 BANNER_MARGIN = 28
 
-# Familias tipográficas con rutas de fallback por plataforma
-# Los archivos en FONT_DIR se bundlean con el repo y funcionan en Docker y local
-_FONT_FAMILIES: dict[str, dict] = {
-    "sans": {
-        "label": "Montserrat (moderna)",
-        "paths": [
-            os.path.join(FONT_DIR, "Montserrat-Bold.ttf"),        # bundled
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
-            "C:/Windows/Fonts/arialbd.ttf",
-            "C:/Windows/Fonts/calibrib.ttf",
-        ],
-    },
-    "serif": {
-        "label": "Playfair Display (editorial)",
-        "paths": [
-            os.path.join(FONT_DIR, "PlayfairDisplay-Bold.ttf"),    # bundled
-            "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
-            "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf",
-            "C:/Windows/Fonts/georgiab.ttf",
-            "C:/Windows/Fonts/timesbd.ttf",
-        ],
-    },
-    "impact": {
-        "label": "Oswald (condensada)",
-        "paths": [
-            os.path.join(FONT_DIR, "Oswald-Bold.ttf"),             # bundled
-            "C:/Windows/Fonts/impact.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "C:/Windows/Fonts/arialbd.ttf",
-        ],
-    },
-    "rounded": {
-        "label": "Nunito (redondeada)",
-        "paths": [
-            os.path.join(FONT_DIR, "Nunito-Bold.ttf"),             # bundled
-            "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "C:/Windows/Fonts/verdanab.ttf",
-            "C:/Windows/Fonts/segoeui.ttf",
-        ],
-    },
-}
-
-FONT_FAMILY_LABELS: dict[str, str] = {k: v["label"] for k, v in _FONT_FAMILIES.items()}
+# Fuentes bundleadas como último recurso
+_BUNDLED_FALLBACKS = [
+    os.path.join(FONT_DIR, "Montserrat-Bold.ttf"),
+    os.path.join(FONT_DIR, "Oswald-Bold.ttf"),
+    os.path.join(FONT_DIR, "PlayfairDisplay-Bold.ttf"),
+    os.path.join(FONT_DIR, "Nunito-Bold.ttf"),
+]
 
 
-def _load_font(size: int, family: str = "sans") -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    """Carga la fuente de la familia indicada con múltiples fallbacks por plataforma."""
-    fam = _FONT_FAMILIES.get(family, _FONT_FAMILIES["sans"])
-    for path in fam["paths"]:
-        if os.path.exists(path):
+def _load_font(size: int, family: str = "Montserrat", weight: str = "bold") -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    """Carga fuente desde gfonts_service (con descarga y caché) con fallback a bundleadas."""
+    from app.services.gfonts_service import get_font_path
+    path = get_font_path(family, weight)
+    if path and os.path.exists(path):
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            pass
+    # Fallback a fuentes bundleadas
+    for p in _BUNDLED_FALLBACKS:
+        if os.path.exists(p):
             try:
-                return ImageFont.truetype(path, size)
+                return ImageFont.truetype(p, size)
             except Exception:
-                continue
-    # Fallback universal: probar cualquier fuente disponible en cualquier familia
-    for f in _FONT_FAMILIES.values():
-        for path in f["paths"]:
-            if os.path.exists(path):
-                try:
-                    return ImageFont.truetype(path, size)
-                except Exception:
-                    continue
+                pass
     return ImageFont.load_default()
 
 
@@ -119,7 +79,6 @@ def _add_gradient(
     gradient = Image.new("RGBA", (img.width, height), (r, g, b, 0))
     draw = ImageDraw.Draw(gradient)
     for y in range(height):
-        # Curva cuadrática: se oscurece más rápido hacia el fondo
         t = y / height
         alpha = int(max_opacity * (t ** 1.6))
         draw.line([(0, y), (img.width, y)], fill=(r, g, b, alpha))
@@ -136,13 +95,13 @@ def _draw_title(
     text_color: str = "#ffffff",
     bottom_offset: int = 80,
     text_align: str = "left",
-    font_family: str = "sans",
+    font_family: str = "Montserrat",
+    font_weight: str = "bold",
     text_bg_color: str = "#000000",
     text_bg_opacity: int = 0,
 ) -> Image.Image:
-    """Dibuja el título con sombra múltiple, alineación y tipografía configurables.
-    Si text_bg_opacity > 0 dibuja un rectángulo semitransparente detrás del bloque de texto."""
-    font = _load_font(font_size, family=font_family)
+    """Dibuja el título con sombra múltiple, alineación y tipografía configurables."""
+    font = _load_font(font_size, family=font_family, weight=font_weight)
     tr, tg, tb = _hex_to_rgb(text_color)
     max_chars = max(18, int(TARGET_W / (font_size * 0.55)))
     lines = textwrap.wrap(title, width=max_chars)[:4]
@@ -157,9 +116,8 @@ def _draw_title(
 
     if text_bg_opacity > 0:
         bgr, bgg, bgb = _hex_to_rgb(text_bg_color)
-        pad_v, pad_h = 18, 0
         draw.rectangle(
-            [pad_h, y_start - pad_v, TARGET_W - pad_h, y_start + total_height + pad_v],
+            [0, y_start - 18, TARGET_W, y_start + total_height + 18],
             fill=(bgr, bgg, bgb, min(255, text_bg_opacity)),
         )
 
@@ -178,7 +136,6 @@ def _draw_title(
         else:
             x = padding_x
 
-        # Sombra difusa en 3 capas para máxima legibilidad
         for dx, dy in [(3, 3), (2, 2), (1, 1)]:
             draw.text((x + dx, y + dy), line, font=font, fill=(0, 0, 0, 160))
         draw.text((x, y), line, font=font, fill=(tr, tg, tb, 255))
@@ -192,42 +149,62 @@ def _draw_banner(
     text: str,
     bg_color: str = "#e53935",
     text_color: str = "#ffffff",
+    banner_style: str = "pill",
+    font_family: str = "Montserrat",
+    font_weight: str = "bold",
 ) -> Image.Image:
-    """Dibuja una franja de color con texto centrado en la parte inferior, estilo píldora."""
+    """Dibuja la franja inferior con estilo configurable: 'pill', 'rect' o 'none'."""
     if not text or not text.strip():
         return img
 
-    draw = ImageDraw.Draw(img)
     font_size = 34
-    font = _load_font(font_size, family="sans")
+    font = _load_font(font_size, family=font_family, weight=font_weight)
 
+    tmp_draw = ImageDraw.Draw(img)
     try:
-        bbox = draw.textbbox((0, 0), text, font=font)
+        bbox = tmp_draw.textbbox((0, 0), text, font=font)
         text_w = bbox[2] - bbox[0]
         text_h = bbox[3] - bbox[1]
         text_top = bbox[1]
     except AttributeError:
-        text_w, text_h = draw.textsize(text, font=font)  # type: ignore[attr-defined]
+        text_w, text_h = tmp_draw.textsize(text, font=font)  # type: ignore[attr-defined]
         text_top = 0
 
-    pad_x = 48
-    pad_y = 14
-    pill_w = min(text_w + pad_x * 2, img.width - BANNER_MARGIN * 2)
-    pill_h = text_h + pad_y * 2
-    radius = pill_h // 2
-
-    x0 = (img.width - pill_w) // 2
-    y0 = img.height - pill_h - BANNER_MARGIN
-    x1 = x0 + pill_w
-    y1 = y0 + pill_h
-
-    br, bg, bb = _hex_to_rgb(bg_color)
     tr, tg, tb = _hex_to_rgb(text_color)
 
-    draw.rounded_rectangle([x0, y0, x1, y1], radius=radius, fill=(br, bg, bb))
+    if banner_style == "none":
+        # Solo texto con sombra, sin fondo
+        tx = (img.width - text_w) // 2
+        ty = img.height - text_h - BANNER_MARGIN - text_top
+        base = img.convert("RGBA")
+        txt_layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
+        d = ImageDraw.Draw(txt_layer)
+        for dx, dy in [(3, 3), (2, 2), (1, 1)]:
+            d.text((tx + dx, ty + dy), text, font=font, fill=(0, 0, 0, 200))
+        d.text((tx, ty), text, font=font, fill=(tr, tg, tb, 255))
+        return Image.alpha_composite(base, txt_layer).convert("RGB")
 
-    tx = x0 + (pill_w - text_w) // 2
-    ty = y0 + (pill_h - text_h) // 2 - text_top
+    br, bg_, bb = _hex_to_rgb(bg_color)
+    pad_x = 48
+    pad_y = 14
+    box_w = min(text_w + pad_x * 2, img.width - BANNER_MARGIN * 2)
+    box_h = text_h + pad_y * 2
+
+    x0 = (img.width - box_w) // 2
+    y0 = img.height - box_h - BANNER_MARGIN
+    x1 = x0 + box_w
+    y1 = y0 + box_h
+
+    draw = ImageDraw.Draw(img)
+    if banner_style == "rect":
+        draw.rectangle([x0, y0, x1, y1], fill=(br, bg_, bb))
+    else:
+        # pill (default)
+        radius = box_h // 2
+        draw.rounded_rectangle([x0, y0, x1, y1], radius=radius, fill=(br, bg_, bb))
+
+    tx = x0 + (box_w - text_w) // 2
+    ty = y0 + (box_h - text_h) // 2 - text_top
     draw.text((tx, ty), text, font=font, fill=(tr, tg, tb))
     return img
 
@@ -270,15 +247,18 @@ def build_instagram_image(
     banner_text_color: str = "#ffffff",
     text_align: str = "left",
     title_y_offset: int = 0,
-    font_family: str = "sans",
+    font_family: str = "Montserrat",
+    font_weight: str = "bold",
     text_bg_color: str = "#000000",
     text_bg_opacity: int = 0,
+    banner_style: str = "pill",
+    banner_font_weight: str = "bold",
 ) -> bytes:
     """
-    Pipeline completo: recibe bytes de imagen, devuelve JPEG 1080×1440 con
-    título, logo y franja inferior superpuestos.
-    title_y_offset: desplazamiento vertical del título en px (positivo = más arriba).
-    text_bg_opacity > 0: dibuja rectángulo semitransparente detrás del título.
+    Pipeline completo: recibe bytes de imagen, devuelve JPEG 1080×1440.
+    font_weight / banner_font_weight: "regular" | "medium" | "bold" | "extrabold"
+    banner_style: "pill" | "rect" | "none"
+    text_bg_opacity > 0: rectángulo semitransparente detrás del título.
     """
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img = _crop_center(img, TARGET_W, TARGET_H)
@@ -291,12 +271,18 @@ def build_instagram_image(
         img, title,
         font_size=font_size, text_color=text_color,
         bottom_offset=title_bottom,
-        text_align=text_align, font_family=font_family,
+        text_align=text_align,
+        font_family=font_family, font_weight=font_weight,
         text_bg_color=text_bg_color, text_bg_opacity=text_bg_opacity,
     )
 
     if banner_text:
-        img = _draw_banner(img, banner_text, bg_color=banner_color, text_color=banner_text_color)
+        img = _draw_banner(
+            img, banner_text,
+            bg_color=banner_color, text_color=banner_text_color,
+            banner_style=banner_style,
+            font_family=font_family, font_weight=banner_font_weight,
+        )
 
     if logo_path:
         img = _paste_logo(img, logo_path, logo_position, size=logo_size)

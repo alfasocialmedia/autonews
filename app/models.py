@@ -311,12 +311,16 @@ class InstagramSettings(Base):
     # Tipografía y posición del título
     text_align = Column(String(10), default="left")
     title_y_offset = Column(Integer, default=0)
-    font_family = Column(String(30), default="sans")
+    font_family = Column(String(50), default="Montserrat")
+    font_weight = Column(String(20), default="bold")
     # Fondo del texto (rectángulo semitransparente)
     text_bg_color = Column(String(10), default="#000000")
     text_bg_opacity = Column(Integer, default=0)
     # Tamaño del logo
     logo_size = Column(Integer, default=180)
+    # Banner
+    banner_style = Column(String(10), default="pill")
+    banner_font_weight = Column(String(20), default="bold")
     # Control
     is_active = Column(Boolean, default=False)
     max_posts_per_day = Column(Integer, default=10)

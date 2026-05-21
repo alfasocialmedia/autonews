@@ -100,10 +100,13 @@ async def instagram_create(
     banner_text_color: str = Form("#ffffff"),
     text_align: str = Form("left"),
     title_y_offset: int = Form(0),
-    font_family: str = Form("sans"),
+    font_family: str = Form("Montserrat"),
+    font_weight: str = Form("bold"),
     text_bg_color: str = Form("#000000"),
     text_bg_opacity: int = Form(0),
     logo_size: int = Form(180),
+    banner_style: str = Form("pill"),
+    banner_font_weight: str = Form("bold"),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -119,8 +122,9 @@ async def instagram_create(
                        logo_position, max_posts_per_day,
                        gradient_color, gradient_opacity, gradient_height,
                        font_size, text_color, banner_text, banner_color, banner_text_color,
-                       text_align, title_y_offset, font_family,
+                       text_align, title_y_offset, font_family, font_weight,
                        text_bg_color, text_bg_opacity, logo_size,
+                       banner_style, banner_font_weight,
                        logo, db)
     db.commit()
     return RedirectResponse(f"/settings/instagram/{cfg.id}?msg=Cuenta+creada+correctamente", status_code=302)
@@ -163,10 +167,13 @@ async def instagram_save(
     banner_text_color: str = Form("#ffffff"),
     text_align: str = Form("left"),
     title_y_offset: int = Form(0),
-    font_family: str = Form("sans"),
+    font_family: str = Form("Montserrat"),
+    font_weight: str = Form("bold"),
     text_bg_color: str = Form("#000000"),
     text_bg_opacity: int = Form(0),
     logo_size: int = Form(180),
+    banner_style: str = Form("pill"),
+    banner_font_weight: str = Form("bold"),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -184,8 +191,9 @@ async def instagram_save(
                            logo_position, max_posts_per_day,
                            gradient_color, gradient_opacity, gradient_height,
                            font_size, text_color, banner_text, banner_color, banner_text_color,
-                           text_align, title_y_offset, font_family,
+                           text_align, title_y_offset, font_family, font_weight,
                            text_bg_color, text_bg_opacity, logo_size,
+                           banner_style, banner_font_weight,
                            logo, db)
         db.commit()
         return RedirectResponse(
@@ -198,6 +206,15 @@ async def instagram_save(
         return RedirectResponse(f"/settings/instagram/{account_id}?err={err}", status_code=302)
 
 
+_VALID_FONTS = {
+    "Montserrat", "Poppins", "Roboto", "Open Sans", "Lato", "Raleway",
+    "Nunito", "Inter", "Playfair Display", "Merriweather", "Lora",
+    "Oswald", "Bebas Neue", "Anton",
+}
+_VALID_WEIGHTS = {"regular", "medium", "bold", "extrabold"}
+_VALID_BANNER_STYLES = {"pill", "rect", "none"}
+
+
 def _apply_form_to_cfg(
     cfg: InstagramSettings,
     ig_user_id: str, app_id: str, app_secret: str, access_token: str,
@@ -205,10 +222,13 @@ def _apply_form_to_cfg(
     gradient_color: str, gradient_opacity: int, gradient_height: int,
     font_size: int, text_color: str,
     banner_text: str, banner_color: str, banner_text_color: str,
-    text_align: str, title_y_offset: int, font_family: str,
+    text_align: str, title_y_offset: int,
+    font_family: str, font_weight: str,
     text_bg_color: str, text_bg_opacity: int, logo_size: int,
+    banner_style: str, banner_font_weight: str,
     logo: Optional[UploadFile], db: Session,
 ):
+    from app.services.gfonts_service import LEGACY_MAP
     cfg.ig_user_id = ig_user_id.strip() or None
     cfg.app_id = app_id.strip() or None
     cfg.max_posts_per_day = max(1, min(25, max_posts_per_day))
@@ -226,9 +246,13 @@ def _apply_form_to_cfg(
     cfg.banner_text_color = banner_text_color if banner_text_color.startswith("#") else "#ffffff"
     cfg.text_align = text_align if text_align in ("left", "center", "right") else "left"
     cfg.title_y_offset = max(-200, min(900, title_y_offset))
-    cfg.font_family = font_family if font_family in ("sans", "serif", "impact", "rounded") else "sans"
+    resolved_family = LEGACY_MAP.get(font_family, font_family)
+    cfg.font_family = resolved_family if resolved_family in _VALID_FONTS else "Montserrat"
+    cfg.font_weight = font_weight if font_weight in _VALID_WEIGHTS else "bold"
     cfg.text_bg_color = text_bg_color if text_bg_color.startswith("#") else "#000000"
     cfg.text_bg_opacity = max(0, min(220, text_bg_opacity))
+    cfg.banner_style = banner_style if banner_style in _VALID_BANNER_STYLES else "pill"
+    cfg.banner_font_weight = banner_font_weight if banner_font_weight in _VALID_WEIGHTS else "bold"
 
     if app_secret.strip():
         cfg.encrypted_app_secret = encrypt_value(app_secret.strip())
@@ -342,6 +366,9 @@ async def preview_image(
     q_text_bg_color: Optional[str] = Query(None, alias="text_bg_color"),
     q_text_bg_opacity: Optional[int] = Query(None, alias="text_bg_opacity"),
     q_logo_size: Optional[int] = Query(None, alias="logo_size"),
+    q_font_weight: Optional[str] = Query(None, alias="font_weight"),
+    q_banner_style: Optional[str] = Query(None, alias="banner_style"),
+    q_banner_font_weight: Optional[str] = Query(None, alias="banner_font_weight"),
 ):
     if not _require_admin(request, db):
         from fastapi.responses import Response
@@ -395,6 +422,9 @@ async def preview_image(
             font_family=_eff(q_font_family, cfg.font_family if cfg else None, "sans"),
             text_bg_color=_eff(q_text_bg_color, cfg.text_bg_color if cfg else None, "#000000"),
             text_bg_opacity=_eff(q_text_bg_opacity, cfg.text_bg_opacity if cfg else None, 0),
+            font_weight=_eff(q_font_weight, cfg.font_weight if cfg else None, "bold"),
+            banner_style=_eff(q_banner_style, cfg.banner_style if cfg else None, "pill"),
+            banner_font_weight=_eff(q_banner_font_weight, cfg.banner_font_weight if cfg else None, "bold"),
         )
     except Exception as exc:
         log.error("Error generando imagen de preview: %s", exc, exc_info=True)
@@ -527,6 +557,9 @@ async def test_publish_instagram(account_id: int, request: Request, db: Session 
             font_family=cfg.font_family or "sans",
             text_bg_color=cfg.text_bg_color or "#000000",
             text_bg_opacity=cfg.text_bg_opacity or 0,
+            font_weight=cfg.font_weight or "bold",
+            banner_style=cfg.banner_style or "pill",
+            banner_font_weight=cfg.banner_font_weight or "bold",
         )
 
         wp = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).first()

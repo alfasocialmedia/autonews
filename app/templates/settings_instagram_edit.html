@@ -151,7 +151,10 @@
   <!-- Diseño + Vista previa -->
   <div class="col-lg-7">
     {% if cfg %}
-    {% set ff = cfg.font_family if cfg and cfg.font_family else 'sans' %}
+    {% set _legacyMap = {'sans': 'Montserrat', 'serif': 'Playfair Display', 'impact': 'Oswald', 'rounded': 'Nunito'} %}
+    {% set ff_raw = cfg.font_family if cfg and cfg.font_family else 'Montserrat' %}
+    {% set ff = _legacyMap.get(ff_raw, ff_raw) %}
+    {% set fw = cfg.font_weight if cfg and cfg.font_weight else 'bold' %}
     {% set ta = cfg.text_align if cfg and cfg.text_align else 'left' %}
     {% set yo = cfg.title_y_offset if cfg and cfg.title_y_offset is not none else 0 %}
     {% set fs = cfg.font_size if cfg and cfg.font_size else 62 %}
@@ -160,6 +163,8 @@
     {% set gh = cfg.gradient_height if cfg and cfg.gradient_height else 480 %}
     {% set tbo = cfg.text_bg_opacity if cfg and cfg.text_bg_opacity is not none else 0 %}
     {% set tbc = cfg.text_bg_color if cfg and cfg.text_bg_color else '#000000' %}
+    {% set bs = cfg.banner_style if cfg and cfg.banner_style else 'pill' %}
+    {% set bfw = cfg.banner_font_weight if cfg and cfg.banner_font_weight else 'bold' %}
 
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
@@ -260,14 +265,42 @@
             </div>
 
             <!-- Tipografía -->
-            <div class="mb-2">
-              <label class="form-label small fw-semibold text-uppercase text-muted mb-1" style="letter-spacing:.05em">Tipografía</label>
-              <select name="font_family" form="igForm" class="form-select form-select-sm" title="Tipografía del título">
-                <option value="sans"    {% if ff == 'sans'    %}selected{% endif %}>Montserrat — moderna</option>
-                <option value="serif"   {% if ff == 'serif'   %}selected{% endif %}>Playfair Display — editorial</option>
-                <option value="impact"  {% if ff == 'impact'  %}selected{% endif %}>Oswald — condensada</option>
-                <option value="rounded" {% if ff == 'rounded' %}selected{% endif %}>Nunito — redondeada</option>
-              </select>
+            <p class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em">Tipografía</p>
+            <div class="row g-2 mb-2">
+              <div class="col-7">
+                <label class="form-label small mb-1">Familia</label>
+                <select name="font_family" form="igForm" class="form-select form-select-sm" title="Familia tipográfica" id="fontFamily">
+                  <optgroup label="Sans-serif">
+                    <option value="Montserrat"  {% if ff == 'Montserrat'  %}selected{% endif %}>Montserrat</option>
+                    <option value="Poppins"     {% if ff == 'Poppins'     %}selected{% endif %}>Poppins</option>
+                    <option value="Roboto"      {% if ff == 'Roboto'      %}selected{% endif %}>Roboto</option>
+                    <option value="Open Sans"   {% if ff == 'Open Sans'   %}selected{% endif %}>Open Sans</option>
+                    <option value="Lato"        {% if ff == 'Lato'        %}selected{% endif %}>Lato</option>
+                    <option value="Raleway"     {% if ff == 'Raleway'     %}selected{% endif %}>Raleway</option>
+                    <option value="Nunito"      {% if ff == 'Nunito'      %}selected{% endif %}>Nunito</option>
+                    <option value="Inter"       {% if ff == 'Inter'       %}selected{% endif %}>Inter</option>
+                  </optgroup>
+                  <optgroup label="Serif">
+                    <option value="Playfair Display" {% if ff == 'Playfair Display' %}selected{% endif %}>Playfair Display</option>
+                    <option value="Merriweather"     {% if ff == 'Merriweather'     %}selected{% endif %}>Merriweather</option>
+                    <option value="Lora"             {% if ff == 'Lora'             %}selected{% endif %}>Lora</option>
+                  </optgroup>
+                  <optgroup label="Display">
+                    <option value="Oswald"    {% if ff == 'Oswald'    %}selected{% endif %}>Oswald</option>
+                    <option value="Bebas Neue"{% if ff == 'Bebas Neue'%}selected{% endif %}>Bebas Neue</option>
+                    <option value="Anton"     {% if ff == 'Anton'     %}selected{% endif %}>Anton</option>
+                  </optgroup>
+                </select>
+              </div>
+              <div class="col-5">
+                <label class="form-label small mb-1">Grosor</label>
+                <select name="font_weight" form="igForm" class="form-select form-select-sm" title="Grosor del título" id="fontWeight">
+                  <option value="regular"   {% if fw == 'regular'   %}selected{% endif %}>Regular</option>
+                  <option value="medium"    {% if fw == 'medium'    %}selected{% endif %}>Medium</option>
+                  <option value="bold"      {% if fw == 'bold'      %}selected{% endif %}>Bold</option>
+                  <option value="extrabold" {% if fw == 'extrabold' %}selected{% endif %}>Extra Bold</option>
+                </select>
+              </div>
             </div>
 
             <!-- Posición vertical -->
@@ -308,16 +341,37 @@
             <div class="mb-2">
               <input type="text" name="banner_text" form="igForm" class="form-control form-control-sm" id="bannerText"
                      value="{{ cfg.banner_text if cfg and cfg.banner_text else '' }}"
-                     placeholder="Ej: Toda la info en tusitio.com.ar" maxlength="80">
+                     placeholder="Ej: Toda la info en tusitio.com.ar" maxlength="80"
+                     title="Texto de la franja inferior (vacío = ocultar)">
               <div class="form-text">Dejar vacío para ocultarla.</div>
             </div>
+            <div class="mb-2">
+              <label class="form-label small mb-1">Estilo fondo</label>
+              <div class="btn-group w-100" role="group" aria-label="Estilo del fondo de la franja">
+                <input type="radio" class="btn-check" name="banner_style" id="bsPill" value="pill" form="igForm" {% if bs == 'pill' %}checked{% endif %} autocomplete="off">
+                <label class="btn btn-sm btn-outline-secondary" for="bsPill">Píldora</label>
+                <input type="radio" class="btn-check" name="banner_style" id="bsRect" value="rect" form="igForm" {% if bs == 'rect' %}checked{% endif %} autocomplete="off">
+                <label class="btn btn-sm btn-outline-secondary" for="bsRect">Rectángulo</label>
+                <input type="radio" class="btn-check" name="banner_style" id="bsNone" value="none" form="igForm" {% if bs == 'none' %}checked{% endif %} autocomplete="off">
+                <label class="btn btn-sm btn-outline-secondary" for="bsNone">Sin fondo</label>
+              </div>
+            </div>
             <div class="row g-2 mb-2">
-              <div class="col-6">
-                <label class="form-label small mb-1">Color franja</label>
+              <div class="col-4">
+                <label class="form-label small mb-1">Grosor texto</label>
+                <select name="banner_font_weight" form="igForm" class="form-select form-select-sm" title="Grosor del texto de la franja">
+                  <option value="regular"   {% if bfw == 'regular'   %}selected{% endif %}>Regular</option>
+                  <option value="medium"    {% if bfw == 'medium'    %}selected{% endif %}>Medium</option>
+                  <option value="bold"      {% if bfw == 'bold'      %}selected{% endif %}>Bold</option>
+                  <option value="extrabold" {% if bfw == 'extrabold' %}selected{% endif %}>Extra Bold</option>
+                </select>
+              </div>
+              <div class="col-4">
+                <label class="form-label small mb-1">Color fondo</label>
                 <input type="color" name="banner_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
                        value="{{ cfg.banner_color if cfg and cfg.banner_color else '#e53935' }}" title="Color de la franja inferior">
               </div>
-              <div class="col-6">
+              <div class="col-4">
                 <label class="form-label small mb-1">Color texto</label>
                 <input type="color" name="banner_text_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
                        value="{{ cfg.banner_text_color if cfg and cfg.banner_text_color else '#ffffff' }}" title="Color del texto de la franja">
@@ -540,8 +594,9 @@ function _collectPreviewParams() {
   [
     'gradient_color','gradient_opacity','gradient_height',
     'font_size','text_color','banner_text','banner_color','banner_text_color',
-    'text_align','title_y_offset','font_family',
-    'logo_size','text_bg_color','text_bg_opacity'
+    'text_align','title_y_offset','font_family','font_weight',
+    'logo_size','text_bg_color','text_bg_opacity',
+    'banner_style','banner_font_weight'
   ].forEach(f => { const v = fd.get(f); if (v !== null) params.set(f, v); });
   return params;
 }
@@ -605,13 +660,20 @@ _bindSlider('fontSize',        'fontSizeDisplay',        ' px');
 _bindSlider('titleYOffset',    'yOffsetDisplay',         ' px');
 _bindSlider('textBgOpacity',   'textBgOpacityDisplay',   '', v => v == '0' ? '0 (off)' : v);
 
-// Color pickers y select → preview en cambio
+// Color pickers → preview en cambio
 ['gradient_color','text_color','text_bg_color','banner_color','banner_text_color'].forEach(name => {
   document.querySelector(`[name="${name}"]`)?.addEventListener('input', () => _schedulePreview(200));
 });
-document.querySelector('[name="font_family"]')?.addEventListener('change', () => _schedulePreview(250));
+// Selects → preview en cambio
+['font_family','font_weight','banner_font_weight'].forEach(name => {
+  document.querySelector(`[name="${name}"]`)?.addEventListener('change', () => _schedulePreview(300));
+});
+// Radio groups
 document.querySelectorAll('[name="text_align"]').forEach(el =>
   el.addEventListener('change', () => _schedulePreview(200))
+);
+document.querySelectorAll('[name="banner_style"]').forEach(el =>
+  el.addEventListener('change', () => _schedulePreview(250))
 );
 // Banner text: debounce más largo (el usuario escribe)
 document.getElementById('bannerText')?.addEventListener('input', () => _schedulePreview(600));
