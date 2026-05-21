@@ -101,6 +101,9 @@ async def instagram_create(
     text_align: str = Form("left"),
     title_y_offset: int = Form(0),
     font_family: str = Form("sans"),
+    text_bg_color: str = Form("#000000"),
+    text_bg_opacity: int = Form(0),
+    logo_size: int = Form(180),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -117,6 +120,7 @@ async def instagram_create(
                        gradient_color, gradient_opacity, gradient_height,
                        font_size, text_color, banner_text, banner_color, banner_text_color,
                        text_align, title_y_offset, font_family,
+                       text_bg_color, text_bg_opacity, logo_size,
                        logo, db)
     db.commit()
     return RedirectResponse(f"/settings/instagram/{cfg.id}?msg=Cuenta+creada+correctamente", status_code=302)
@@ -160,6 +164,9 @@ async def instagram_save(
     text_align: str = Form("left"),
     title_y_offset: int = Form(0),
     font_family: str = Form("sans"),
+    text_bg_color: str = Form("#000000"),
+    text_bg_opacity: int = Form(0),
+    logo_size: int = Form(180),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -178,6 +185,7 @@ async def instagram_save(
                            gradient_color, gradient_opacity, gradient_height,
                            font_size, text_color, banner_text, banner_color, banner_text_color,
                            text_align, title_y_offset, font_family,
+                           text_bg_color, text_bg_opacity, logo_size,
                            logo, db)
         db.commit()
         return RedirectResponse(
@@ -198,6 +206,7 @@ def _apply_form_to_cfg(
     font_size: int, text_color: str,
     banner_text: str, banner_color: str, banner_text_color: str,
     text_align: str, title_y_offset: int, font_family: str,
+    text_bg_color: str, text_bg_opacity: int, logo_size: int,
     logo: Optional[UploadFile], db: Session,
 ):
     cfg.ig_user_id = ig_user_id.strip() or None
@@ -206,6 +215,7 @@ def _apply_form_to_cfg(
     cfg.logo_position = logo_position if logo_position in (
         "top-left", "top-right", "bottom-left", "bottom-right"
     ) else "bottom-right"
+    cfg.logo_size = max(60, min(300, logo_size))
     cfg.gradient_color = gradient_color if gradient_color.startswith("#") else "#000000"
     cfg.gradient_opacity = max(0, min(255, gradient_opacity))
     cfg.gradient_height = max(100, min(1440, gradient_height))
@@ -217,6 +227,8 @@ def _apply_form_to_cfg(
     cfg.text_align = text_align if text_align in ("left", "center", "right") else "left"
     cfg.title_y_offset = max(-200, min(900, title_y_offset))
     cfg.font_family = font_family if font_family in ("sans", "serif", "impact", "rounded") else "sans"
+    cfg.text_bg_color = text_bg_color if text_bg_color.startswith("#") else "#000000"
+    cfg.text_bg_opacity = max(0, min(220, text_bg_opacity))
 
     if app_secret.strip():
         cfg.encrypted_app_secret = encrypt_value(app_secret.strip())
@@ -327,6 +339,9 @@ async def preview_image(
     q_text_align: Optional[str] = Query(None, alias="text_align"),
     q_title_y_offset: Optional[int] = Query(None, alias="title_y_offset"),
     q_font_family: Optional[str] = Query(None, alias="font_family"),
+    q_text_bg_color: Optional[str] = Query(None, alias="text_bg_color"),
+    q_text_bg_opacity: Optional[int] = Query(None, alias="text_bg_opacity"),
+    q_logo_size: Optional[int] = Query(None, alias="logo_size"),
 ):
     if not _require_admin(request, db):
         from fastapi.responses import Response
@@ -366,6 +381,7 @@ async def preview_image(
             "Vista previa — Título de la noticia de ejemplo",
             logo_path=cfg.logo_path if cfg else None,
             logo_position=((cfg.logo_position or "bottom-right") if cfg else "bottom-right"),
+            logo_size=_eff(q_logo_size, cfg.logo_size if cfg else None, 180),
             gradient_color=_eff(q_gradient_color, cfg.gradient_color if cfg else None, "#000000"),
             gradient_opacity=_eff(q_gradient_opacity, cfg.gradient_opacity if cfg else None, 200),
             gradient_height=_eff(q_gradient_height, cfg.gradient_height if cfg else None, 480),
@@ -377,6 +393,8 @@ async def preview_image(
             text_align=_eff(q_text_align, cfg.text_align if cfg else None, "left"),
             title_y_offset=_eff(q_title_y_offset, cfg.title_y_offset if cfg else None, 0),
             font_family=_eff(q_font_family, cfg.font_family if cfg else None, "sans"),
+            text_bg_color=_eff(q_text_bg_color, cfg.text_bg_color if cfg else None, "#000000"),
+            text_bg_opacity=_eff(q_text_bg_opacity, cfg.text_bg_opacity if cfg else None, 0),
         )
     except Exception as exc:
         log.error("Error generando imagen de preview: %s", exc, exc_info=True)
@@ -495,6 +513,7 @@ async def test_publish_instagram(account_id: int, request: Request, db: Session 
             "Prueba de publicación automática — AutoNews",
             logo_path=cfg.logo_path,
             logo_position=cfg.logo_position or "bottom-right",
+            logo_size=cfg.logo_size or 180,
             gradient_color=cfg.gradient_color or "#000000",
             gradient_opacity=cfg.gradient_opacity or 200,
             gradient_height=cfg.gradient_height or 480,
@@ -503,6 +522,11 @@ async def test_publish_instagram(account_id: int, request: Request, db: Session 
             banner_text=cfg.banner_text or None,
             banner_color=cfg.banner_color or "#e53935",
             banner_text_color=cfg.banner_text_color or "#ffffff",
+            text_align=cfg.text_align or "left",
+            title_y_offset=cfg.title_y_offset or 0,
+            font_family=cfg.font_family or "sans",
+            text_bg_color=cfg.text_bg_color or "#000000",
+            text_bg_opacity=cfg.text_bg_opacity or 0,
         )
 
         wp = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).first()

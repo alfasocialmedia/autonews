@@ -151,32 +151,38 @@
   <!-- Diseño + Vista previa -->
   <div class="col-lg-7">
     {% if cfg %}
-    <div class="card border-0 shadow-sm">
+    {% set ff = cfg.font_family if cfg and cfg.font_family else 'sans' %}
+    {% set ta = cfg.text_align if cfg and cfg.text_align else 'left' %}
+    {% set yo = cfg.title_y_offset if cfg and cfg.title_y_offset is not none else 0 %}
+    {% set fs = cfg.font_size if cfg and cfg.font_size else 62 %}
+    {% set ls = cfg.logo_size if cfg and cfg.logo_size else 180 %}
+    {% set go = cfg.gradient_opacity if cfg and cfg.gradient_opacity is not none else 200 %}
+    {% set gh = cfg.gradient_height if cfg and cfg.gradient_height else 480 %}
+    {% set tbo = cfg.text_bg_opacity if cfg and cfg.text_bg_opacity is not none else 0 %}
+    {% set tbc = cfg.text_bg_color if cfg and cfg.text_bg_color else '#000000' %}
+
+    <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
         <h6 class="mb-0 fw-semibold"><i class="bi bi-sliders me-2"></i>Diseño e imagen</h6>
         <button type="button" class="btn btn-sm btn-primary" id="btnPreview">
           <i class="bi bi-eye me-1"></i>Ver previa
         </button>
       </div>
-      <div class="card-body">
-        {% set ff = cfg.font_family if cfg and cfg.font_family else 'sans' %}
-        {% set ta = cfg.text_align if cfg and cfg.text_align else 'left' %}
-        {% set yo = cfg.title_y_offset if cfg and cfg.title_y_offset is not none else 0 %}
-
+      <div class="card-body p-3">
         <div class="row g-3">
+
           <!-- Columna izquierda: controles -->
-          <div class="col-md-6">
+          <div class="col-md-6" style="max-height:740px;overflow-y:auto;overflow-x:hidden;padding-right:4px">
 
             <!-- Logo -->
-            <p class="text-muted small fw-semibold text-uppercase mb-2" style="letter-spacing:.05em">Logo</p>
-            <div class="mb-2">
-              <input type="file" name="logo" form="igForm" class="form-control form-control-sm" accept=".png,.jpg,.jpeg,.webp">
-              <div class="form-text">PNG con transparencia recomendado.</div>
+            <p class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em">Logo</p>
+            <div class="mb-1">
+              <input type="file" name="logo" form="igForm" class="form-control form-control-sm" accept=".png,.jpg,.jpeg,.webp" title="Subir logo (PNG recomendado)">
             </div>
-            <div class="row g-2 mb-3">
+            <div class="row g-2 mb-2">
               <div class="col-5">
                 {% if cfg and cfg.logo_path %}
-                <img src="/settings/instagram/{{ cfg.id }}/logo" class="img-thumbnail" style="max-height:44px">
+                <img src="/settings/instagram/{{ cfg.id }}/logo" class="img-thumbnail" style="max-height:40px" alt="Logo actual">
                 {% else %}
                 <span class="text-muted small">Sin logo</span>
                 {% endif %}
@@ -189,58 +195,72 @@
                 </select>
               </div>
             </div>
+            <div class="mb-3">
+              <label class="form-label small d-flex justify-content-between mb-1">
+                <span class="text-muted">Tamaño logo</span>
+                <span class="badge bg-secondary fw-normal" id="logoSizeDisplay">{{ ls }} px</span>
+              </label>
+              <input type="range" name="logo_size" form="igForm" class="form-range" id="logoSize"
+                     min="60" max="300" step="10" value="{{ ls }}" title="Tamaño del logo en px">
+            </div>
 
             <!-- Gradiente -->
-            <p class="text-muted small fw-semibold text-uppercase mb-2" style="letter-spacing:.05em">Gradiente</p>
+            <p class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em">Gradiente</p>
             <div class="row g-2 mb-2">
               <div class="col-4">
                 <label class="form-label small mb-1">Color</label>
                 <input type="color" name="gradient_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
                        value="{{ cfg.gradient_color if cfg and cfg.gradient_color else '#000000' }}" title="Color del gradiente">
               </div>
-              <div class="col-4">
-                <label class="form-label small mb-1">Opacidad</label>
-                <input type="number" name="gradient_opacity" form="igForm" class="form-control form-control-sm"
-                       value="{{ cfg.gradient_opacity if cfg and cfg.gradient_opacity is not none else 200 }}"
-                       min="0" max="255" title="Opacidad 0–255">
-              </div>
-              <div class="col-4">
-                <label class="form-label small mb-1">Alto (px)</label>
-                <input type="number" name="gradient_height" form="igForm" class="form-control form-control-sm"
-                       value="{{ cfg.gradient_height if cfg and cfg.gradient_height else 480 }}"
-                       min="100" max="1440" title="Alto del gradiente en px">
+              <div class="col-8">
+                <label class="form-label small d-flex justify-content-between mb-1">
+                  <span>Opacidad</span>
+                  <span class="badge bg-secondary fw-normal" id="gradOpacityDisplay">{{ go }}</span>
+                </label>
+                <input type="range" name="gradient_opacity" form="igForm" class="form-range" id="gradOpacity"
+                       min="0" max="255" step="5" value="{{ go }}" title="Opacidad del gradiente (0-255)">
               </div>
             </div>
+            <div class="mb-3">
+              <label class="form-label small d-flex justify-content-between mb-1">
+                <span class="text-muted">Alto del gradiente</span>
+                <span class="badge bg-secondary fw-normal" id="gradHeightDisplay">{{ gh }} px</span>
+              </label>
+              <input type="range" name="gradient_height" form="igForm" class="form-range" id="gradHeight"
+                     min="100" max="1440" step="20" value="{{ gh }}" title="Alto del gradiente en px">
+            </div>
 
-            <!-- Texto -->
-            <p class="text-muted small fw-semibold text-uppercase mb-2 mt-3" style="letter-spacing:.05em">Texto del título</p>
-            <div class="row g-2 mb-3">
+            <!-- Texto del título -->
+            <p class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em">Texto del título</p>
+            <div class="row g-2 mb-2">
               <div class="col-4">
                 <label class="form-label small mb-1">Color</label>
                 <input type="color" name="text_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
                        value="{{ cfg.text_color if cfg and cfg.text_color else '#ffffff' }}" title="Color del texto">
               </div>
-              <div class="col-4">
-                <label class="form-label small mb-1">Tamaño (px)</label>
-                <input type="number" name="font_size" form="igForm" class="form-control form-control-sm"
-                       value="{{ cfg.font_size if cfg and cfg.font_size else 62 }}"
-                       min="20" max="120" title="Tamaño de fuente en px">
+              <div class="col-8">
+                <label class="form-label small d-flex justify-content-between mb-1">
+                  <span>Tamaño</span>
+                  <span class="badge bg-secondary fw-normal" id="fontSizeDisplay">{{ fs }} px</span>
+                </label>
+                <input type="range" name="font_size" form="igForm" class="form-range" id="fontSize"
+                       min="20" max="120" step="2" value="{{ fs }}" title="Tamaño de fuente en px">
               </div>
-              <div class="col-4">
-                <label class="form-label small mb-1">Alineación</label>
-                <div class="btn-group w-100" role="group" aria-label="Alineación">
-                  <input type="radio" class="btn-check" name="text_align" id="align_left"   value="left"   form="igForm" {% if ta == 'left'   %}checked{% endif %} autocomplete="off" title="Izquierda">
-                  <label class="btn btn-sm btn-outline-secondary px-1" for="align_left"><i class="bi bi-text-left"></i></label>
-                  <input type="radio" class="btn-check" name="text_align" id="align_center" value="center" form="igForm" {% if ta == 'center' %}checked{% endif %} autocomplete="off" title="Centrado">
-                  <label class="btn btn-sm btn-outline-secondary px-1" for="align_center"><i class="bi bi-text-center"></i></label>
-                  <input type="radio" class="btn-check" name="text_align" id="align_right"  value="right"  form="igForm" {% if ta == 'right'  %}checked{% endif %} autocomplete="off" title="Derecha">
-                  <label class="btn btn-sm btn-outline-secondary px-1" for="align_right"><i class="bi bi-text-right"></i></label>
-                </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small mb-1">Alineación</label>
+              <div class="btn-group w-100" role="group">
+                <input type="radio" class="btn-check" name="text_align" id="align_left"   value="left"   form="igForm" {% if ta == 'left'   %}checked{% endif %} autocomplete="off">
+                <label class="btn btn-sm btn-outline-secondary" for="align_left"><i class="bi bi-text-left"></i> Izq.</label>
+                <input type="radio" class="btn-check" name="text_align" id="align_center" value="center" form="igForm" {% if ta == 'center' %}checked{% endif %} autocomplete="off">
+                <label class="btn btn-sm btn-outline-secondary" for="align_center"><i class="bi bi-text-center"></i> Centro</label>
+                <input type="radio" class="btn-check" name="text_align" id="align_right"  value="right"  form="igForm" {% if ta == 'right'  %}checked{% endif %} autocomplete="off">
+                <label class="btn btn-sm btn-outline-secondary" for="align_right"><i class="bi bi-text-right"></i> Der.</label>
               </div>
             </div>
 
             <!-- Tipografía -->
-            <div class="mb-3">
+            <div class="mb-2">
               <label class="form-label small fw-semibold text-uppercase text-muted mb-1" style="letter-spacing:.05em">Tipografía</label>
               <select name="font_family" form="igForm" class="form-select form-select-sm" title="Tipografía del título">
                 <option value="sans"    {% if ff == 'sans'    %}selected{% endif %}>Montserrat — moderna</option>
@@ -253,36 +273,54 @@
             <!-- Posición vertical -->
             <div class="mb-3">
               <label class="form-label small fw-semibold text-uppercase text-muted d-flex justify-content-between mb-1" style="letter-spacing:.05em">
-                <span>Posición vertical</span>
+                <span>Posición vertical del título</span>
                 <span class="badge bg-secondary fw-normal" id="yOffsetDisplay">{{ yo }} px</span>
               </label>
               <input type="range" name="title_y_offset" form="igForm" class="form-range" id="titleYOffset"
-                     min="-100" max="900" step="10" value="{{ yo }}" title="Posición vertical del título">
+                     min="-100" max="900" step="10" value="{{ yo }}" title="Posición vertical del título en px">
               <div class="d-flex justify-content-between">
                 <small class="text-muted">↓ abajo</small>
                 <small class="text-muted">↑ arriba</small>
               </div>
             </div>
 
-            <!-- Banner -->
-            <p class="text-muted small fw-semibold text-uppercase mb-2" style="letter-spacing:.05em">Franja inferior</p>
+            <!-- Fondo del texto -->
+            <p class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em">Fondo del texto</p>
+            <div class="row g-2 mb-3">
+              <div class="col-4">
+                <label class="form-label small mb-1">Color</label>
+                <input type="color" name="text_bg_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                       value="{{ tbc }}" title="Color del fondo del texto">
+              </div>
+              <div class="col-8">
+                <label class="form-label small d-flex justify-content-between mb-1">
+                  <span>Opacidad</span>
+                  <span class="badge bg-secondary fw-normal" id="textBgOpacityDisplay">{{ tbo }}{% if tbo == 0 %} (off){% endif %}</span>
+                </label>
+                <input type="range" name="text_bg_opacity" form="igForm" class="form-range" id="textBgOpacity"
+                       min="0" max="220" step="10" value="{{ tbo }}" title="Opacidad del fondo del texto (0=desactivado)">
+                <div class="form-text">0 = sin fondo.</div>
+              </div>
+            </div>
+
+            <!-- Franja inferior -->
+            <p class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em">Franja inferior</p>
             <div class="mb-2">
-              <input type="text" name="banner_text" form="igForm" class="form-control form-control-sm"
+              <input type="text" name="banner_text" form="igForm" class="form-control form-control-sm" id="bannerText"
                      value="{{ cfg.banner_text if cfg and cfg.banner_text else '' }}"
-                     placeholder="Ej: Toda la info en tusitio.com.ar" maxlength="80"
-                     title="Texto de la franja inferior">
+                     placeholder="Ej: Toda la info en tusitio.com.ar" maxlength="80">
               <div class="form-text">Dejar vacío para ocultarla.</div>
             </div>
-            <div class="row g-2">
+            <div class="row g-2 mb-2">
               <div class="col-6">
                 <label class="form-label small mb-1">Color franja</label>
                 <input type="color" name="banner_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
-                       value="{{ cfg.banner_color if cfg and cfg.banner_color else '#e53935' }}" title="Color del banner">
+                       value="{{ cfg.banner_color if cfg and cfg.banner_color else '#e53935' }}" title="Color de la franja inferior">
               </div>
               <div class="col-6">
                 <label class="form-label small mb-1">Color texto</label>
                 <input type="color" name="banner_text_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
-                       value="{{ cfg.banner_text_color if cfg and cfg.banner_text_color else '#ffffff' }}" title="Color del texto del banner">
+                       value="{{ cfg.banner_text_color if cfg and cfg.banner_text_color else '#ffffff' }}" title="Color del texto de la franja">
               </div>
             </div>
 
@@ -296,15 +334,15 @@
                 <small>Generando…</small>
               </div>
               <img id="previewImg" src="" alt="Vista previa Instagram"
-                   class="rounded shadow" style="display:none;max-width:100%;max-height:480px">
+                   class="rounded shadow" style="display:none;max-width:100%;max-height:600px">
               <p id="previewDim" class="text-muted mt-1 mb-0" style="display:none;font-size:.7rem">1080 × 1440 px · 4:5</p>
             </div>
             <p class="text-muted small mt-3 mb-0 text-center" id="previewHint">
-              <i class="bi bi-arrow-up-circle me-1"></i>Ajustá los controles y hacé clic en <strong>Ver previa</strong>
+              <i class="bi bi-hourglass-split me-1"></i>Cargando vista previa…
             </p>
           </div>
-        </div>
 
+        </div>
       </div>
     </div>
     {% endif %}
@@ -493,23 +531,17 @@ if (btnTestPublish) {
   });
 }
 
-// ── Preview en tiempo real ──────────────────────────────────────────────────
-const titleYOffset   = document.getElementById('titleYOffset');
-const yOffsetDisplay = document.getElementById('yOffsetDisplay');
-if (titleYOffset && yOffsetDisplay) {
-  titleYOffset.addEventListener('input', () => {
-    yOffsetDisplay.textContent = titleYOffset.value + ' px';
-  });
-}
-
+// ── Preview en tiempo real ─────────────────────────────────────────────────────
 function _collectPreviewParams() {
   const params = new URLSearchParams({ t: Date.now() });
   const form = document.getElementById('igForm');
   if (!form) return params;
   const fd = new FormData(form);
-  ['gradient_color','gradient_opacity','gradient_height',
-   'font_size','text_color','banner_text','banner_color','banner_text_color',
-   'text_align','title_y_offset','font_family'
+  [
+    'gradient_color','gradient_opacity','gradient_height',
+    'font_size','text_color','banner_text','banner_color','banner_text_color',
+    'text_align','title_y_offset','font_family',
+    'logo_size','text_bg_color','text_bg_opacity'
   ].forEach(f => { const v = fd.get(f); if (v !== null) params.set(f, v); });
   return params;
 }
@@ -518,52 +550,80 @@ let _previewLoaded = false;
 let _previewTimer  = null;
 
 function _runPreview() {
-  const container = document.getElementById('previewContainer');
-  const spinner   = document.getElementById('previewSpinner');
-  const img       = document.getElementById('previewImg');
-  const btn       = document.getElementById('btnPreview');
+  const spinner = document.getElementById('previewSpinner');
+  const img     = document.getElementById('previewImg');
+  const dim     = document.getElementById('previewDim');
+  const hint    = document.getElementById('previewHint');
+  const btn     = document.getElementById('btnPreview');
   if (!img) return;
 
-  container.style.display = 'block';
-  spinner.style.display   = 'block';
-  img.style.display       = 'none';
+  if (spinner) spinner.style.display = 'block';
+  img.style.display = 'none';
+  if (dim) dim.style.display = 'none';
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>'; }
 
   const url = `${BASE}/preview-image?${_collectPreviewParams().toString()}`;
   const tmp = new Image();
   tmp.onload = () => {
-    img.src             = tmp.src;
-    spinner.style.display = 'none';
-    img.style.display   = 'block';
-    _previewLoaded      = true;
+    img.src = tmp.src;
+    if (spinner) spinner.style.display = 'none';
+    img.style.display = 'block';
+    if (dim) dim.style.display = 'block';
+    if (hint) hint.style.display = 'none';
+    _previewLoaded = true;
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>'; }
   };
   tmp.onerror = () => {
-    spinner.style.display = 'none';
+    if (spinner) spinner.style.display = 'none';
+    if (hint) { hint.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Error al generar la vista previa'; hint.style.display = 'block'; }
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-eye me-1"></i>Ver previa'; }
   };
   tmp.src = url;
 }
 
 function _schedulePreview(delay = 400) {
-  if (!_previewLoaded) return;   // solo auto-actualiza tras el primer click manual
+  if (!_previewLoaded) return;
   clearTimeout(_previewTimer);
   _previewTimer = setTimeout(_runPreview, delay);
 }
 
-// Click manual
-const btnPreview = document.getElementById('btnPreview');
-if (btnPreview) btnPreview.addEventListener('click', _runPreview);
+// Slider genérico: actualiza badge + dispara preview en tiempo real
+function _bindSlider(id, displayId, suffix, formatFn) {
+  const slider  = document.getElementById(id);
+  const display = document.getElementById(displayId);
+  if (!slider) return;
+  slider.addEventListener('input', () => {
+    if (display) display.textContent = formatFn ? formatFn(slider.value) : slider.value + suffix;
+    _schedulePreview(300);
+  });
+}
 
-// Auto-actualizar al cambiar controles de estilo (sólo si ya hay preview visible)
-const _watchFields = ['font_family','gradient_color','text_color','banner_color','banner_text_color','gradient_opacity','gradient_height','font_size'];
-_watchFields.forEach(name => {
-  document.querySelector(`[name="${name}"]`)?.addEventListener('change', () => _schedulePreview(300));
+_bindSlider('logoSize',        'logoSizeDisplay',        ' px');
+_bindSlider('gradOpacity',     'gradOpacityDisplay',     '');
+_bindSlider('gradHeight',      'gradHeightDisplay',      ' px');
+_bindSlider('fontSize',        'fontSizeDisplay',        ' px');
+_bindSlider('titleYOffset',    'yOffsetDisplay',         ' px');
+_bindSlider('textBgOpacity',   'textBgOpacityDisplay',   '', v => v == '0' ? '0 (off)' : v);
+
+// Color pickers y select → preview en cambio
+['gradient_color','text_color','text_bg_color','banner_color','banner_text_color'].forEach(name => {
+  document.querySelector(`[name="${name}"]`)?.addEventListener('input', () => _schedulePreview(200));
 });
+document.querySelector('[name="font_family"]')?.addEventListener('change', () => _schedulePreview(250));
 document.querySelectorAll('[name="text_align"]').forEach(el =>
   el.addEventListener('change', () => _schedulePreview(200))
 );
-if (titleYOffset) titleYOffset.addEventListener('input', () => _schedulePreview(350));
+// Banner text: debounce más largo (el usuario escribe)
+document.getElementById('bannerText')?.addEventListener('input', () => _schedulePreview(600));
+
+// Botón manual
+const btnPreview = document.getElementById('btnPreview');
+if (btnPreview) btnPreview.addEventListener('click', _runPreview);
+
+// Auto-carga al abrir la página
+if (ACCT_ID > 0) {
+  setTimeout(_runPreview, 700);
+}
 
 document.getElementById('toggleIG')?.addEventListener('change', async function () {
   const resp = await fetch(`${BASE}/toggle`, { method: 'POST' });

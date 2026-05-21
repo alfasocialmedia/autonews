@@ -911,6 +911,7 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
             title,
             logo_path=ig.logo_path,
             logo_position=ig.logo_position or "bottom-right",
+            logo_size=ig.logo_size or 180,
             gradient_color=ig.gradient_color or "#000000",
             gradient_opacity=ig.gradient_opacity or 200,
             gradient_height=ig.gradient_height or 480,
@@ -922,6 +923,8 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
             text_align=ig.text_align or "left",
             title_y_offset=ig.title_y_offset or 0,
             font_family=ig.font_family or "sans",
+            text_bg_color=ig.text_bg_color or "#000000",
+            text_bg_opacity=ig.text_bg_opacity or 0,
         )
 
         # Generar caption con Groq

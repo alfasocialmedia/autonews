@@ -137,21 +137,33 @@ def _draw_title(
     bottom_offset: int = 80,
     text_align: str = "left",
     font_family: str = "sans",
+    text_bg_color: str = "#000000",
+    text_bg_opacity: int = 0,
 ) -> Image.Image:
-    """Dibuja el título con sombra múltiple, alineación y tipografía configurables."""
+    """Dibuja el título con sombra múltiple, alineación y tipografía configurables.
+    Si text_bg_opacity > 0 dibuja un rectángulo semitransparente detrás del bloque de texto."""
     font = _load_font(font_size, family=font_family)
     tr, tg, tb = _hex_to_rgb(text_color)
     max_chars = max(18, int(TARGET_W / (font_size * 0.55)))
     lines = textwrap.wrap(title, width=max_chars)[:4]
     line_height = int(font_size * 1.25)
     total_height = len(lines) * line_height
-    y = img.height - total_height - bottom_offset
+    y_start = img.height - total_height - bottom_offset
     padding_x = 50
 
     base = img.convert("RGBA")
     txt_layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(txt_layer)
 
+    if text_bg_opacity > 0:
+        bgr, bgg, bgb = _hex_to_rgb(text_bg_color)
+        pad_v, pad_h = 18, 0
+        draw.rectangle(
+            [pad_h, y_start - pad_v, TARGET_W - pad_h, y_start + total_height + pad_v],
+            fill=(bgr, bgg, bgb, min(255, text_bg_opacity)),
+        )
+
+    y = y_start
     for line in lines:
         try:
             bbox = draw.textbbox((0, 0), line, font=font)
@@ -220,12 +232,12 @@ def _draw_banner(
     return img
 
 
-def _paste_logo(img: Image.Image, logo_path: str, position: str) -> Image.Image:
+def _paste_logo(img: Image.Image, logo_path: str, position: str, size: int = LOGO_MAX_SIZE) -> Image.Image:
     if not logo_path or not os.path.exists(logo_path):
         return img
     try:
         logo = Image.open(logo_path).convert("RGBA")
-        logo.thumbnail((LOGO_MAX_SIZE, LOGO_MAX_SIZE), Image.LANCZOS)
+        logo.thumbnail((size, size), Image.LANCZOS)
         lw, lh = logo.size
         m = LOGO_MARGIN
         positions = {
@@ -247,6 +259,7 @@ def build_instagram_image(
     title: str,
     logo_path: str | None = None,
     logo_position: str = "bottom-right",
+    logo_size: int = 180,
     gradient_color: str = "#000000",
     gradient_opacity: int = 200,
     gradient_height: int = 480,
@@ -258,11 +271,14 @@ def build_instagram_image(
     text_align: str = "left",
     title_y_offset: int = 0,
     font_family: str = "sans",
+    text_bg_color: str = "#000000",
+    text_bg_opacity: int = 0,
 ) -> bytes:
     """
     Pipeline completo: recibe bytes de imagen, devuelve JPEG 1080×1440 con
     título, logo y franja inferior superpuestos.
     title_y_offset: desplazamiento vertical del título en px (positivo = más arriba).
+    text_bg_opacity > 0: dibuja rectángulo semitransparente detrás del título.
     """
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img = _crop_center(img, TARGET_W, TARGET_H)
@@ -276,13 +292,14 @@ def build_instagram_image(
         font_size=font_size, text_color=text_color,
         bottom_offset=title_bottom,
         text_align=text_align, font_family=font_family,
+        text_bg_color=text_bg_color, text_bg_opacity=text_bg_opacity,
     )
 
     if banner_text:
         img = _draw_banner(img, banner_text, bg_color=banner_color, text_color=banner_text_color)
 
     if logo_path:
-        img = _paste_logo(img, logo_path, logo_position)
+        img = _paste_logo(img, logo_path, logo_position, size=logo_size)
 
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=90, optimize=True)
