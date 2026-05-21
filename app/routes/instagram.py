@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import requests as http_requests
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -98,6 +98,9 @@ async def instagram_create(
     banner_text: str = Form(""),
     banner_color: str = Form("#e53935"),
     banner_text_color: str = Form("#ffffff"),
+    text_align: str = Form("left"),
+    title_y_offset: int = Form(0),
+    font_family: str = Form("sans"),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -113,6 +116,7 @@ async def instagram_create(
                        logo_position, max_posts_per_day,
                        gradient_color, gradient_opacity, gradient_height,
                        font_size, text_color, banner_text, banner_color, banner_text_color,
+                       text_align, title_y_offset, font_family,
                        logo, db)
     db.commit()
     return RedirectResponse(f"/settings/instagram/{cfg.id}?msg=Cuenta+creada+correctamente", status_code=302)
@@ -153,6 +157,9 @@ async def instagram_save(
     banner_text: str = Form(""),
     banner_color: str = Form("#e53935"),
     banner_text_color: str = Form("#ffffff"),
+    text_align: str = Form("left"),
+    title_y_offset: int = Form(0),
+    font_family: str = Form("sans"),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -170,6 +177,7 @@ async def instagram_save(
                            logo_position, max_posts_per_day,
                            gradient_color, gradient_opacity, gradient_height,
                            font_size, text_color, banner_text, banner_color, banner_text_color,
+                           text_align, title_y_offset, font_family,
                            logo, db)
         db.commit()
         return RedirectResponse(
@@ -189,6 +197,7 @@ def _apply_form_to_cfg(
     gradient_color: str, gradient_opacity: int, gradient_height: int,
     font_size: int, text_color: str,
     banner_text: str, banner_color: str, banner_text_color: str,
+    text_align: str, title_y_offset: int, font_family: str,
     logo: Optional[UploadFile], db: Session,
 ):
     cfg.ig_user_id = ig_user_id.strip() or None
@@ -205,6 +214,9 @@ def _apply_form_to_cfg(
     cfg.banner_text = banner_text.strip() or None
     cfg.banner_color = banner_color if banner_color.startswith("#") else "#e53935"
     cfg.banner_text_color = banner_text_color if banner_text_color.startswith("#") else "#ffffff"
+    cfg.text_align = text_align if text_align in ("left", "center", "right") else "left"
+    cfg.title_y_offset = max(-200, min(900, title_y_offset))
+    cfg.font_family = font_family if font_family in ("sans", "serif", "impact", "rounded") else "sans"
 
     if app_secret.strip():
         cfg.encrypted_app_secret = encrypt_value(app_secret.strip())
@@ -295,7 +307,23 @@ def _make_fallback_image_bytes(w: int = 1200, h: int = 800) -> bytes:
 
 
 @router.get("/{account_id}/preview-image")
-async def preview_image(account_id: int, request: Request, db: Session = Depends(get_db)):
+async def preview_image(
+    account_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    # Query params para preview en tiempo real (sobreescriben los valores de DB)
+    q_font_size: Optional[int] = Query(None, alias="font_size"),
+    q_text_color: Optional[str] = Query(None, alias="text_color"),
+    q_gradient_color: Optional[str] = Query(None, alias="gradient_color"),
+    q_gradient_opacity: Optional[int] = Query(None, alias="gradient_opacity"),
+    q_gradient_height: Optional[int] = Query(None, alias="gradient_height"),
+    q_banner_text: Optional[str] = Query(None, alias="banner_text"),
+    q_banner_color: Optional[str] = Query(None, alias="banner_color"),
+    q_banner_text_color: Optional[str] = Query(None, alias="banner_text_color"),
+    q_text_align: Optional[str] = Query(None, alias="text_align"),
+    q_title_y_offset: Optional[int] = Query(None, alias="title_y_offset"),
+    q_font_family: Optional[str] = Query(None, alias="font_family"),
+):
     if not _require_admin(request, db):
         from fastapi.responses import Response
         return Response(status_code=403)
@@ -305,7 +333,6 @@ async def preview_image(account_id: int, request: Request, db: Session = Depends
     import urllib.request as _ur
     from app.services.image_template_service import build_instagram_image
 
-    # Intentar descargar imagen de muestra desde Pollinations (timeout corto)
     img_bytes = None
     img_url = (
         "https://image.pollinations.ai/prompt/professional%20news%20photo%20editorial%20style"
@@ -318,24 +345,30 @@ async def preview_image(account_id: int, request: Request, db: Session = Depends
     except Exception:
         pass
 
-    # Fallback: degradado generado localmente
     if not img_bytes:
         img_bytes = _make_fallback_image_bytes()
+
+    # Query param tiene prioridad; si no viene, usa el valor de DB; si no hay DB, usa default
+    def _eff(q_val, db_val, default):
+        return q_val if q_val is not None else (db_val if db_val is not None else default)
 
     try:
         ig_bytes = build_instagram_image(
             img_bytes,
             "Vista previa — Título de la noticia de ejemplo",
             logo_path=cfg.logo_path if cfg else None,
-            logo_position=(cfg.logo_position if cfg else "bottom-right") or "bottom-right",
-            gradient_color=(cfg.gradient_color or "#000000") if cfg else "#000000",
-            gradient_opacity=(cfg.gradient_opacity or 200) if cfg else 200,
-            gradient_height=(cfg.gradient_height or 480) if cfg else 480,
-            font_size=(cfg.font_size or 62) if cfg else 62,
-            text_color=(cfg.text_color or "#ffffff") if cfg else "#ffffff",
-            banner_text=(cfg.banner_text or None) if cfg else None,
-            banner_color=(cfg.banner_color or "#e53935") if cfg else "#e53935",
-            banner_text_color=(cfg.banner_text_color or "#ffffff") if cfg else "#ffffff",
+            logo_position=((cfg.logo_position or "bottom-right") if cfg else "bottom-right"),
+            gradient_color=_eff(q_gradient_color, cfg.gradient_color if cfg else None, "#000000"),
+            gradient_opacity=_eff(q_gradient_opacity, cfg.gradient_opacity if cfg else None, 200),
+            gradient_height=_eff(q_gradient_height, cfg.gradient_height if cfg else None, 480),
+            font_size=_eff(q_font_size, cfg.font_size if cfg else None, 62),
+            text_color=_eff(q_text_color, cfg.text_color if cfg else None, "#ffffff"),
+            banner_text=q_banner_text if q_banner_text is not None else (cfg.banner_text if cfg else None),
+            banner_color=_eff(q_banner_color, cfg.banner_color if cfg else None, "#e53935"),
+            banner_text_color=_eff(q_banner_text_color, cfg.banner_text_color if cfg else None, "#ffffff"),
+            text_align=_eff(q_text_align, cfg.text_align if cfg else None, "left"),
+            title_y_offset=_eff(q_title_y_offset, cfg.title_y_offset if cfg else None, 0),
+            font_family=_eff(q_font_family, cfg.font_family if cfg else None, "sans"),
         )
     except Exception as exc:
         log.error("Error generando imagen de preview: %s", exc, exc_info=True)

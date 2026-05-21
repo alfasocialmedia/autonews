@@ -308,6 +308,10 @@ class InstagramSettings(Base):
     banner_text = Column(String(300), nullable=True)
     banner_color = Column(String(10), default="#e53935")
     banner_text_color = Column(String(10), default="#ffffff")
+    # Tipografía y posición del título
+    text_align = Column(String(10), default="left")
+    title_y_offset = Column(Integer, default=0)
+    font_family = Column(String(30), default="sans")
     # Control
     is_active = Column(Boolean, default=False)
     max_posts_per_day = Column(Integer, default=10)

@@ -209,6 +209,12 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN banner_color VARCHAR(10) DEFAULT '#e53935'"))
             if "banner_text_color" not in ig_cols:
                 conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN banner_text_color VARCHAR(10) DEFAULT '#ffffff'"))
+            if "text_align" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN text_align VARCHAR(10) DEFAULT 'left'"))
+            if "title_y_offset" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN title_y_offset INTEGER DEFAULT 0"))
+            if "font_family" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN font_family VARCHAR(30) DEFAULT 'sans'"))
         if "rss_feeds" in tables:
             rss_cols = [c["name"] for c in inspector.get_columns("rss_feeds")]
             if "instagram_settings_id" not in rss_cols:

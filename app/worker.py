@@ -919,6 +919,9 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
             banner_text=ig.banner_text or None,
             banner_color=ig.banner_color or "#e53935",
             banner_text_color=ig.banner_text_color or "#ffffff",
+            text_align=ig.text_align or "left",
+            title_y_offset=ig.title_y_offset or 0,
+            font_family=ig.font_family or "sans",
         )
 
         # Generar caption con Groq

@@ -1,8 +1,8 @@
 """
 Genera la imagen para Instagram:
   - Redimensiona a 1080×1440 (4:5) recortando desde el centro
-  - Agrega degradado oscuro en la parte inferior
-  - Superpone el texto del título (con ajuste de línea automático)
+  - Agrega degradado oscuro cuadrático en la parte inferior
+  - Superpone el texto del título con alineación y fuente configurables
   - Superpone el logo del medio (si existe) en la esquina configurada
   - Dibuja franja de color en la parte inferior con texto personalizado
 Retorna bytes JPEG listos para subir.
@@ -19,30 +19,79 @@ TARGET_W = 1080
 TARGET_H = 1440
 FONT_DIR = os.path.join(os.path.dirname(__file__), "..", "static", "fonts")
 LOGO_MARGIN = 40
-LOGO_MAX_SIZE = 180   # px — lado máximo del logo
-BANNER_HEIGHT = 72    # px — alto de la franja inferior
-BANNER_MARGIN = 28    # px — margen horizontal del banner respecto al borde
+LOGO_MAX_SIZE = 180
+BANNER_HEIGHT = 72
+BANNER_MARGIN = 28
+
+# Familias tipográficas con rutas de fallback por plataforma
+_FONT_FAMILIES: dict[str, dict] = {
+    "sans": {
+        "label": "Sans-serif clásica",
+        "paths": [
+            os.path.join(FONT_DIR, "Roboto-Bold.ttf"),
+            os.path.join(FONT_DIR, "NotoSans-Bold.ttf"),
+            os.path.join(FONT_DIR, "DejaVuSans-Bold.ttf"),
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+            "C:/Windows/Fonts/arialbd.ttf",
+            "C:/Windows/Fonts/calibrib.ttf",
+        ],
+    },
+    "serif": {
+        "label": "Serif editorial",
+        "paths": [
+            os.path.join(FONT_DIR, "Merriweather-Bold.ttf"),
+            os.path.join(FONT_DIR, "DejaVuSerif-Bold.ttf"),
+            "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSerif-Bold.ttf",
+            "C:/Windows/Fonts/georgiab.ttf",
+            "C:/Windows/Fonts/timesbd.ttf",
+        ],
+    },
+    "impact": {
+        "label": "Impacto / Display",
+        "paths": [
+            os.path.join(FONT_DIR, "Anton-Regular.ttf"),
+            os.path.join(FONT_DIR, "Oswald-Bold.ttf"),
+            "C:/Windows/Fonts/impact.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "C:/Windows/Fonts/arialbd.ttf",
+        ],
+    },
+    "rounded": {
+        "label": "Moderna redondeada",
+        "paths": [
+            os.path.join(FONT_DIR, "Nunito-Bold.ttf"),
+            os.path.join(FONT_DIR, "Poppins-Bold.ttf"),
+            "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "C:/Windows/Fonts/verdanab.ttf",
+            "C:/Windows/Fonts/segoeui.ttf",
+        ],
+    },
+}
+
+FONT_FAMILY_LABELS: dict[str, str] = {k: v["label"] for k, v in _FONT_FAMILIES.items()}
 
 
-def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    candidates = [
-        os.path.join(FONT_DIR, "NotoSans-Bold.ttf"),
-        os.path.join(FONT_DIR, "DejaVuSans-Bold.ttf"),
-        # Linux (Docker)
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
-        # Windows (desarrollo local)
-        "C:/Windows/Fonts/arialbd.ttf",
-        "C:/Windows/Fonts/arial.ttf",
-        "C:/Windows/Fonts/calibrib.ttf",
-        "C:/Windows/Fonts/segoeui.ttf",
-        "C:/Windows/Fonts/verdanab.ttf",
-    ]
-    for path in candidates:
+def _load_font(size: int, family: str = "sans") -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    """Carga la fuente de la familia indicada con múltiples fallbacks por plataforma."""
+    fam = _FONT_FAMILIES.get(family, _FONT_FAMILIES["sans"])
+    for path in fam["paths"]:
         if os.path.exists(path):
-            return ImageFont.truetype(path, size)
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                continue
+    # Fallback universal: probar cualquier fuente disponible en cualquier familia
+    for f in _FONT_FAMILIES.values():
+        for path in f["paths"]:
+            if os.path.exists(path):
+                try:
+                    return ImageFont.truetype(path, size)
+                except Exception:
+                    continue
     return ImageFont.load_default()
 
 
@@ -90,9 +139,11 @@ def _draw_title(
     font_size: int = 62,
     text_color: str = "#ffffff",
     bottom_offset: int = 80,
+    text_align: str = "left",
+    font_family: str = "sans",
 ) -> Image.Image:
-    """Dibuja el título con sombra múltiple para máxima legibilidad."""
-    font = _load_font(font_size)
+    """Dibuja el título con sombra múltiple, alineación y tipografía configurables."""
+    font = _load_font(font_size, family=font_family)
     tr, tg, tb = _hex_to_rgb(text_color)
     max_chars = max(18, int(TARGET_W / (font_size * 0.55)))
     lines = textwrap.wrap(title, width=max_chars)[:4]
@@ -101,17 +152,28 @@ def _draw_title(
     y = img.height - total_height - bottom_offset
     padding_x = 50
 
-    # Convertir a RGBA para poder componer la sombra con transparencia
     base = img.convert("RGBA")
     txt_layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(txt_layer)
 
     for line in lines:
-        # Sombra difusa (3 desplazamientos)
+        try:
+            bbox = draw.textbbox((0, 0), line, font=font)
+            line_w = bbox[2] - bbox[0]
+        except AttributeError:
+            line_w, _ = draw.textsize(line, font=font)  # type: ignore[attr-defined]
+
+        if text_align == "center":
+            x = (img.width - line_w) // 2
+        elif text_align == "right":
+            x = img.width - line_w - padding_x
+        else:
+            x = padding_x
+
+        # Sombra difusa en 3 capas para máxima legibilidad
         for dx, dy in [(3, 3), (2, 2), (1, 1)]:
-            draw.text((padding_x + dx, y + dy), line, font=font, fill=(0, 0, 0, 160))
-        # Texto principal
-        draw.text((padding_x, y), line, font=font, fill=(tr, tg, tb, 255))
+            draw.text((x + dx, y + dy), line, font=font, fill=(0, 0, 0, 160))
+        draw.text((x, y), line, font=font, fill=(tr, tg, tb, 255))
         y += line_height
 
     return Image.alpha_composite(base, txt_layer).convert("RGB")
@@ -129,15 +191,16 @@ def _draw_banner(
 
     draw = ImageDraw.Draw(img)
     font_size = 34
-    font = _load_font(font_size)
+    font = _load_font(font_size, family="sans")
 
-    # Medir el ancho del texto para determinar el tamaño de la píldora
     try:
         bbox = draw.textbbox((0, 0), text, font=font)
         text_w = bbox[2] - bbox[0]
         text_h = bbox[3] - bbox[1]
+        text_top = bbox[1]
     except AttributeError:
-        text_w, text_h = draw.textsize(text, font=font)
+        text_w, text_h = draw.textsize(text, font=font)  # type: ignore[attr-defined]
+        text_top = 0
 
     pad_x = 48
     pad_y = 14
@@ -145,7 +208,6 @@ def _draw_banner(
     pill_h = text_h + pad_y * 2
     radius = pill_h // 2
 
-    # Centrar la píldora horizontalmente, posicionar en la parte inferior
     x0 = (img.width - pill_w) // 2
     y0 = img.height - pill_h - BANNER_MARGIN
     x1 = x0 + pill_w
@@ -154,12 +216,10 @@ def _draw_banner(
     br, bg, bb = _hex_to_rgb(bg_color)
     tr, tg, tb = _hex_to_rgb(text_color)
 
-    # Dibujar la píldora con bordes redondeados
     draw.rounded_rectangle([x0, y0, x1, y1], radius=radius, fill=(br, bg, bb))
 
-    # Texto centrado dentro de la píldora
     tx = x0 + (pill_w - text_w) // 2
-    ty = y0 + (pill_h - text_h) // 2 - (bbox[1] if 'bbox' in dir() else 0)
+    ty = y0 + (pill_h - text_h) // 2 - text_top
     draw.text((tx, ty), text, font=font, fill=(tr, tg, tb))
     return img
 
@@ -199,18 +259,28 @@ def build_instagram_image(
     banner_text: str | None = None,
     banner_color: str = "#e53935",
     banner_text_color: str = "#ffffff",
+    text_align: str = "left",
+    title_y_offset: int = 0,
+    font_family: str = "sans",
 ) -> bytes:
     """
     Pipeline completo: recibe bytes de imagen, devuelve JPEG 1080×1440 con
     título, logo y franja inferior superpuestos.
+    title_y_offset: desplazamiento vertical del título en px (positivo = más arriba).
     """
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img = _crop_center(img, TARGET_W, TARGET_H)
     img = _add_gradient(img, gradient_height, color=gradient_color, max_opacity=gradient_opacity)
 
-    # Si hay banner, el título sube para no tapar la franja
-    title_bottom = (BANNER_HEIGHT + BANNER_MARGIN + 20) if banner_text else 80
-    img = _draw_title(img, title, font_size=font_size, text_color=text_color, bottom_offset=title_bottom)
+    base_bottom = (BANNER_HEIGHT + BANNER_MARGIN + 20) if banner_text else 80
+    title_bottom = max(10, base_bottom + title_y_offset)
+
+    img = _draw_title(
+        img, title,
+        font_size=font_size, text_color=text_color,
+        bottom_offset=title_bottom,
+        text_align=text_align, font_family=font_family,
+    )
 
     if banner_text:
         img = _draw_banner(img, banner_text, bg_color=banner_color, text_color=banner_text_color)
