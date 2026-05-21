@@ -46,7 +46,7 @@
 <div class="row g-4">
   <!-- Formulario principal -->
   <div class="col-lg-7">
-    <form method="post"
+    <form id="igForm" method="post"
           action="{% if is_new %}/settings/instagram/new{% else %}/settings/instagram/{{ account_id }}/save{% endif %}"
           enctype="multipart/form-data">
 
@@ -188,46 +188,6 @@
             </div>
           </div>
 
-          <div class="row g-3 mb-3">
-            <div class="col-7">
-              <label class="form-label fw-semibold"><i class="bi bi-type me-1"></i>Tipografía del título</label>
-              {% set ff = cfg.font_family if cfg and cfg.font_family else 'sans' %}
-              <select name="font_family" class="form-select" title="Tipografía del título">
-                <option value="sans"    {% if ff == 'sans'    %}selected{% endif %}>Sans-serif clásica</option>
-                <option value="serif"   {% if ff == 'serif'   %}selected{% endif %}>Serif editorial</option>
-                <option value="impact"  {% if ff == 'impact'  %}selected{% endif %}>Impacto / Display</option>
-                <option value="rounded" {% if ff == 'rounded' %}selected{% endif %}>Moderna redondeada</option>
-              </select>
-            </div>
-            <div class="col-5">
-              <label class="form-label fw-semibold"><i class="bi bi-text-left me-1"></i>Alineación</label>
-              {% set ta = cfg.text_align if cfg and cfg.text_align else 'left' %}
-              <div class="btn-group w-100" role="group" aria-label="Alineación del título">
-                <input type="radio" class="btn-check" name="text_align" id="align_left"   value="left"   {% if ta == 'left'   %}checked{% endif %} autocomplete="off" title="Alinear a la izquierda">
-                <label class="btn btn-outline-secondary" for="align_left"><i class="bi bi-text-left"></i></label>
-                <input type="radio" class="btn-check" name="text_align" id="align_center" value="center" {% if ta == 'center' %}checked{% endif %} autocomplete="off" title="Centrar texto">
-                <label class="btn btn-outline-secondary" for="align_center"><i class="bi bi-text-center"></i></label>
-                <input type="radio" class="btn-check" name="text_align" id="align_right"  value="right"  {% if ta == 'right'  %}checked{% endif %} autocomplete="off" title="Alinear a la derecha">
-                <label class="btn btn-outline-secondary" for="align_right"><i class="bi bi-text-right"></i></label>
-              </div>
-            </div>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label fw-semibold d-flex justify-content-between align-items-center">
-              <span><i class="bi bi-arrows-vertical me-1"></i>Posición vertical del título</span>
-              <span class="badge bg-secondary" id="yOffsetDisplay">{{ cfg.title_y_offset if cfg and cfg.title_y_offset is not none else 0 }} px</span>
-            </label>
-            <input type="range" name="title_y_offset" class="form-range" id="titleYOffset"
-                   min="-100" max="900" step="10"
-                   value="{{ cfg.title_y_offset if cfg and cfg.title_y_offset is not none else 0 }}"
-                   title="Posición vertical del título">
-            <div class="d-flex justify-content-between">
-              <small class="text-muted">↓ más abajo</small>
-              <small class="text-muted">↑ más arriba</small>
-            </div>
-          </div>
-
           <hr class="my-3">
           <p class="fw-semibold small mb-2">
             <i class="bi bi-badge-cc me-1"></i>Franja inferior (banner)
@@ -289,22 +249,70 @@
 
   <!-- Panel lateral -->
   <div class="col-lg-5">
-    <!-- Vista previa -->
+    <!-- Vista previa + controles de título -->
     {% if cfg %}
     <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+      <div class="card-header bg-transparent border-0">
         <h6 class="mb-0 fw-semibold"><i class="bi bi-image me-2"></i>Vista previa</h6>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnPreview">
-          <i class="bi bi-eye me-1"></i>Ver previa
-        </button>
       </div>
-      <div class="card-body p-2" id="previewContainer" style="display:none">
-        <div id="previewSpinner" class="text-center py-3" style="display:none">
-          <span class="spinner-border spinner-border-sm me-1"></span>Generando imagen…
+      <div class="card-body pt-2 pb-3">
+
+        <!-- Controles de título (asociados al form principal via form="igForm") -->
+        {% set ff = cfg.font_family if cfg and cfg.font_family else 'sans' %}
+        {% set ta = cfg.text_align if cfg and cfg.text_align else 'left' %}
+        {% set yo = cfg.title_y_offset if cfg and cfg.title_y_offset is not none else 0 %}
+
+        <div class="row g-2 mb-2">
+          <div class="col-7">
+            <label class="form-label small fw-semibold mb-1"><i class="bi bi-type me-1"></i>Tipografía</label>
+            <select name="font_family" form="igForm" class="form-select form-select-sm" title="Tipografía del título">
+              <option value="sans"    {% if ff == 'sans'    %}selected{% endif %}>Sans-serif clásica</option>
+              <option value="serif"   {% if ff == 'serif'   %}selected{% endif %}>Serif editorial</option>
+              <option value="impact"  {% if ff == 'impact'  %}selected{% endif %}>Impacto / Display</option>
+              <option value="rounded" {% if ff == 'rounded' %}selected{% endif %}>Moderna redondeada</option>
+            </select>
+          </div>
+          <div class="col-5">
+            <label class="form-label small fw-semibold mb-1"><i class="bi bi-text-left me-1"></i>Alineación</label>
+            <div class="btn-group w-100" role="group" aria-label="Alineación del título">
+              <input type="radio" class="btn-check" name="text_align" id="align_left"   value="left"   form="igForm" {% if ta == 'left'   %}checked{% endif %} autocomplete="off" title="Izquierda">
+              <label class="btn btn-sm btn-outline-secondary" for="align_left"><i class="bi bi-text-left"></i></label>
+              <input type="radio" class="btn-check" name="text_align" id="align_center" value="center" form="igForm" {% if ta == 'center' %}checked{% endif %} autocomplete="off" title="Centrado">
+              <label class="btn btn-sm btn-outline-secondary" for="align_center"><i class="bi bi-text-center"></i></label>
+              <input type="radio" class="btn-check" name="text_align" id="align_right"  value="right"  form="igForm" {% if ta == 'right'  %}checked{% endif %} autocomplete="off" title="Derecha">
+              <label class="btn btn-sm btn-outline-secondary" for="align_right"><i class="bi bi-text-right"></i></label>
+            </div>
+          </div>
         </div>
-        <img id="previewImg" src="" alt="Vista previa Instagram"
-             class="img-fluid rounded mx-auto d-block" style="display:none;max-height:420px;width:auto">
-        <p class="text-muted small mt-1 mb-0 text-center">1080×1440 px — formato 4:5</p>
+
+        <div class="mb-3">
+          <label class="form-label small fw-semibold d-flex justify-content-between align-items-center mb-1">
+            <span><i class="bi bi-arrows-vertical me-1"></i>Posición vertical</span>
+            <span class="badge bg-secondary" id="yOffsetDisplay">{{ yo }} px</span>
+          </label>
+          <input type="range" name="title_y_offset" form="igForm" class="form-range" id="titleYOffset"
+                 min="-100" max="900" step="10" value="{{ yo }}" title="Posición vertical del título">
+          <div class="d-flex justify-content-between">
+            <small class="text-muted">↓ más abajo</small>
+            <small class="text-muted">↑ más arriba</small>
+          </div>
+        </div>
+
+        <!-- Botón y área de preview -->
+        <div class="d-grid mb-2">
+          <button type="button" class="btn btn-sm btn-outline-primary" id="btnPreview">
+            <i class="bi bi-eye me-1"></i>Ver previa con ajustes actuales
+          </button>
+        </div>
+        <div id="previewContainer" style="display:none">
+          <div id="previewSpinner" class="text-center py-3" style="display:none">
+            <span class="spinner-border spinner-border-sm me-1"></span>Generando imagen…
+          </div>
+          <img id="previewImg" src="" alt="Vista previa Instagram"
+               class="img-fluid rounded mx-auto d-block" style="display:none">
+          <p class="text-muted small mt-1 mb-0 text-center">1080×1440 px — formato 4:5</p>
+        </div>
+
       </div>
     </div>
     {% endif %}
