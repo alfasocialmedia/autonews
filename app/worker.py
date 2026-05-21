@@ -384,6 +384,8 @@ def process_emails():
                                         groq_key=decrypt_value(groq_cfg.encrypted_api_key),
                                         groq_model=groq_cfg.model,
                                         instagram_settings_id=account.instagram_settings_id,
+                                        groq_provider=groq_cfg.provider or "groq",
+                                        groq_base_url=groq_cfg.api_base_url,
                                     )
                             except Exception as ig_exc:
                                 log.warning("[IG/IMAP] No se pudo publicar en Instagram: %s", ig_exc)
@@ -554,6 +556,9 @@ def _resolve_image_url(raw_url: str, gdrive_api_key: str | None) -> str | None:
     return raw_url
 
 
+_ELEVENLABS_MAX_CHARS = 4900
+
+
 def _generate_tts_audio(db, ai_result: dict) -> bytes | None:
     """Genera audio MP3 con ElevenLabs (prioridad) o Edge TTS (fallback gratuito). Devuelve bytes o None."""
     from app.services.elevenlabs_service import strip_html
@@ -567,11 +572,17 @@ def _generate_tts_audio(db, ai_result: dict) -> bytes | None:
         if el_cfg:
             from app.services.elevenlabs_service import generate_audio as el_generate
             el_key = decrypt_value(el_cfg.encrypted_api_key)
-            audio = el_generate(plain_text, el_key, el_cfg.voice_id, el_cfg.model_id)
-            log.info("🔊 Audio ElevenLabs generado: %d bytes", len(audio))
+            # ElevenLabs limita a ~5000 chars por request; truncar en oración completa
+            tts_text = plain_text
+            if len(tts_text) > _ELEVENLABS_MAX_CHARS:
+                cut = tts_text.rfind(". ", 0, _ELEVENLABS_MAX_CHARS)
+                tts_text = tts_text[: cut + 1] if cut != -1 else tts_text[:_ELEVENLABS_MAX_CHARS]
+                log.info("🔊 Texto truncado para ElevenLabs: %d → %d chars", len(plain_text), len(tts_text))
+            audio = el_generate(tts_text, el_key, el_cfg.voice_id, el_cfg.model_id)
+            log.info("🔊 Audio ElevenLabs generado con voz '%s': %d bytes", el_cfg.voice_id, len(audio))
             return audio
     except Exception as exc:
-        log.warning("ElevenLabs TTS error, intentando Edge TTS: %s", exc)
+        log.warning("ElevenLabs TTS error (voz_id=%s), intentando Edge TTS: %s", getattr(el_cfg, "voice_id", "?"), exc)
 
     # Fallback: Edge TTS gratuito
     try:
@@ -855,6 +866,8 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
                     groq_key=decrypt_value(groq_cfg.encrypted_api_key),
                     groq_model=groq_cfg.model,
                     instagram_settings_id=instagram_settings_id,
+                    groq_provider=groq_cfg.provider or "groq",
+                    groq_base_url=groq_cfg.api_base_url,
                 )
         except Exception as exc:
             log.warning("[IG] No se pudo publicar en Instagram: %s", exc)
@@ -862,7 +875,7 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
     return published_count
 
 
-def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_url: str, groq_key: str, groq_model: str, instagram_settings_id: int | None = None):
+def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_url: str, groq_key: str, groq_model: str, instagram_settings_id: int | None = None, groq_provider: str = "groq", groq_base_url: str | None = None):
     """Publica en Instagram usando la cuenta vinculada al feed/IMAP (o la primera activa como fallback)."""
     try:
         from app.services.image_template_service import build_instagram_image
@@ -940,7 +953,7 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
 
         # Generar caption con Groq (después de tener wp.site_url disponible)
         website_footer = ig.banner_text or wp.site_url or ""
-        caption = _generate_ig_caption(groq_key, groq_model, title, ai_result.get("summary", ""), website_footer)
+        caption = _generate_ig_caption(groq_key, groq_model, title, ai_result.get("summary", ""), website_footer, groq_provider=groq_provider, groq_base_url=groq_base_url)
 
         wp_pwd = decrypt_value(wp.encrypted_app_password)
         media_result = upload_media(
@@ -966,12 +979,12 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
         log.error("[IG] Excepción en _publish_instagram: %s", exc)
 
 
-def _generate_ig_caption(groq_key: str, groq_model: str, title: str, summary: str, website_footer: str = "") -> str:
+def _generate_ig_caption(groq_key: str, groq_model: str, title: str, summary: str, website_footer: str = "", groq_provider: str = "groq", groq_base_url: str | None = None) -> str:
     """Genera caption Instagram: frase gancho + copy con emojis + 5 hashtags virales + footer web."""
     footer = f"\n\n📰 {website_footer}" if website_footer else ""
     try:
         from app.services.groq_service import _get_client
-        client = _get_client(groq_key)
+        client = _get_client(groq_key, provider=groq_provider, api_base_url=groq_base_url)
         prompt = (
             "Sos community manager de un medio digital. El título de la noticia ya está en la imagen, "
             "NO lo repitas en el caption. Generá un caption para Instagram con exactamente esta estructura:\n"

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import io
 import os
-import textwrap
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -88,6 +87,36 @@ def _add_gradient(
     return Image.alpha_composite(base, overlay).convert("RGB")
 
 
+def _wrap_by_pixels(title: str, font, max_px: int, max_lines: int = 4) -> list[str]:
+    """Divide el título en líneas que no superen max_px de ancho real (medición PIL)."""
+    tmp_img = Image.new("RGB", (1, 1))
+    draw = ImageDraw.Draw(tmp_img)
+
+    def text_width(t: str) -> int:
+        try:
+            bb = draw.textbbox((0, 0), t, font=font)
+            return bb[2] - bb[0]
+        except AttributeError:
+            w, _ = draw.textsize(t, font=font)  # type: ignore[attr-defined]
+            return w
+
+    words = title.split()
+    lines: list[str] = []
+    current: list[str] = []
+    for word in words:
+        candidate = " ".join(current + [word])
+        if text_width(candidate) <= max_px or not current:
+            current.append(word)
+        else:
+            lines.append(" ".join(current))
+            current = [word]
+            if len(lines) >= max_lines:
+                break
+    if current and len(lines) < max_lines:
+        lines.append(" ".join(current))
+    return lines[:max_lines]
+
+
 def _draw_title(
     img: Image.Image,
     title: str,
@@ -103,12 +132,12 @@ def _draw_title(
     """Dibuja el título con sombra múltiple, alineación y tipografía configurables."""
     font = _load_font(font_size, family=font_family, weight=font_weight)
     tr, tg, tb = _hex_to_rgb(text_color)
-    max_chars = max(18, int(TARGET_W / (font_size * 0.55)))
-    lines = textwrap.wrap(title, width=max_chars)[:4]
+    padding_x = 50
+    usable_w = TARGET_W - padding_x * 2
+    lines = _wrap_by_pixels(title, font, usable_w)
     line_height = int(font_size * 1.25)
     total_height = len(lines) * line_height
     y_start = img.height - total_height - bottom_offset
-    padding_x = 50
 
     base = img.convert("RGBA")
     txt_layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
