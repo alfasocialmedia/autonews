@@ -80,7 +80,7 @@ def _add_gradient(
     draw = ImageDraw.Draw(gradient)
     for y in range(height):
         t = y / height
-        alpha = int(max_opacity * (t ** 1.6))
+        alpha = int(max_opacity * (t ** 1.2))
         draw.line([(0, y), (img.width, y)], fill=(r, g, b, alpha))
     base = img.convert("RGBA")
     overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
