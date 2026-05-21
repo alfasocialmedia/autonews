@@ -289,6 +289,10 @@ async def serve_logo(account_id: int, request: Request, db: Session = Depends(ge
 
 # ─── Vista previa ────────────────────────────────────────────────────────────
 
+# Cache del fondo de preview por account_id para renders rápidos (evita re-descargar Pollinations)
+_preview_bg_cache: dict[int, bytes] = {}
+
+
 def _make_fallback_image_bytes(w: int = 1200, h: int = 800) -> bytes:
     """Genera un degradado azul-oscuro como imagen de fondo cuando Pollinations no responde."""
     from PIL import Image, ImageDraw
@@ -333,20 +337,24 @@ async def preview_image(
     import urllib.request as _ur
     from app.services.image_template_service import build_instagram_image
 
-    img_bytes = None
-    img_url = (
-        "https://image.pollinations.ai/prompt/professional%20news%20photo%20editorial%20style"
-        "?width=1200&height=800&seed=7&nologo=true&model=flux"
-    )
-    try:
-        req = _ur.Request(img_url, headers={"User-Agent": "AutoNews/1.0"})
-        with _ur.urlopen(req, timeout=12) as r:
-            img_bytes = r.read()
-    except Exception:
-        pass
+    # Usar fondo cacheado si existe (evita llamar Pollinations en cada render)
+    img_bytes = _preview_bg_cache.get(account_id)
+    if not img_bytes:
+        img_url = (
+            "https://image.pollinations.ai/prompt/professional%20news%20photo%20editorial%20style"
+            "?width=1200&height=800&seed=7&nologo=true&model=flux"
+        )
+        try:
+            req = _ur.Request(img_url, headers={"User-Agent": "AutoNews/1.0"})
+            with _ur.urlopen(req, timeout=12) as r:
+                img_bytes = r.read()
+            _preview_bg_cache[account_id] = img_bytes
+        except Exception:
+            pass
 
     if not img_bytes:
         img_bytes = _make_fallback_image_bytes()
+        _preview_bg_cache[account_id] = img_bytes
 
     # Query param tiene prioridad; si no viene, usa el valor de DB; si no hay DB, usa default
     def _eff(q_val, db_val, default):

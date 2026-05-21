@@ -24,46 +24,42 @@ BANNER_HEIGHT = 72
 BANNER_MARGIN = 28
 
 # Familias tipográficas con rutas de fallback por plataforma
+# Los archivos en FONT_DIR se bundlean con el repo y funcionan en Docker y local
 _FONT_FAMILIES: dict[str, dict] = {
     "sans": {
-        "label": "Sans-serif clásica",
+        "label": "Montserrat (moderna)",
         "paths": [
-            os.path.join(FONT_DIR, "Roboto-Bold.ttf"),
-            os.path.join(FONT_DIR, "NotoSans-Bold.ttf"),
-            os.path.join(FONT_DIR, "DejaVuSans-Bold.ttf"),
+            os.path.join(FONT_DIR, "Montserrat-Bold.ttf"),        # bundled
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
             "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
-            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
             "C:/Windows/Fonts/arialbd.ttf",
             "C:/Windows/Fonts/calibrib.ttf",
         ],
     },
     "serif": {
-        "label": "Serif editorial",
+        "label": "Playfair Display (editorial)",
         "paths": [
-            os.path.join(FONT_DIR, "Merriweather-Bold.ttf"),
-            os.path.join(FONT_DIR, "DejaVuSerif-Bold.ttf"),
+            os.path.join(FONT_DIR, "PlayfairDisplay-Bold.ttf"),    # bundled
             "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
-            "/usr/share/fonts/truetype/noto/NotoSerif-Bold.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf",
             "C:/Windows/Fonts/georgiab.ttf",
             "C:/Windows/Fonts/timesbd.ttf",
         ],
     },
     "impact": {
-        "label": "Impacto / Display",
+        "label": "Oswald (condensada)",
         "paths": [
-            os.path.join(FONT_DIR, "Anton-Regular.ttf"),
-            os.path.join(FONT_DIR, "Oswald-Bold.ttf"),
+            os.path.join(FONT_DIR, "Oswald-Bold.ttf"),             # bundled
             "C:/Windows/Fonts/impact.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
             "C:/Windows/Fonts/arialbd.ttf",
         ],
     },
     "rounded": {
-        "label": "Moderna redondeada",
+        "label": "Nunito (redondeada)",
         "paths": [
-            os.path.join(FONT_DIR, "Nunito-Bold.ttf"),
-            os.path.join(FONT_DIR, "Poppins-Bold.ttf"),
+            os.path.join(FONT_DIR, "Nunito-Bold.ttf"),             # bundled
             "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
             "C:/Windows/Fonts/verdanab.ttf",

@@ -266,10 +266,10 @@
           <div class="col-7">
             <label class="form-label small fw-semibold mb-1"><i class="bi bi-type me-1"></i>Tipografía</label>
             <select name="font_family" form="igForm" class="form-select form-select-sm" title="Tipografía del título">
-              <option value="sans"    {% if ff == 'sans'    %}selected{% endif %}>Sans-serif clásica</option>
-              <option value="serif"   {% if ff == 'serif'   %}selected{% endif %}>Serif editorial</option>
-              <option value="impact"  {% if ff == 'impact'  %}selected{% endif %}>Impacto / Display</option>
-              <option value="rounded" {% if ff == 'rounded' %}selected{% endif %}>Moderna redondeada</option>
+              <option value="sans"    {% if ff == 'sans'    %}selected{% endif %}>Montserrat — moderna</option>
+              <option value="serif"   {% if ff == 'serif'   %}selected{% endif %}>Playfair Display — editorial</option>
+              <option value="impact"  {% if ff == 'impact'  %}selected{% endif %}>Oswald — condensada</option>
+              <option value="rounded" {% if ff == 'rounded' %}selected{% endif %}>Nunito — redondeada</option>
             </select>
           </div>
           <div class="col-5">
@@ -299,18 +299,22 @@
         </div>
 
         <!-- Botón y área de preview -->
-        <div class="d-grid mb-2">
-          <button type="button" class="btn btn-sm btn-outline-primary" id="btnPreview">
-            <i class="bi bi-eye me-1"></i>Ver previa con ajustes actuales
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="text-muted" style="font-size:.75rem">Los cambios se aplican automáticamente</span>
+          <button type="button" class="btn btn-sm btn-primary px-3" id="btnPreview">
+            <i class="bi bi-eye me-1"></i>Ver previa
           </button>
         </div>
         <div id="previewContainer" style="display:none">
-          <div id="previewSpinner" class="text-center py-3" style="display:none">
-            <span class="spinner-border spinner-border-sm me-1"></span>Generando imagen…
+          <div id="previewSpinner" class="text-center py-2" style="display:none">
+            <span class="spinner-border spinner-border-sm text-secondary me-1"></span>
+            <span class="text-muted small">Generando…</span>
           </div>
-          <img id="previewImg" src="" alt="Vista previa Instagram"
-               class="img-fluid rounded mx-auto d-block" style="display:none">
-          <p class="text-muted small mt-1 mb-0 text-center">1080×1440 px — formato 4:5</p>
+          <div class="position-relative d-flex justify-content-center">
+            <img id="previewImg" src="" alt="Vista previa Instagram"
+                 class="rounded shadow-sm" style="display:none;max-height:220px;width:auto">
+          </div>
+          <p class="text-muted text-center mb-0 mt-1" style="font-size:.7rem">1080 × 1440 px · 4:5</p>
         </div>
 
       </div>
@@ -501,8 +505,8 @@ if (btnTestPublish) {
   });
 }
 
-// Slider de posición vertical
-const titleYOffset = document.getElementById('titleYOffset');
+// ── Preview en tiempo real ──────────────────────────────────────────────────
+const titleYOffset   = document.getElementById('titleYOffset');
 const yOffsetDisplay = document.getElementById('yOffsetDisplay');
 if (titleYOffset && yOffsetDisplay) {
   titleYOffset.addEventListener('input', () => {
@@ -512,7 +516,7 @@ if (titleYOffset && yOffsetDisplay) {
 
 function _collectPreviewParams() {
   const params = new URLSearchParams({ t: Date.now() });
-  const form = document.querySelector('form[enctype]');
+  const form = document.getElementById('igForm');
   if (!form) return params;
   const fd = new FormData(form);
   ['gradient_color','gradient_opacity','gradient_height',
@@ -522,29 +526,56 @@ function _collectPreviewParams() {
   return params;
 }
 
-const btnPreview = document.getElementById('btnPreview');
-if (btnPreview) {
-  btnPreview.addEventListener('click', async () => {
-    const container = document.getElementById('previewContainer');
-    const spinner = document.getElementById('previewSpinner');
-    const img = document.getElementById('previewImg');
-    container.style.display = 'block';
-    img.style.display = 'none';
-    spinner.style.display = 'block';
-    btnPreview.disabled = true;
-    btnPreview.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generando…';
-    img.onload = () => {
-      spinner.style.display = 'none'; img.style.display = 'block';
-      btnPreview.disabled = false; btnPreview.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Actualizar';
-    };
-    img.onerror = () => {
-      spinner.style.display = 'none';
-      container.innerHTML = '<p class="text-danger small p-2">Error al generar la vista previa.</p>';
-      btnPreview.disabled = false; btnPreview.innerHTML = '<i class="bi bi-eye me-1"></i>Ver previa';
-    };
-    img.src = `${BASE}/preview-image?${_collectPreviewParams().toString()}`;
-  });
+let _previewLoaded = false;
+let _previewTimer  = null;
+
+function _runPreview() {
+  const container = document.getElementById('previewContainer');
+  const spinner   = document.getElementById('previewSpinner');
+  const img       = document.getElementById('previewImg');
+  const btn       = document.getElementById('btnPreview');
+  if (!img) return;
+
+  container.style.display = 'block';
+  spinner.style.display   = 'block';
+  img.style.display       = 'none';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>'; }
+
+  const url = `${BASE}/preview-image?${_collectPreviewParams().toString()}`;
+  const tmp = new Image();
+  tmp.onload = () => {
+    img.src             = tmp.src;
+    spinner.style.display = 'none';
+    img.style.display   = 'block';
+    _previewLoaded      = true;
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>'; }
+  };
+  tmp.onerror = () => {
+    spinner.style.display = 'none';
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-eye me-1"></i>Ver previa'; }
+  };
+  tmp.src = url;
 }
+
+function _schedulePreview(delay = 400) {
+  if (!_previewLoaded) return;   // solo auto-actualiza tras el primer click manual
+  clearTimeout(_previewTimer);
+  _previewTimer = setTimeout(_runPreview, delay);
+}
+
+// Click manual
+const btnPreview = document.getElementById('btnPreview');
+if (btnPreview) btnPreview.addEventListener('click', _runPreview);
+
+// Auto-actualizar al cambiar controles de estilo (sólo si ya hay preview visible)
+const _watchFields = ['font_family','gradient_color','text_color','banner_color','banner_text_color','gradient_opacity','gradient_height','font_size'];
+_watchFields.forEach(name => {
+  document.querySelector(`[name="${name}"]`)?.addEventListener('change', () => _schedulePreview(300));
+});
+document.querySelectorAll('[name="text_align"]').forEach(el =>
+  el.addEventListener('change', () => _schedulePreview(200))
+);
+if (titleYOffset) titleYOffset.addEventListener('input', () => _schedulePreview(350));
 
 document.getElementById('toggleIG')?.addEventListener('change', async function () {
   const resp = await fetch(`${BASE}/toggle`, { method: 'POST' });
