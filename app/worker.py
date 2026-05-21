@@ -906,27 +906,33 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
 
         # Necesitamos bytes de imagen para procesar con Pillow
         if img_payload:
-            img_data, _, _ = img_payload
+            img_data, img_fname, _ = img_payload
+            log.info("[IG] Usando imagen del artículo: %s (%d bytes)", img_fname, len(img_data))
         elif wp_image_url:
+            log.info("[IG] Descargando imagen desde URL: %s", wp_image_url[:120])
             downloaded = _download_image(wp_image_url)
             if not downloaded:
                 log.warning("[IG] No se pudo descargar imagen para Instagram")
                 return
-            img_data, _, _ = downloaded
+            img_data, img_fname, _ = downloaded
+            log.info("[IG] Imagen descargada: %s (%d bytes)", img_fname, len(img_data))
         else:
             log.info("[IG] Sin imagen disponible — saltando publicación IG")
             return
 
         title = ai_result.get("title", "")
+        log.info("[IG] Aplicando diseño (cfg=%s, fuente=%s, opacidad_grad=%s) al título: %s",
+                 ig.name, ig.font_family, ig.gradient_opacity, title[:60])
 
-        ig_image_bytes = build_instagram_image(
+        try:
+            ig_image_bytes = build_instagram_image(
             img_data,
             title,
             logo_path=ig.logo_path,
             logo_position=ig.logo_position or "bottom-right",
-            logo_size=ig.logo_size or 180,
+            logo_size=ig.logo_size if ig.logo_size is not None else 180,
             gradient_color=ig.gradient_color or "#000000",
-            gradient_opacity=ig.gradient_opacity or 200,
+            gradient_opacity=ig.gradient_opacity if ig.gradient_opacity is not None else 200,
             gradient_height=ig.gradient_height or 480,
             font_size=ig.font_size or 62,
             text_color=ig.text_color or "#ffffff",
@@ -934,16 +940,16 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
             banner_color=ig.banner_color or "#e53935",
             banner_text_color=ig.banner_text_color or "#ffffff",
             text_align=ig.text_align or "left",
-            title_y_offset=ig.title_y_offset or 0,
-            font_family=ig.font_family or "sans",
+            title_y_offset=ig.title_y_offset if ig.title_y_offset is not None else 0,
+            font_family=ig.font_family or "Montserrat",
             text_bg_color=ig.text_bg_color or "#000000",
-            text_bg_opacity=ig.text_bg_opacity or 0,
+            text_bg_opacity=ig.text_bg_opacity if ig.text_bg_opacity is not None else 0,
             font_weight=ig.font_weight or "bold",
             banner_style=ig.banner_style or "pill",
             banner_font_weight=ig.banner_font_weight or "bold",
-            banner_y_offset=ig.banner_y_offset or 0,
+            banner_y_offset=ig.banner_y_offset if ig.banner_y_offset is not None else 0,
             banner_align=ig.banner_align or "center",
-            text_bg_padding_x=ig.text_bg_padding_x or 0,
+            text_bg_padding_x=ig.text_bg_padding_x if ig.text_bg_padding_x is not None else 0,
             text_bg_padding_y=ig.text_bg_padding_y if ig.text_bg_padding_y is not None else 18,
             text_bg_full_width=ig.text_bg_full_width if ig.text_bg_full_width is not None else True,
             title_max_lines=ig.title_max_lines or 4,
@@ -953,6 +959,11 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
             category_text_color=ig.category_text_color or "#ffffff",
             category_x_percent=ig.category_x_percent if ig.category_x_percent is not None else 0,
         )
+        except Exception as build_exc:
+            log.error("[IG] Error en build_instagram_image: %s", build_exc, exc_info=True)
+            _log_db(db, "ERROR", f"[Instagram] Error generando imagen: {build_exc}", source="instagram")
+            return
+        log.info("[IG] Imagen procesada OK (%d bytes)", len(ig_image_bytes))
 
         # Subir la imagen procesada al primer sitio WP activo para obtener URL pública
         wp = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).first()
