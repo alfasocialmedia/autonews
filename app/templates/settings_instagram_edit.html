@@ -44,13 +44,12 @@
 {% endwith %}
 
 <div class="row g-4">
-  <!-- Formulario principal -->
-  <div class="col-lg-7">
+  <!-- Credenciales -->
+  <div class="col-lg-5">
     <form id="igForm" method="post"
           action="{% if is_new %}/settings/instagram/new{% else %}/settings/instagram/{{ account_id }}/save{% endif %}"
           enctype="multipart/form-data">
 
-      <!-- CREDENCIALES -->
       <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-transparent border-0">
           <h6 class="mb-0 fw-semibold"><i class="bi bi-key me-2"></i>Credenciales</h6>
@@ -120,108 +119,10 @@
         </div>
       </div>
 
-      <!-- DISEÑO DE IMAGEN -->
-      <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-transparent border-0">
-          <h6 class="mb-0 fw-semibold"><i class="bi bi-image me-2"></i>Diseño de imagen</h6>
-        </div>
-        <div class="card-body">
-
-          <div class="row g-3 mb-3">
-            <div class="col-8">
-              <label class="form-label fw-semibold">Logo del medio</label>
-              <input type="file" name="logo" class="form-control" accept=".png,.jpg,.jpeg,.webp">
-              <div class="form-text">PNG con transparencia recomendado.</div>
-              {% if cfg and cfg.logo_path %}
-              <div class="mt-2">
-                <img src="/settings/instagram/{{ cfg.id }}/logo"
-                     class="img-thumbnail" style="max-height:60px">
-                <span class="text-muted small ms-2">Logo actual</span>
-              </div>
-              {% endif %}
-            </div>
-            <div class="col-4">
-              <label class="form-label fw-semibold">Posición del logo</label>
-              <select name="logo_position" class="form-select">
-                {% for pos, label in [('top-left','↖ Sup. izq.'),('top-right','↗ Sup. der.'),('bottom-left','↙ Inf. izq.'),('bottom-right','↘ Inf. der.')] %}
-                <option value="{{ pos }}" {% if cfg and cfg.logo_position == pos %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-            </div>
-          </div>
-
-          <hr class="my-3">
-          <p class="fw-semibold small mb-2">Gradiente y texto</p>
-
-          <div class="row g-3 mb-3">
-            <div class="col-6">
-              <label class="form-label fw-semibold">Color del gradiente</label>
-              <input type="color" name="gradient_color" class="form-control form-control-color"
-                     value="{{ cfg.gradient_color if cfg and cfg.gradient_color else '#000000' }}">
-            </div>
-            <div class="col-6">
-              <label class="form-label fw-semibold">Color del texto</label>
-              <input type="color" name="text_color" class="form-control form-control-color"
-                     value="{{ cfg.text_color if cfg and cfg.text_color else '#ffffff' }}">
-            </div>
-          </div>
-
-          <div class="row g-3 mb-3">
-            <div class="col-4">
-              <label class="form-label fw-semibold">Opacidad gradiente</label>
-              <input type="number" name="gradient_opacity" class="form-control"
-                     value="{{ cfg.gradient_opacity if cfg and cfg.gradient_opacity is not none else 200 }}"
-                     min="0" max="255">
-              <div class="form-text">0–255</div>
-            </div>
-            <div class="col-4">
-              <label class="form-label fw-semibold">Alto gradiente (px)</label>
-              <input type="number" name="gradient_height" class="form-control"
-                     value="{{ cfg.gradient_height if cfg and cfg.gradient_height else 480 }}"
-                     min="100" max="1440">
-            </div>
-            <div class="col-4">
-              <label class="form-label fw-semibold">Tamaño fuente (px)</label>
-              <input type="number" name="font_size" class="form-control"
-                     value="{{ cfg.font_size if cfg and cfg.font_size else 62 }}"
-                     min="20" max="120">
-            </div>
-          </div>
-
-          <hr class="my-3">
-          <p class="fw-semibold small mb-2">
-            <i class="bi bi-badge-cc me-1"></i>Franja inferior (banner)
-            <span class="text-muted fw-normal">— ej: "Toda la info en tusitio.com.ar"</span>
-          </p>
-
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Texto del banner</label>
-            <input type="text" name="banner_text" class="form-control"
-                   value="{{ cfg.banner_text if cfg and cfg.banner_text else '' }}"
-                   placeholder="Ej: Toda la info en blogsanvicente.com.ar"
-                   maxlength="80">
-            <div class="form-text">Dejar vacío para no mostrar franja.</div>
-          </div>
-
-          <div class="row g-3">
-            <div class="col-6">
-              <label class="form-label fw-semibold">Color del banner</label>
-              <input type="color" name="banner_color" class="form-control form-control-color"
-                     value="{{ cfg.banner_color if cfg and cfg.banner_color else '#e53935' }}">
-            </div>
-            <div class="col-6">
-              <label class="form-label fw-semibold">Color texto del banner</label>
-              <input type="color" name="banner_text_color" class="form-control form-control-color"
-                     value="{{ cfg.banner_text_color if cfg and cfg.banner_text_color else '#ffffff' }}">
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ACCIONES -->
+      <!-- Botones de acción -->
       <div class="d-flex gap-2 flex-wrap">
         <button type="submit" class="btn btn-primary">
-          <i class="bi bi-save me-1"></i>Guardar configuración
+          <i class="bi bi-save me-1"></i>Guardar
         </button>
         {% if cfg and cfg.app_id and cfg.encrypted_app_secret %}
         <button type="button" class="btn btn-outline-primary" id="btnOAuth">
@@ -230,7 +131,7 @@
         {% endif %}
         {% if cfg and cfg.ig_user_id and cfg.encrypted_access_token %}
         <button type="button" class="btn btn-outline-info" id="btnTest">
-          <i class="bi bi-plug me-1"></i>Probar conexión
+          <i class="bi bi-plug me-1"></i>Probar
         </button>
         {% endif %}
         {% if cfg and cfg.ig_user_id and cfg.encrypted_access_token and cfg.is_active %}
@@ -247,74 +148,161 @@
     <div id="testResult" class="mt-3" style="display:none"></div>
   </div>
 
-  <!-- Panel lateral -->
-  <div class="col-lg-5">
-    <!-- Vista previa + controles de título -->
+  <!-- Diseño + Vista previa -->
+  <div class="col-lg-7">
     {% if cfg %}
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-transparent border-0">
-        <h6 class="mb-0 fw-semibold"><i class="bi bi-image me-2"></i>Vista previa</h6>
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-sliders me-2"></i>Diseño e imagen</h6>
+        <button type="button" class="btn btn-sm btn-primary" id="btnPreview">
+          <i class="bi bi-eye me-1"></i>Ver previa
+        </button>
       </div>
-      <div class="card-body pt-2 pb-3">
-
-        <!-- Controles de título (asociados al form principal via form="igForm") -->
+      <div class="card-body">
         {% set ff = cfg.font_family if cfg and cfg.font_family else 'sans' %}
         {% set ta = cfg.text_align if cfg and cfg.text_align else 'left' %}
         {% set yo = cfg.title_y_offset if cfg and cfg.title_y_offset is not none else 0 %}
 
-        <div class="row g-2 mb-2">
-          <div class="col-7">
-            <label class="form-label small fw-semibold mb-1"><i class="bi bi-type me-1"></i>Tipografía</label>
-            <select name="font_family" form="igForm" class="form-select form-select-sm" title="Tipografía del título">
-              <option value="sans"    {% if ff == 'sans'    %}selected{% endif %}>Montserrat — moderna</option>
-              <option value="serif"   {% if ff == 'serif'   %}selected{% endif %}>Playfair Display — editorial</option>
-              <option value="impact"  {% if ff == 'impact'  %}selected{% endif %}>Oswald — condensada</option>
-              <option value="rounded" {% if ff == 'rounded' %}selected{% endif %}>Nunito — redondeada</option>
-            </select>
-          </div>
-          <div class="col-5">
-            <label class="form-label small fw-semibold mb-1"><i class="bi bi-text-left me-1"></i>Alineación</label>
-            <div class="btn-group w-100" role="group" aria-label="Alineación del título">
-              <input type="radio" class="btn-check" name="text_align" id="align_left"   value="left"   form="igForm" {% if ta == 'left'   %}checked{% endif %} autocomplete="off" title="Izquierda">
-              <label class="btn btn-sm btn-outline-secondary" for="align_left"><i class="bi bi-text-left"></i></label>
-              <input type="radio" class="btn-check" name="text_align" id="align_center" value="center" form="igForm" {% if ta == 'center' %}checked{% endif %} autocomplete="off" title="Centrado">
-              <label class="btn btn-sm btn-outline-secondary" for="align_center"><i class="bi bi-text-center"></i></label>
-              <input type="radio" class="btn-check" name="text_align" id="align_right"  value="right"  form="igForm" {% if ta == 'right'  %}checked{% endif %} autocomplete="off" title="Derecha">
-              <label class="btn btn-sm btn-outline-secondary" for="align_right"><i class="bi bi-text-right"></i></label>
+        <div class="row g-3">
+          <!-- Columna izquierda: controles -->
+          <div class="col-md-6">
+
+            <!-- Logo -->
+            <p class="text-muted small fw-semibold text-uppercase mb-2" style="letter-spacing:.05em">Logo</p>
+            <div class="mb-2">
+              <input type="file" name="logo" form="igForm" class="form-control form-control-sm" accept=".png,.jpg,.jpeg,.webp">
+              <div class="form-text">PNG con transparencia recomendado.</div>
             </div>
-          </div>
-        </div>
+            <div class="row g-2 mb-3">
+              <div class="col-5">
+                {% if cfg and cfg.logo_path %}
+                <img src="/settings/instagram/{{ cfg.id }}/logo" class="img-thumbnail" style="max-height:44px">
+                {% else %}
+                <span class="text-muted small">Sin logo</span>
+                {% endif %}
+              </div>
+              <div class="col-7">
+                <select name="logo_position" form="igForm" class="form-select form-select-sm" title="Posición del logo">
+                  {% for pos, lbl in [('top-left','↖ Sup. izq.'),('top-right','↗ Sup. der.'),('bottom-left','↙ Inf. izq.'),('bottom-right','↘ Inf. der.')] %}
+                  <option value="{{ pos }}" {% if cfg and cfg.logo_position == pos %}selected{% endif %}>{{ lbl }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
 
-        <div class="mb-3">
-          <label class="form-label small fw-semibold d-flex justify-content-between align-items-center mb-1">
-            <span><i class="bi bi-arrows-vertical me-1"></i>Posición vertical</span>
-            <span class="badge bg-secondary" id="yOffsetDisplay">{{ yo }} px</span>
-          </label>
-          <input type="range" name="title_y_offset" form="igForm" class="form-range" id="titleYOffset"
-                 min="-100" max="900" step="10" value="{{ yo }}" title="Posición vertical del título">
-          <div class="d-flex justify-content-between">
-            <small class="text-muted">↓ más abajo</small>
-            <small class="text-muted">↑ más arriba</small>
-          </div>
-        </div>
+            <!-- Gradiente -->
+            <p class="text-muted small fw-semibold text-uppercase mb-2" style="letter-spacing:.05em">Gradiente</p>
+            <div class="row g-2 mb-2">
+              <div class="col-4">
+                <label class="form-label small mb-1">Color</label>
+                <input type="color" name="gradient_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                       value="{{ cfg.gradient_color if cfg and cfg.gradient_color else '#000000' }}" title="Color del gradiente">
+              </div>
+              <div class="col-4">
+                <label class="form-label small mb-1">Opacidad</label>
+                <input type="number" name="gradient_opacity" form="igForm" class="form-control form-control-sm"
+                       value="{{ cfg.gradient_opacity if cfg and cfg.gradient_opacity is not none else 200 }}"
+                       min="0" max="255" title="Opacidad 0–255">
+              </div>
+              <div class="col-4">
+                <label class="form-label small mb-1">Alto (px)</label>
+                <input type="number" name="gradient_height" form="igForm" class="form-control form-control-sm"
+                       value="{{ cfg.gradient_height if cfg and cfg.gradient_height else 480 }}"
+                       min="100" max="1440" title="Alto del gradiente en px">
+              </div>
+            </div>
 
-        <!-- Botón y área de preview -->
-        <div class="d-flex align-items-center justify-content-between mb-2">
-          <span class="text-muted" style="font-size:.75rem">Los cambios se aplican automáticamente</span>
-          <button type="button" class="btn btn-sm btn-primary px-3" id="btnPreview">
-            <i class="bi bi-eye me-1"></i>Ver previa
-          </button>
-        </div>
-        <div id="previewContainer" style="display:none">
-          <div id="previewSpinner" class="text-center py-2" style="display:none">
-            <span class="spinner-border spinner-border-sm text-secondary me-1"></span>
-            <span class="text-muted small">Generando…</span>
+            <!-- Texto -->
+            <p class="text-muted small fw-semibold text-uppercase mb-2 mt-3" style="letter-spacing:.05em">Texto del título</p>
+            <div class="row g-2 mb-3">
+              <div class="col-4">
+                <label class="form-label small mb-1">Color</label>
+                <input type="color" name="text_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                       value="{{ cfg.text_color if cfg and cfg.text_color else '#ffffff' }}" title="Color del texto">
+              </div>
+              <div class="col-4">
+                <label class="form-label small mb-1">Tamaño (px)</label>
+                <input type="number" name="font_size" form="igForm" class="form-control form-control-sm"
+                       value="{{ cfg.font_size if cfg and cfg.font_size else 62 }}"
+                       min="20" max="120" title="Tamaño de fuente en px">
+              </div>
+              <div class="col-4">
+                <label class="form-label small mb-1">Alineación</label>
+                <div class="btn-group w-100" role="group" aria-label="Alineación">
+                  <input type="radio" class="btn-check" name="text_align" id="align_left"   value="left"   form="igForm" {% if ta == 'left'   %}checked{% endif %} autocomplete="off" title="Izquierda">
+                  <label class="btn btn-sm btn-outline-secondary px-1" for="align_left"><i class="bi bi-text-left"></i></label>
+                  <input type="radio" class="btn-check" name="text_align" id="align_center" value="center" form="igForm" {% if ta == 'center' %}checked{% endif %} autocomplete="off" title="Centrado">
+                  <label class="btn btn-sm btn-outline-secondary px-1" for="align_center"><i class="bi bi-text-center"></i></label>
+                  <input type="radio" class="btn-check" name="text_align" id="align_right"  value="right"  form="igForm" {% if ta == 'right'  %}checked{% endif %} autocomplete="off" title="Derecha">
+                  <label class="btn btn-sm btn-outline-secondary px-1" for="align_right"><i class="bi bi-text-right"></i></label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tipografía -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold text-uppercase text-muted mb-1" style="letter-spacing:.05em">Tipografía</label>
+              <select name="font_family" form="igForm" class="form-select form-select-sm" title="Tipografía del título">
+                <option value="sans"    {% if ff == 'sans'    %}selected{% endif %}>Montserrat — moderna</option>
+                <option value="serif"   {% if ff == 'serif'   %}selected{% endif %}>Playfair Display — editorial</option>
+                <option value="impact"  {% if ff == 'impact'  %}selected{% endif %}>Oswald — condensada</option>
+                <option value="rounded" {% if ff == 'rounded' %}selected{% endif %}>Nunito — redondeada</option>
+              </select>
+            </div>
+
+            <!-- Posición vertical -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold text-uppercase text-muted d-flex justify-content-between mb-1" style="letter-spacing:.05em">
+                <span>Posición vertical</span>
+                <span class="badge bg-secondary fw-normal" id="yOffsetDisplay">{{ yo }} px</span>
+              </label>
+              <input type="range" name="title_y_offset" form="igForm" class="form-range" id="titleYOffset"
+                     min="-100" max="900" step="10" value="{{ yo }}" title="Posición vertical del título">
+              <div class="d-flex justify-content-between">
+                <small class="text-muted">↓ abajo</small>
+                <small class="text-muted">↑ arriba</small>
+              </div>
+            </div>
+
+            <!-- Banner -->
+            <p class="text-muted small fw-semibold text-uppercase mb-2" style="letter-spacing:.05em">Franja inferior</p>
+            <div class="mb-2">
+              <input type="text" name="banner_text" form="igForm" class="form-control form-control-sm"
+                     value="{{ cfg.banner_text if cfg and cfg.banner_text else '' }}"
+                     placeholder="Ej: Toda la info en tusitio.com.ar" maxlength="80"
+                     title="Texto de la franja inferior">
+              <div class="form-text">Dejar vacío para ocultarla.</div>
+            </div>
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label small mb-1">Color franja</label>
+                <input type="color" name="banner_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                       value="{{ cfg.banner_color if cfg and cfg.banner_color else '#e53935' }}" title="Color del banner">
+              </div>
+              <div class="col-6">
+                <label class="form-label small mb-1">Color texto</label>
+                <input type="color" name="banner_text_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                       value="{{ cfg.banner_text_color if cfg and cfg.banner_text_color else '#ffffff' }}" title="Color del texto del banner">
+              </div>
+            </div>
+
           </div>
-          <div class="position-relative d-flex justify-content-center">
-            <img id="previewImg" src="" alt="Vista previa Instagram"
-                 class="rounded shadow-sm" style="display:none;max-height:220px;width:auto">
+
+          <!-- Columna derecha: preview -->
+          <div class="col-md-6 d-flex flex-column align-items-center justify-content-start">
+            <div id="previewContainer" class="w-100 text-center">
+              <div id="previewSpinner" class="py-4 text-muted" style="display:none">
+                <span class="spinner-border spinner-border-sm me-1"></span>
+                <small>Generando…</small>
+              </div>
+              <img id="previewImg" src="" alt="Vista previa Instagram"
+                   class="rounded shadow" style="display:none;max-width:100%;max-height:480px">
+              <p id="previewDim" class="text-muted mt-1 mb-0" style="display:none;font-size:.7rem">1080 × 1440 px · 4:5</p>
+            </div>
+            <p class="text-muted small mt-3 mb-0 text-center" id="previewHint">
+              <i class="bi bi-arrow-up-circle me-1"></i>Ajustá los controles y hacé clic en <strong>Ver previa</strong>
+            </p>
           </div>
-          <p class="text-muted text-center mb-0 mt-1" style="font-size:.7rem">1080 × 1440 px · 4:5</p>
         </div>
 
       </div>
