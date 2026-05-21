@@ -175,6 +175,7 @@
     {% set cbc = cfg.category_bg_color if cfg and cfg.category_bg_color else '#e53935' %}
     {% set ctc = cfg.category_text_color if cfg and cfg.category_text_color else '#ffffff' %}
     {% set cp = cfg.category_position if cfg and cfg.category_position else 'top-left' %}
+    {% set cxp = cfg.category_x_percent if cfg and cfg.category_x_percent is not none else 0 %}
 
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
@@ -187,291 +188,313 @@
         <div class="row g-3">
 
           <!-- Columna izquierda: controles -->
-          <div class="col-md-6" style="max-height:740px;overflow-y:auto;overflow-x:hidden;padding-right:4px">
+          <div class="col-md-6" style="max-height:760px;overflow-y:auto;overflow-x:hidden;padding-right:6px">
 
-            <!-- Logo -->
-            <p class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em">Logo</p>
-            <div class="mb-1">
-              <input type="file" name="logo" form="igForm" class="form-control form-control-sm" accept=".png,.jpg,.jpeg,.webp" title="Subir logo (PNG recomendado)">
-            </div>
-            <div class="row g-2 mb-2">
-              <div class="col-5">
-                {% if cfg and cfg.logo_path %}
-                <img src="/settings/instagram/{{ cfg.id }}/logo" class="img-thumbnail" style="max-height:40px" alt="Logo actual">
-                {% else %}
-                <span class="text-muted small">Sin logo</span>
-                {% endif %}
+            <!-- ── GRADIENTE ── -->
+            <div style="border-left:3px solid #6c757d;padding-left:10px;margin-bottom:14px">
+              <p style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6c757d;margin-bottom:8px">
+                <i class="bi bi-layers me-1"></i>Gradiente
+              </p>
+              <div class="row g-2 mb-2">
+                <div class="col-4">
+                  <label class="form-label small mb-1">Color</label>
+                  <input type="color" name="gradient_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                         value="{{ cfg.gradient_color if cfg and cfg.gradient_color else '#000000' }}">
+                </div>
+                <div class="col-8">
+                  <label class="form-label small d-flex justify-content-between mb-1">
+                    <span>Intensidad</span>
+                    <span class="badge bg-secondary fw-normal" id="gradOpacityDisplay">{{ go }}</span>
+                  </label>
+                  <input type="range" name="gradient_opacity" form="igForm" class="form-range" id="gradOpacity"
+                         min="0" max="255" step="5" value="{{ go }}">
+                </div>
               </div>
-              <div class="col-7">
-                <select name="logo_position" form="igForm" class="form-select form-select-sm" title="Posición del logo">
-                  {% for pos, lbl in [('top-left','↖ Sup. izq.'),('top-right','↗ Sup. der.'),('bottom-left','↙ Inf. izq.'),('bottom-right','↘ Inf. der.')] %}
-                  <option value="{{ pos }}" {% if cfg and cfg.logo_position == pos %}selected{% endif %}>{{ lbl }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-            </div>
-            <div class="mb-3">
-              <label class="form-label small d-flex justify-content-between mb-1">
-                <span class="text-muted">Tamaño logo</span>
-                <span class="badge bg-secondary fw-normal" id="logoSizeDisplay">{{ ls }} px</span>
-              </label>
-              <input type="range" name="logo_size" form="igForm" class="form-range" id="logoSize"
-                     min="60" max="300" step="10" value="{{ ls }}" title="Tamaño del logo en px">
-            </div>
-
-            <!-- Gradiente -->
-            <p class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em">Gradiente</p>
-            <div class="row g-2 mb-2">
-              <div class="col-4">
-                <label class="form-label small mb-1">Color</label>
-                <input type="color" name="gradient_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
-                       value="{{ cfg.gradient_color if cfg and cfg.gradient_color else '#000000' }}" title="Color del gradiente">
-              </div>
-              <div class="col-8">
+              <div>
                 <label class="form-label small d-flex justify-content-between mb-1">
-                  <span>Opacidad</span>
-                  <span class="badge bg-secondary fw-normal" id="gradOpacityDisplay">{{ go }}</span>
+                  <span>Alto (hasta dónde llega)</span>
+                  <span class="badge bg-secondary fw-normal" id="gradHeightDisplay">{{ gh }} px</span>
                 </label>
-                <input type="range" name="gradient_opacity" form="igForm" class="form-range" id="gradOpacity"
-                       min="0" max="255" step="5" value="{{ go }}" title="Opacidad del gradiente (0-255)">
+                <input type="range" name="gradient_height" form="igForm" class="form-range" id="gradHeight"
+                       min="100" max="1440" step="20" value="{{ gh }}">
+                <div class="d-flex justify-content-between">
+                  <small class="text-muted">↓ corto</small>
+                  <small class="text-muted">↑ toda la imagen</small>
+                </div>
               </div>
-            </div>
-            <div class="mb-3">
-              <label class="form-label small d-flex justify-content-between mb-1">
-                <span class="text-muted">Alto del gradiente</span>
-                <span class="badge bg-secondary fw-normal" id="gradHeightDisplay">{{ gh }} px</span>
-              </label>
-              <input type="range" name="gradient_height" form="igForm" class="form-range" id="gradHeight"
-                     min="100" max="1440" step="20" value="{{ gh }}" title="Alto del gradiente en px">
             </div>
 
-            <!-- Texto del título -->
-            <p class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em">Texto del título</p>
-            <div class="row g-2 mb-2">
-              <div class="col-4">
-                <label class="form-label small mb-1">Color</label>
-                <input type="color" name="text_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
-                       value="{{ cfg.text_color if cfg and cfg.text_color else '#ffffff' }}" title="Color del texto">
+            <!-- ── TÍTULO ── -->
+            <div style="border-left:3px solid #0d6efd;padding-left:10px;margin-bottom:14px">
+              <p style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#0d6efd;margin-bottom:8px">
+                <i class="bi bi-type me-1"></i>Título
+              </p>
+              <div class="row g-2 mb-2">
+                <div class="col-4">
+                  <label class="form-label small mb-1">Color</label>
+                  <input type="color" name="text_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                         value="{{ cfg.text_color if cfg and cfg.text_color else '#ffffff' }}">
+                </div>
+                <div class="col-8">
+                  <label class="form-label small d-flex justify-content-between mb-1">
+                    <span>Tamaño</span>
+                    <span class="badge bg-secondary fw-normal" id="fontSizeDisplay">{{ fs }} px</span>
+                  </label>
+                  <input type="range" name="font_size" form="igForm" class="form-range" id="fontSize"
+                         min="20" max="120" step="2" value="{{ fs }}">
+                </div>
               </div>
-              <div class="col-8">
+              <div class="row g-2 mb-2">
+                <div class="col-7">
+                  <label class="form-label small mb-1">Fuente</label>
+                  <select name="font_family" form="igForm" class="form-select form-select-sm" id="fontFamily">
+                    <optgroup label="Sans-serif">
+                      <option value="Montserrat"  {% if ff == 'Montserrat'  %}selected{% endif %}>Montserrat</option>
+                      <option value="Poppins"     {% if ff == 'Poppins'     %}selected{% endif %}>Poppins</option>
+                      <option value="Roboto"      {% if ff == 'Roboto'      %}selected{% endif %}>Roboto</option>
+                      <option value="Open Sans"   {% if ff == 'Open Sans'   %}selected{% endif %}>Open Sans</option>
+                      <option value="Lato"        {% if ff == 'Lato'        %}selected{% endif %}>Lato</option>
+                      <option value="Raleway"     {% if ff == 'Raleway'     %}selected{% endif %}>Raleway</option>
+                      <option value="Nunito"      {% if ff == 'Nunito'      %}selected{% endif %}>Nunito</option>
+                      <option value="Inter"       {% if ff == 'Inter'       %}selected{% endif %}>Inter</option>
+                    </optgroup>
+                    <optgroup label="Serif">
+                      <option value="Playfair Display" {% if ff == 'Playfair Display' %}selected{% endif %}>Playfair Display</option>
+                      <option value="Merriweather"     {% if ff == 'Merriweather'     %}selected{% endif %}>Merriweather</option>
+                      <option value="Lora"             {% if ff == 'Lora'             %}selected{% endif %}>Lora</option>
+                    </optgroup>
+                    <optgroup label="Display">
+                      <option value="Oswald"    {% if ff == 'Oswald'    %}selected{% endif %}>Oswald</option>
+                      <option value="Bebas Neue"{% if ff == 'Bebas Neue'%}selected{% endif %}>Bebas Neue</option>
+                      <option value="Anton"     {% if ff == 'Anton'     %}selected{% endif %}>Anton</option>
+                    </optgroup>
+                  </select>
+                </div>
+                <div class="col-5">
+                  <label class="form-label small mb-1">Grosor</label>
+                  <select name="font_weight" form="igForm" class="form-select form-select-sm" id="fontWeight">
+                    <option value="regular"   {% if fw == 'regular'   %}selected{% endif %}>Regular</option>
+                    <option value="medium"    {% if fw == 'medium'    %}selected{% endif %}>Medium</option>
+                    <option value="bold"      {% if fw == 'bold'      %}selected{% endif %}>Bold</option>
+                    <option value="extrabold" {% if fw == 'extrabold' %}selected{% endif %}>Extra Bold</option>
+                  </select>
+                </div>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small mb-1">Alineación</label>
+                <div class="btn-group w-100" role="group">
+                  <input type="radio" class="btn-check" name="text_align" id="align_left"   value="left"   form="igForm" {% if ta == 'left'   %}checked{% endif %} autocomplete="off">
+                  <label class="btn btn-sm btn-outline-secondary" for="align_left"><i class="bi bi-text-left"></i> Izq.</label>
+                  <input type="radio" class="btn-check" name="text_align" id="align_center" value="center" form="igForm" {% if ta == 'center' %}checked{% endif %} autocomplete="off">
+                  <label class="btn btn-sm btn-outline-secondary" for="align_center"><i class="bi bi-text-center"></i> Centro</label>
+                  <input type="radio" class="btn-check" name="text_align" id="align_right"  value="right"  form="igForm" {% if ta == 'right'  %}checked{% endif %} autocomplete="off">
+                  <label class="btn btn-sm btn-outline-secondary" for="align_right"><i class="bi bi-text-right"></i> Der.</label>
+                </div>
+              </div>
+              <div class="mb-2">
                 <label class="form-label small d-flex justify-content-between mb-1">
-                  <span>Tamaño</span>
-                  <span class="badge bg-secondary fw-normal" id="fontSizeDisplay">{{ fs }} px</span>
+                  <span>Posición vertical</span>
+                  <span class="badge bg-secondary fw-normal" id="yOffsetDisplay">{{ yo }} px</span>
                 </label>
-                <input type="range" name="font_size" form="igForm" class="form-range" id="fontSize"
-                       min="20" max="120" step="2" value="{{ fs }}" title="Tamaño de fuente en px">
+                <input type="range" name="title_y_offset" form="igForm" class="form-range" id="titleYOffset"
+                       min="-100" max="900" step="10" value="{{ yo }}">
+                <div class="d-flex justify-content-between">
+                  <small class="text-muted">↓ más abajo</small>
+                  <small class="text-muted">↑ más arriba</small>
+                </div>
               </div>
-            </div>
-            <div class="mb-2">
-              <label class="form-label small mb-1">Alineación</label>
-              <div class="btn-group w-100" role="group">
-                <input type="radio" class="btn-check" name="text_align" id="align_left"   value="left"   form="igForm" {% if ta == 'left'   %}checked{% endif %} autocomplete="off">
-                <label class="btn btn-sm btn-outline-secondary" for="align_left"><i class="bi bi-text-left"></i> Izq.</label>
-                <input type="radio" class="btn-check" name="text_align" id="align_center" value="center" form="igForm" {% if ta == 'center' %}checked{% endif %} autocomplete="off">
-                <label class="btn btn-sm btn-outline-secondary" for="align_center"><i class="bi bi-text-center"></i> Centro</label>
-                <input type="radio" class="btn-check" name="text_align" id="align_right"  value="right"  form="igForm" {% if ta == 'right'  %}checked{% endif %} autocomplete="off">
-                <label class="btn btn-sm btn-outline-secondary" for="align_right"><i class="bi bi-text-right"></i> Der.</label>
-              </div>
-            </div>
-
-            <!-- Tipografía -->
-            <p class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em">Tipografía</p>
-            <div class="row g-2 mb-2">
-              <div class="col-7">
-                <label class="form-label small mb-1">Familia</label>
-                <select name="font_family" form="igForm" class="form-select form-select-sm" title="Familia tipográfica" id="fontFamily">
-                  <optgroup label="Sans-serif">
-                    <option value="Montserrat"  {% if ff == 'Montserrat'  %}selected{% endif %}>Montserrat</option>
-                    <option value="Poppins"     {% if ff == 'Poppins'     %}selected{% endif %}>Poppins</option>
-                    <option value="Roboto"      {% if ff == 'Roboto'      %}selected{% endif %}>Roboto</option>
-                    <option value="Open Sans"   {% if ff == 'Open Sans'   %}selected{% endif %}>Open Sans</option>
-                    <option value="Lato"        {% if ff == 'Lato'        %}selected{% endif %}>Lato</option>
-                    <option value="Raleway"     {% if ff == 'Raleway'     %}selected{% endif %}>Raleway</option>
-                    <option value="Nunito"      {% if ff == 'Nunito'      %}selected{% endif %}>Nunito</option>
-                    <option value="Inter"       {% if ff == 'Inter'       %}selected{% endif %}>Inter</option>
-                  </optgroup>
-                  <optgroup label="Serif">
-                    <option value="Playfair Display" {% if ff == 'Playfair Display' %}selected{% endif %}>Playfair Display</option>
-                    <option value="Merriweather"     {% if ff == 'Merriweather'     %}selected{% endif %}>Merriweather</option>
-                    <option value="Lora"             {% if ff == 'Lora'             %}selected{% endif %}>Lora</option>
-                  </optgroup>
-                  <optgroup label="Display">
-                    <option value="Oswald"    {% if ff == 'Oswald'    %}selected{% endif %}>Oswald</option>
-                    <option value="Bebas Neue"{% if ff == 'Bebas Neue'%}selected{% endif %}>Bebas Neue</option>
-                    <option value="Anton"     {% if ff == 'Anton'     %}selected{% endif %}>Anton</option>
-                  </optgroup>
-                </select>
-              </div>
-              <div class="col-5">
-                <label class="form-label small mb-1">Grosor</label>
-                <select name="font_weight" form="igForm" class="form-select form-select-sm" title="Grosor del título" id="fontWeight">
-                  <option value="regular"   {% if fw == 'regular'   %}selected{% endif %}>Regular</option>
-                  <option value="medium"    {% if fw == 'medium'    %}selected{% endif %}>Medium</option>
-                  <option value="bold"      {% if fw == 'bold'      %}selected{% endif %}>Bold</option>
-                  <option value="extrabold" {% if fw == 'extrabold' %}selected{% endif %}>Extra Bold</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- Posición vertical -->
-            <div class="mb-3">
-              <label class="form-label small fw-semibold text-uppercase text-muted d-flex justify-content-between mb-1" style="letter-spacing:.05em">
-                <span>Posición vertical del título</span>
-                <span class="badge bg-secondary fw-normal" id="yOffsetDisplay">{{ yo }} px</span>
-              </label>
-              <input type="range" name="title_y_offset" form="igForm" class="form-range" id="titleYOffset"
-                     min="-100" max="900" step="10" value="{{ yo }}" title="Posición vertical del título en px">
-              <div class="d-flex justify-content-between">
-                <small class="text-muted">↓ abajo</small>
-                <small class="text-muted">↑ arriba</small>
-              </div>
-            </div>
-
-            <!-- Límite de líneas -->
-            <div class="mb-3">
-              <label class="form-label small fw-semibold text-uppercase text-muted d-flex justify-content-between mb-1" style="letter-spacing:.05em">
-                <span>Máx. líneas del título</span>
-                <span class="badge bg-secondary fw-normal" id="titleMaxLinesDisplay">{{ tml }}</span>
-              </label>
-              <input type="range" name="title_max_lines" form="igForm" class="form-range" id="titleMaxLines"
-                     min="1" max="6" step="1" value="{{ tml }}" title="Máximo de líneas que puede ocupar el título">
-            </div>
-
-            <!-- Fondo del texto -->
-            <p class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em">Fondo del texto</p>
-            <div class="row g-2 mb-2">
-              <div class="col-4">
-                <label class="form-label small mb-1">Color</label>
-                <input type="color" name="text_bg_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
-                       value="{{ tbc }}" title="Color del fondo del texto">
-              </div>
-              <div class="col-8">
+              <div>
                 <label class="form-label small d-flex justify-content-between mb-1">
-                  <span>Opacidad</span>
-                  <span class="badge bg-secondary fw-normal" id="textBgOpacityDisplay">{{ tbo }}{% if tbo == 0 %} (off){% endif %}</span>
+                  <span>Máx. líneas</span>
+                  <span class="badge bg-secondary fw-normal" id="titleMaxLinesDisplay">{{ tml }}</span>
                 </label>
-                <input type="range" name="text_bg_opacity" form="igForm" class="form-range" id="textBgOpacity"
-                       min="0" max="220" step="10" value="{{ tbo }}" title="Opacidad del fondo del texto (0=desactivado)">
-                <div class="form-text">0 = sin fondo.</div>
+                <input type="range" name="title_max_lines" form="igForm" class="form-range" id="titleMaxLines"
+                       min="1" max="6" step="1" value="{{ tml }}">
               </div>
             </div>
-            <div class="form-check form-switch mb-2">
-              <input class="form-check-input" type="checkbox" role="switch" name="text_bg_full_width" id="textBgFullWidth" form="igForm"
-                     {% if tbfw %}checked{% endif %}>
-              <label class="form-check-label small" for="textBgFullWidth">Ancho completo</label>
-              <div class="form-text" style="margin-top:0">Desactivado: el fondo se ajusta al ancho del texto.</div>
-            </div>
-            <div class="row g-2 mb-3" id="textBgPaddingRow" {% if tbfw %}style="display:none"{% endif %}>
-              <div class="col-6">
-                <label class="form-label small d-flex justify-content-between mb-1">
-                  <span>Padding lateral</span>
-                  <span class="badge bg-secondary fw-normal" id="textBgPaddingXDisplay">{{ tbpx }} px</span>
-                </label>
-                <input type="range" name="text_bg_padding_x" form="igForm" class="form-range" id="textBgPaddingX"
-                       min="0" max="200" step="5" value="{{ tbpx }}" title="Espacio extra a los lados del fondo">
+
+            <!-- ── FONDO DEL TÍTULO ── -->
+            <div style="border-left:3px solid #0dcaf0;padding-left:10px;margin-bottom:14px">
+              <p style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#0dcaf0;margin-bottom:8px">
+                <i class="bi bi-square-fill me-1"></i>Fondo del título
+              </p>
+              <div class="row g-2 mb-2">
+                <div class="col-4">
+                  <label class="form-label small mb-1">Color</label>
+                  <input type="color" name="text_bg_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                         value="{{ tbc }}">
+                </div>
+                <div class="col-8">
+                  <label class="form-label small d-flex justify-content-between mb-1">
+                    <span>Opacidad</span>
+                    <span class="badge bg-secondary fw-normal" id="textBgOpacityDisplay">{{ tbo }}{% if tbo == 0 %} (off){% endif %}</span>
+                  </label>
+                  <input type="range" name="text_bg_opacity" form="igForm" class="form-range" id="textBgOpacity"
+                         min="0" max="220" step="10" value="{{ tbo }}">
+                  <div class="form-text">0 = sin fondo.</div>
+                </div>
               </div>
-              <div class="col-6">
+              <div class="mb-2">
                 <label class="form-label small d-flex justify-content-between mb-1">
                   <span>Padding vertical</span>
                   <span class="badge bg-secondary fw-normal" id="textBgPaddingYDisplay">{{ tbpy }} px</span>
                 </label>
                 <input type="range" name="text_bg_padding_y" form="igForm" class="form-range" id="textBgPaddingY"
-                       min="0" max="100" step="2" value="{{ tbpy }}" title="Espacio extra arriba y abajo del fondo">
+                       min="0" max="100" step="2" value="{{ tbpy }}">
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" role="switch" name="text_bg_full_width" id="textBgFullWidth" form="igForm"
+                       {% if tbfw %}checked{% endif %}>
+                <label class="form-check-label small" for="textBgFullWidth">Ancho completo</label>
+              </div>
+              <div id="textBgPaddingRow" {% if tbfw %}style="display:none"{% endif %}>
+                <label class="form-label small d-flex justify-content-between mb-1">
+                  <span>Padding lateral</span>
+                  <span class="badge bg-secondary fw-normal" id="textBgPaddingXDisplay">{{ tbpx }} px</span>
+                </label>
+                <input type="range" name="text_bg_padding_x" form="igForm" class="form-range" id="textBgPaddingX"
+                       min="0" max="200" step="5" value="{{ tbpx }}">
               </div>
             </div>
 
-            <!-- Franja inferior -->
-            <p class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em">Franja inferior</p>
-            <div class="mb-2">
-              <input type="text" name="banner_text" form="igForm" class="form-control form-control-sm" id="bannerText"
-                     value="{{ cfg.banner_text if cfg and cfg.banner_text else '' }}"
-                     placeholder="Ej: Toda la info en tusitio.com.ar" maxlength="80"
-                     title="Texto de la franja inferior (vacío = ocultar)">
-              <div class="form-text">Dejar vacío para ocultarla.</div>
-            </div>
-            <div class="mb-2">
-              <label class="form-label small mb-1">Estilo fondo</label>
-              <div class="btn-group w-100" role="group" aria-label="Estilo del fondo de la franja">
-                <input type="radio" class="btn-check" name="banner_style" id="bsPill" value="pill" form="igForm" {% if bs == 'pill' %}checked{% endif %} autocomplete="off">
-                <label class="btn btn-sm btn-outline-secondary" for="bsPill">Píldora</label>
-                <input type="radio" class="btn-check" name="banner_style" id="bsRect" value="rect" form="igForm" {% if bs == 'rect' %}checked{% endif %} autocomplete="off">
-                <label class="btn btn-sm btn-outline-secondary" for="bsRect">Rectángulo</label>
-                <input type="radio" class="btn-check" name="banner_style" id="bsNone" value="none" form="igForm" {% if bs == 'none' %}checked{% endif %} autocomplete="off">
-                <label class="btn btn-sm btn-outline-secondary" for="bsNone">Sin fondo</label>
+            <!-- ── FRANJA INFERIOR ── -->
+            <div style="border-left:3px solid #dc3545;padding-left:10px;margin-bottom:14px">
+              <p style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#dc3545;margin-bottom:8px">
+                <i class="bi bi-bookmark-fill me-1"></i>Franja inferior
+              </p>
+              <div class="mb-2">
+                <input type="text" name="banner_text" form="igForm" class="form-control form-control-sm" id="bannerText"
+                       value="{{ cfg.banner_text if cfg and cfg.banner_text else '' }}"
+                       placeholder="Ej: Toda la info en tusitio.com.ar" maxlength="80">
+                <div class="form-text">Dejar vacío para ocultarla.</div>
               </div>
-            </div>
-            <div class="row g-2 mb-2">
-              <div class="col-4">
-                <label class="form-label small mb-1">Grosor texto</label>
-                <select name="banner_font_weight" form="igForm" class="form-select form-select-sm" title="Grosor del texto de la franja">
-                  <option value="regular"   {% if bfw == 'regular'   %}selected{% endif %}>Regular</option>
-                  <option value="medium"    {% if bfw == 'medium'    %}selected{% endif %}>Medium</option>
-                  <option value="bold"      {% if bfw == 'bold'      %}selected{% endif %}>Bold</option>
-                  <option value="extrabold" {% if bfw == 'extrabold' %}selected{% endif %}>Extra Bold</option>
-                </select>
+              <div class="mb-2">
+                <label class="form-label small mb-1">Estilo</label>
+                <div class="btn-group w-100" role="group">
+                  <input type="radio" class="btn-check" name="banner_style" id="bsPill" value="pill" form="igForm" {% if bs == 'pill' %}checked{% endif %} autocomplete="off">
+                  <label class="btn btn-sm btn-outline-secondary" for="bsPill">Píldora</label>
+                  <input type="radio" class="btn-check" name="banner_style" id="bsRect" value="rect" form="igForm" {% if bs == 'rect' %}checked{% endif %} autocomplete="off">
+                  <label class="btn btn-sm btn-outline-secondary" for="bsRect">Rectángulo</label>
+                  <input type="radio" class="btn-check" name="banner_style" id="bsNone" value="none" form="igForm" {% if bs == 'none' %}checked{% endif %} autocomplete="off">
+                  <label class="btn btn-sm btn-outline-secondary" for="bsNone">Sin fondo</label>
+                </div>
               </div>
-              <div class="col-4">
-                <label class="form-label small mb-1">Color fondo</label>
-                <input type="color" name="banner_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
-                       value="{{ cfg.banner_color if cfg and cfg.banner_color else '#e53935' }}" title="Color de la franja inferior">
-              </div>
-              <div class="col-4">
-                <label class="form-label small mb-1">Color texto</label>
-                <input type="color" name="banner_text_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
-                       value="{{ cfg.banner_text_color if cfg and cfg.banner_text_color else '#ffffff' }}" title="Color del texto de la franja">
-              </div>
-            </div>
-            <div class="mb-2">
-              <label class="form-label small mb-1">Alineación</label>
-              <div class="btn-group w-100" role="group" aria-label="Alineación de la franja">
-                <input type="radio" class="btn-check" name="banner_align" id="baLeft"   value="left"   form="igForm" {% if ba == 'left'   %}checked{% endif %} autocomplete="off">
-                <label class="btn btn-sm btn-outline-secondary" for="baLeft"><i class="bi bi-text-left"></i> Izq.</label>
-                <input type="radio" class="btn-check" name="banner_align" id="baCenter" value="center" form="igForm" {% if ba == 'center' %}checked{% endif %} autocomplete="off">
-                <label class="btn btn-sm btn-outline-secondary" for="baCenter"><i class="bi bi-text-center"></i> Centro</label>
-                <input type="radio" class="btn-check" name="banner_align" id="baRight"  value="right"  form="igForm" {% if ba == 'right'  %}checked{% endif %} autocomplete="off">
-                <label class="btn btn-sm btn-outline-secondary" for="baRight"><i class="bi bi-text-right"></i> Der.</label>
-              </div>
-            </div>
-            <div class="mb-3">
-              <label class="form-label small fw-semibold text-uppercase text-muted d-flex justify-content-between mb-1" style="letter-spacing:.05em">
-                <span>Posición vertical de la franja</span>
-                <span class="badge bg-secondary fw-normal" id="bannerYOffsetDisplay">{{ byo }} px</span>
-              </label>
-              <input type="range" name="banner_y_offset" form="igForm" class="form-range" id="bannerYOffset"
-                     min="-100" max="800" step="10" value="{{ byo }}" title="Posición vertical de la franja en px">
-              <div class="d-flex justify-content-between">
-                <small class="text-muted">↓ abajo</small>
-                <small class="text-muted">↑ arriba</small>
-              </div>
-            </div>
-
-            <!-- Badge de categoría -->
-            <p class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em">Badge de categoría</p>
-            <div class="form-check form-switch mb-2">
-              <input class="form-check-input" type="checkbox" role="switch" name="show_category" id="showCategory" form="igForm"
-                     {% if sc %}checked{% endif %}>
-              <label class="form-check-label small" for="showCategory">Mostrar categoría en la imagen</label>
-              <div class="form-text" style="margin-top:0">Aparece como badge en la esquina superior (ej: POLICIALES).</div>
-            </div>
-            <div id="categoryRow" {% if not sc %}style="display:none"{% endif %}>
               <div class="row g-2 mb-2">
                 <div class="col-4">
+                  <label class="form-label small mb-1">Grosor texto</label>
+                  <select name="banner_font_weight" form="igForm" class="form-select form-select-sm">
+                    <option value="regular"   {% if bfw == 'regular'   %}selected{% endif %}>Regular</option>
+                    <option value="medium"    {% if bfw == 'medium'    %}selected{% endif %}>Medium</option>
+                    <option value="bold"      {% if bfw == 'bold'      %}selected{% endif %}>Bold</option>
+                    <option value="extrabold" {% if bfw == 'extrabold' %}selected{% endif %}>Extra Bold</option>
+                  </select>
+                </div>
+                <div class="col-4">
                   <label class="form-label small mb-1">Color fondo</label>
-                  <input type="color" name="category_bg_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
-                         value="{{ cbc }}" title="Color del badge de categoría">
+                  <input type="color" name="banner_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                         value="{{ cfg.banner_color if cfg and cfg.banner_color else '#e53935' }}">
                 </div>
                 <div class="col-4">
                   <label class="form-label small mb-1">Color texto</label>
-                  <input type="color" name="category_text_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
-                         value="{{ ctc }}" title="Color del texto del badge">
+                  <input type="color" name="banner_text_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                         value="{{ cfg.banner_text_color if cfg and cfg.banner_text_color else '#ffffff' }}">
                 </div>
-                <div class="col-4">
-                  <label class="form-label small mb-1">Posición</label>
-                  <select name="category_position" form="igForm" class="form-select form-select-sm" id="categoryPosition" title="Dónde aparece el badge">
-                    <option value="top-left"  {% if cp == 'top-left'  %}selected{% endif %}>↖ Sup. izq.</option>
-                    <option value="top-right" {% if cp == 'top-right' %}selected{% endif %}>↗ Sup. der.</option>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small mb-1">Alineación</label>
+                <div class="btn-group w-100" role="group">
+                  <input type="radio" class="btn-check" name="banner_align" id="baLeft"   value="left"   form="igForm" {% if ba == 'left'   %}checked{% endif %} autocomplete="off">
+                  <label class="btn btn-sm btn-outline-secondary" for="baLeft"><i class="bi bi-text-left"></i> Izq.</label>
+                  <input type="radio" class="btn-check" name="banner_align" id="baCenter" value="center" form="igForm" {% if ba == 'center' %}checked{% endif %} autocomplete="off">
+                  <label class="btn btn-sm btn-outline-secondary" for="baCenter"><i class="bi bi-text-center"></i> Centro</label>
+                  <input type="radio" class="btn-check" name="banner_align" id="baRight"  value="right"  form="igForm" {% if ba == 'right'  %}checked{% endif %} autocomplete="off">
+                  <label class="btn btn-sm btn-outline-secondary" for="baRight"><i class="bi bi-text-right"></i> Der.</label>
+                </div>
+              </div>
+              <div>
+                <label class="form-label small d-flex justify-content-between mb-1">
+                  <span>Posición vertical</span>
+                  <span class="badge bg-secondary fw-normal" id="bannerYOffsetDisplay">{{ byo }} px</span>
+                </label>
+                <input type="range" name="banner_y_offset" form="igForm" class="form-range" id="bannerYOffset"
+                       min="-100" max="800" step="10" value="{{ byo }}">
+                <div class="d-flex justify-content-between">
+                  <small class="text-muted">↓ más abajo</small>
+                  <small class="text-muted">↑ más arriba</small>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── BADGE DE CATEGORÍA ── -->
+            <div style="border-left:3px solid #fd7e14;padding-left:10px;margin-bottom:14px">
+              <p style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#fd7e14;margin-bottom:8px">
+                <i class="bi bi-tag-fill me-1"></i>Badge de categoría
+              </p>
+              <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox" role="switch" name="show_category" id="showCategory" form="igForm"
+                       {% if sc %}checked{% endif %}>
+                <label class="form-check-label small" for="showCategory">Mostrar categoría en la imagen</label>
+              </div>
+              <div class="form-text mb-2">Badge en la parte superior (ej: POLICIALES).</div>
+              <div id="categoryRow" {% if not sc %}style="display:none"{% endif %}>
+                <div class="row g-2 mb-2">
+                  <div class="col-6">
+                    <label class="form-label small mb-1">Color fondo</label>
+                    <input type="color" name="category_bg_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                           value="{{ cbc }}">
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small mb-1">Color texto</label>
+                    <input type="color" name="category_text_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                           value="{{ ctc }}">
+                  </div>
+                </div>
+                <div>
+                  <label class="form-label small d-flex justify-content-between mb-1">
+                    <span>Posición horizontal</span>
+                    <span class="badge bg-secondary fw-normal" id="categoryXPercentDisplay">{{ cxp }}%</span>
+                  </label>
+                  <input type="range" name="category_x_percent" form="igForm" class="form-range" id="categoryXPercent"
+                         min="0" max="100" step="5" value="{{ cxp }}">
+                  <div class="d-flex justify-content-between">
+                    <small class="text-muted">◀ Izquierda</small>
+                    <small class="text-muted">Derecha ▶</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── LOGO ── -->
+            <div style="border-left:3px solid #198754;padding-left:10px;margin-bottom:14px">
+              <p style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#198754;margin-bottom:8px">
+                <i class="bi bi-image me-1"></i>Logo
+              </p>
+              <div class="mb-2">
+                <input type="file" name="logo" form="igForm" class="form-control form-control-sm" accept=".png,.jpg,.jpeg,.webp">
+              </div>
+              <div class="row g-2 mb-2">
+                <div class="col-5">
+                  {% if cfg and cfg.logo_path %}
+                  <img src="/settings/instagram/{{ cfg.id }}/logo" class="img-thumbnail" style="max-height:40px" alt="Logo actual">
+                  {% else %}
+                  <span class="text-muted small">Sin logo</span>
+                  {% endif %}
+                </div>
+                <div class="col-7">
+                  <select name="logo_position" form="igForm" class="form-select form-select-sm">
+                    {% for pos, lbl in [('top-left','↖ Sup. izq.'),('top-right','↗ Sup. der.'),('bottom-left','↙ Inf. izq.'),('bottom-right','↘ Inf. der.')] %}
+                    <option value="{{ pos }}" {% if cfg and cfg.logo_position == pos %}selected{% endif %}>{{ lbl }}</option>
+                    {% endfor %}
                   </select>
                 </div>
+              </div>
+              <div>
+                <label class="form-label small d-flex justify-content-between mb-1">
+                  <span>Tamaño</span>
+                  <span class="badge bg-secondary fw-normal" id="logoSizeDisplay">{{ ls }} px</span>
+                </label>
+                <input type="range" name="logo_size" form="igForm" class="form-range" id="logoSize"
+                       min="60" max="300" step="10" value="{{ ls }}">
               </div>
             </div>
 
@@ -695,7 +718,7 @@ function _collectPreviewParams() {
     'logo_size','text_bg_color','text_bg_opacity',
     'banner_style','banner_font_weight','banner_y_offset','banner_align',
     'text_bg_padding_x','text_bg_padding_y','title_max_lines',
-    'category_bg_color','category_text_color','category_position',
+    'category_bg_color','category_text_color','category_x_percent',
   ].forEach(f => { const v = fd.get(f); if (v !== null) params.set(f, v); });
   // Checkboxes (no aparecen en FormData si están unchecked)
   params.set('text_bg_full_width', document.getElementById('textBgFullWidth')?.checked ? '1' : '0');
@@ -755,16 +778,17 @@ function _bindSlider(id, displayId, suffix, formatFn) {
   });
 }
 
-_bindSlider('logoSize',          'logoSizeDisplay',          ' px');
-_bindSlider('gradOpacity',       'gradOpacityDisplay',       '');
-_bindSlider('gradHeight',        'gradHeightDisplay',        ' px');
-_bindSlider('fontSize',          'fontSizeDisplay',          ' px');
-_bindSlider('titleYOffset',      'yOffsetDisplay',           ' px');
-_bindSlider('titleMaxLines',     'titleMaxLinesDisplay',     '');
-_bindSlider('textBgOpacity',     'textBgOpacityDisplay',     '', v => v == '0' ? '0 (off)' : v);
-_bindSlider('textBgPaddingX',    'textBgPaddingXDisplay',    ' px');
-_bindSlider('textBgPaddingY',    'textBgPaddingYDisplay',    ' px');
-_bindSlider('bannerYOffset',     'bannerYOffsetDisplay',     ' px');
+_bindSlider('logoSize',           'logoSizeDisplay',           ' px');
+_bindSlider('gradOpacity',        'gradOpacityDisplay',        '');
+_bindSlider('gradHeight',         'gradHeightDisplay',         ' px');
+_bindSlider('fontSize',           'fontSizeDisplay',           ' px');
+_bindSlider('titleYOffset',       'yOffsetDisplay',            ' px');
+_bindSlider('titleMaxLines',      'titleMaxLinesDisplay',      '');
+_bindSlider('textBgOpacity',      'textBgOpacityDisplay',      '', v => v == '0' ? '0 (off)' : v);
+_bindSlider('textBgPaddingX',     'textBgPaddingXDisplay',     ' px');
+_bindSlider('textBgPaddingY',     'textBgPaddingYDisplay',     ' px');
+_bindSlider('bannerYOffset',      'bannerYOffsetDisplay',      ' px');
+_bindSlider('categoryXPercent',   'categoryXPercentDisplay',   '%');
 
 // Color pickers → preview en cambio
 ['gradient_color','text_color','text_bg_color','banner_color','banner_text_color',
@@ -772,7 +796,7 @@ _bindSlider('bannerYOffset',     'bannerYOffsetDisplay',     ' px');
   document.querySelector(`[name="${name}"]`)?.addEventListener('input', () => _schedulePreview(200));
 });
 // Selects → preview en cambio
-['font_family','font_weight','banner_font_weight','category_position'].forEach(name => {
+['font_family','font_weight','banner_font_weight'].forEach(name => {
   document.querySelector(`[name="${name}"]`)?.addEventListener('change', () => _schedulePreview(300));
 });
 // Radio groups

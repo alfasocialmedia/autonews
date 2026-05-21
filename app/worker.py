@@ -951,7 +951,7 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
             show_category=bool(ig.show_category),
             category_bg_color=ig.category_bg_color or "#e53935",
             category_text_color=ig.category_text_color or "#ffffff",
-            category_position=ig.category_position or "top-left",
+            category_x_percent=ig.category_x_percent if ig.category_x_percent is not None else 0,
         )
 
         # Subir la imagen procesada al primer sitio WP activo para obtener URL pública

@@ -275,9 +275,9 @@ def _draw_category_badge(
     text_color: str = "#ffffff",
     font_family: str = "Montserrat",
     font_weight: str = "bold",
-    position: str = "top-left",
+    x_percent: int = 0,
 ) -> Image.Image:
-    """Dibuja el badge de categoría (ej: 'POLICIALES') en la esquina superior indicada."""
+    """Dibuja el badge de categoría (ej: 'POLICIALES'). x_percent 0=izquierda, 100=derecha."""
     if not category or not category.strip():
         return img
 
@@ -299,7 +299,8 @@ def _draw_category_badge(
     box_h = text_h + pad_y * 2
     margin = BANNER_MARGIN
 
-    x0 = (img.width - box_w - margin) if position == "top-right" else margin
+    travel = max(0, img.width - box_w - margin * 2)
+    x0 = margin + travel * max(0, min(100, x_percent)) // 100
     y0 = margin
     x1 = x0 + box_w
     y1 = y0 + box_h
@@ -369,7 +370,7 @@ def build_instagram_image(
     show_category: bool = False,
     category_bg_color: str = "#e53935",
     category_text_color: str = "#ffffff",
-    category_position: str = "top-left",
+    category_x_percent: int = 0,
 ) -> bytes:
     """
     Pipeline completo: recibe bytes de imagen, devuelve JPEG 1080×1440.
@@ -412,7 +413,7 @@ def build_instagram_image(
             img, category,
             bg_color=category_bg_color, text_color=category_text_color,
             font_family=font_family, font_weight=font_weight,
-            position=category_position,
+            x_percent=category_x_percent,
         )
 
     if logo_path:

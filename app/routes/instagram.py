@@ -116,7 +116,7 @@ async def instagram_create(
     show_category: str = Form(""),
     category_bg_color: str = Form("#e53935"),
     category_text_color: str = Form("#ffffff"),
-    category_position: str = Form("top-left"),
+    category_x_percent: int = Form(0),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -137,7 +137,7 @@ async def instagram_create(
                        banner_style, banner_font_weight, banner_y_offset, banner_align,
                        text_bg_padding_x, text_bg_padding_y, text_bg_full_width,
                        title_max_lines, show_category, category_bg_color,
-                       category_text_color, category_position,
+                       category_text_color, category_x_percent,
                        logo, db)
     db.commit()
     return RedirectResponse(f"/settings/instagram/{cfg.id}?msg=Cuenta+creada+correctamente", status_code=302)
@@ -196,7 +196,7 @@ async def instagram_save(
     show_category: str = Form(""),
     category_bg_color: str = Form("#e53935"),
     category_text_color: str = Form("#ffffff"),
-    category_position: str = Form("top-left"),
+    category_x_percent: int = Form(0),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -219,7 +219,7 @@ async def instagram_save(
                            banner_style, banner_font_weight, banner_y_offset, banner_align,
                            text_bg_padding_x, text_bg_padding_y, text_bg_full_width,
                            title_max_lines, show_category, category_bg_color,
-                           category_text_color, category_position,
+                           category_text_color, category_x_percent,
                            logo, db)
         db.commit()
         return RedirectResponse(
@@ -255,7 +255,7 @@ def _apply_form_to_cfg(
     banner_y_offset: int, banner_align: str,
     text_bg_padding_x: int, text_bg_padding_y: int, text_bg_full_width: str,
     title_max_lines: int, show_category: str,
-    category_bg_color: str, category_text_color: str, category_position: str,
+    category_bg_color: str, category_text_color: str, category_x_percent: int,
     logo: Optional[UploadFile], db: Session,
 ):
     from app.services.gfonts_service import LEGACY_MAP
@@ -292,7 +292,8 @@ def _apply_form_to_cfg(
     cfg.show_category = show_category.lower() in ("on", "true", "1", "yes")
     cfg.category_bg_color = category_bg_color if category_bg_color.startswith("#") else "#e53935"
     cfg.category_text_color = category_text_color if category_text_color.startswith("#") else "#ffffff"
-    cfg.category_position = category_position if category_position in ("top-left", "top-right") else "top-left"
+    cfg.category_x_percent = max(0, min(100, category_x_percent))
+    cfg.category_position = "top-right" if cfg.category_x_percent >= 50 else "top-left"
 
     if app_secret.strip():
         cfg.encrypted_app_secret = encrypt_value(app_secret.strip())
@@ -418,7 +419,7 @@ async def preview_image(
     q_show_category: Optional[int] = Query(None, alias="show_category"),
     q_category_bg_color: Optional[str] = Query(None, alias="category_bg_color"),
     q_category_text_color: Optional[str] = Query(None, alias="category_text_color"),
-    q_category_position: Optional[str] = Query(None, alias="category_position"),
+    q_category_x_percent: Optional[int] = Query(None, alias="category_x_percent"),
 ):
     if not _require_admin(request, db):
         from fastapi.responses import Response
@@ -485,7 +486,7 @@ async def preview_image(
             show_category=bool(_eff(q_show_category, (1 if cfg and cfg.show_category else 0) if cfg else None, 0)),
             category_bg_color=_eff(q_category_bg_color, cfg.category_bg_color if cfg else None, "#e53935"),
             category_text_color=_eff(q_category_text_color, cfg.category_text_color if cfg else None, "#ffffff"),
-            category_position=_eff(q_category_position, cfg.category_position if cfg else None, "top-left"),
+            category_x_percent=_eff(q_category_x_percent, cfg.category_x_percent if cfg else None, 0),
         )
     except Exception as exc:
         log.error("Error generando imagen de preview: %s", exc, exc_info=True)

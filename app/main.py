@@ -247,6 +247,9 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN category_text_color VARCHAR(10) DEFAULT '#ffffff'"))
             if "category_position" not in ig_cols:
                 conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN category_position VARCHAR(20) DEFAULT 'top-left'"))
+            if "category_x_percent" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN category_x_percent INTEGER DEFAULT 0"))
+                conn.execute(text("UPDATE instagram_settings SET category_x_percent = CASE WHEN category_position = 'top-right' THEN 100 ELSE 0 END"))
             # Migrar font_family legacy a nombres reales de Google Fonts
             conn.execute(text("UPDATE instagram_settings SET font_family = 'Montserrat' WHERE font_family = 'sans' OR font_family IS NULL"))
             conn.execute(text("UPDATE instagram_settings SET font_family = 'Playfair Display' WHERE font_family = 'serif'"))
