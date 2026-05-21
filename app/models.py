@@ -321,6 +321,8 @@ class InstagramSettings(Base):
     # Banner
     banner_style = Column(String(10), default="pill")
     banner_font_weight = Column(String(20), default="bold")
+    banner_y_offset = Column(Integer, default=0)
+    banner_align = Column(String(10), default="center")
     # Control
     is_active = Column(Boolean, default=False)
     max_posts_per_day = Column(Integer, default=10)

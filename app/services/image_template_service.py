@@ -152,8 +152,11 @@ def _draw_banner(
     banner_style: str = "pill",
     font_family: str = "Montserrat",
     font_weight: str = "bold",
+    y_offset: int = 0,
+    align: str = "center",
 ) -> Image.Image:
-    """Dibuja la franja inferior con estilo configurable: 'pill', 'rect' o 'none'."""
+    """Dibuja la franja inferior con estilo configurable: 'pill', 'rect' o 'none'.
+    y_offset > 0 sube la franja, < 0 la baja. align: 'left'|'center'|'right'."""
     if not text or not text.strip():
         return img
 
@@ -174,8 +177,13 @@ def _draw_banner(
 
     if banner_style == "none":
         # Solo texto con sombra, sin fondo
-        tx = (img.width - text_w) // 2
-        ty = img.height - text_h - BANNER_MARGIN - text_top
+        if align == "left":
+            tx = BANNER_MARGIN
+        elif align == "right":
+            tx = img.width - text_w - BANNER_MARGIN
+        else:
+            tx = (img.width - text_w) // 2
+        ty = img.height - text_h - BANNER_MARGIN - y_offset - text_top
         base = img.convert("RGBA")
         txt_layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
         d = ImageDraw.Draw(txt_layer)
@@ -190,8 +198,13 @@ def _draw_banner(
     box_w = min(text_w + pad_x * 2, img.width - BANNER_MARGIN * 2)
     box_h = text_h + pad_y * 2
 
-    x0 = (img.width - box_w) // 2
-    y0 = img.height - box_h - BANNER_MARGIN
+    if align == "left":
+        x0 = BANNER_MARGIN
+    elif align == "right":
+        x0 = img.width - box_w - BANNER_MARGIN
+    else:
+        x0 = (img.width - box_w) // 2
+    y0 = img.height - box_h - BANNER_MARGIN - y_offset
     x1 = x0 + box_w
     y1 = y0 + box_h
 
@@ -253,6 +266,8 @@ def build_instagram_image(
     text_bg_opacity: int = 0,
     banner_style: str = "pill",
     banner_font_weight: str = "bold",
+    banner_y_offset: int = 0,
+    banner_align: str = "center",
 ) -> bytes:
     """
     Pipeline completo: recibe bytes de imagen, devuelve JPEG 1080×1440.
@@ -282,6 +297,7 @@ def build_instagram_image(
             bg_color=banner_color, text_color=banner_text_color,
             banner_style=banner_style,
             font_family=font_family, font_weight=banner_font_weight,
+            y_offset=banner_y_offset, align=banner_align,
         )
 
     if logo_path:

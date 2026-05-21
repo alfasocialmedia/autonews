@@ -928,16 +928,19 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
             font_weight=ig.font_weight or "bold",
             banner_style=ig.banner_style or "pill",
             banner_font_weight=ig.banner_font_weight or "bold",
+            banner_y_offset=ig.banner_y_offset or 0,
+            banner_align=ig.banner_align or "center",
         )
-
-        # Generar caption con Groq
-        caption = _generate_ig_caption(groq_key, groq_model, title, ai_result.get("summary", ""))
 
         # Subir la imagen procesada al primer sitio WP activo para obtener URL pública
         wp = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).first()
         if not wp:
             log.warning("[IG] No hay sitio WordPress activo para subir imagen de Instagram")
             return
+
+        # Generar caption con Groq (después de tener wp.site_url disponible)
+        website_footer = ig.banner_text or wp.site_url or ""
+        caption = _generate_ig_caption(groq_key, groq_model, title, ai_result.get("summary", ""), website_footer)
 
         wp_pwd = decrypt_value(wp.encrypted_app_password)
         media_result = upload_media(
@@ -963,25 +966,30 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
         log.error("[IG] Excepción en _publish_instagram: %s", exc)
 
 
-def _generate_ig_caption(groq_key: str, groq_model: str, title: str, summary: str) -> str:
-    """Genera un caption corto con hasta 5 hashtags usando Groq."""
+def _generate_ig_caption(groq_key: str, groq_model: str, title: str, summary: str, website_footer: str = "") -> str:
+    """Genera caption Instagram: frase gancho + copy con emojis + 5 hashtags virales + footer web."""
+    footer = f"\n\n📰 {website_footer}" if website_footer else ""
     try:
         from app.services.groq_service import _get_client
         client = _get_client(groq_key)
         prompt = (
-            f"Escribí un caption para Instagram de máximo 150 caracteres para esta noticia. "
-            f"Luego agregá exactamente 5 hashtags relevantes en español. "
-            f"Solo devolvé el caption y los hashtags, sin explicaciones.\n\n"
-            f"Título: {title}\nResumen: {summary}"
+            "Sos community manager de un medio digital. El título de la noticia ya está en la imagen, "
+            "NO lo repitas en el caption. Generá un caption para Instagram con exactamente esta estructura:\n"
+            "1. Una frase gancho atractiva e impactante (máx. 2 líneas, con emojis)\n"
+            "2. Un copy breve y directo con emojis integrados (2-3 líneas)\n"
+            "3. Exactamente 5 hashtags virales y de alto alcance en español\n"
+            "Máximo 220 palabras en total. Solo devolvé el caption listo para publicar, sin comentarios.\n\n"
+            f"Noticia — Título: {title}\nResumen: {summary}"
         )
         resp = client.chat.completions.create(
             model=groq_model,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=200,
+            max_tokens=350,
         )
-        return resp.choices[0].message.content.strip()
+        text = resp.choices[0].message.content.strip()
+        return text + footer
     except Exception:
-        return f"{title}\n\n#noticias #argentina #informacion #actualidad #hoy"
+        return f"🔥 ¡No te pierdas esta noticia! 👇\n\n#noticias #argentina #informacion #actualidad #hoy{footer}"
 
 
 def _broadcast_whatsapp(db, ai_result: dict, wp_url: str, wp_site_id: int | None = None):

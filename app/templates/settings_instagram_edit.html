@@ -165,6 +165,8 @@
     {% set tbc = cfg.text_bg_color if cfg and cfg.text_bg_color else '#000000' %}
     {% set bs = cfg.banner_style if cfg and cfg.banner_style else 'pill' %}
     {% set bfw = cfg.banner_font_weight if cfg and cfg.banner_font_weight else 'bold' %}
+    {% set byo = cfg.banner_y_offset if cfg and cfg.banner_y_offset is not none else 0 %}
+    {% set ba = cfg.banner_align if cfg and cfg.banner_align else 'center' %}
 
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
@@ -375,6 +377,29 @@
                 <label class="form-label small mb-1">Color texto</label>
                 <input type="color" name="banner_text_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
                        value="{{ cfg.banner_text_color if cfg and cfg.banner_text_color else '#ffffff' }}" title="Color del texto de la franja">
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small mb-1">Alineación</label>
+              <div class="btn-group w-100" role="group" aria-label="Alineación de la franja">
+                <input type="radio" class="btn-check" name="banner_align" id="baLeft"   value="left"   form="igForm" {% if ba == 'left'   %}checked{% endif %} autocomplete="off">
+                <label class="btn btn-sm btn-outline-secondary" for="baLeft"><i class="bi bi-text-left"></i> Izq.</label>
+                <input type="radio" class="btn-check" name="banner_align" id="baCenter" value="center" form="igForm" {% if ba == 'center' %}checked{% endif %} autocomplete="off">
+                <label class="btn btn-sm btn-outline-secondary" for="baCenter"><i class="bi bi-text-center"></i> Centro</label>
+                <input type="radio" class="btn-check" name="banner_align" id="baRight"  value="right"  form="igForm" {% if ba == 'right'  %}checked{% endif %} autocomplete="off">
+                <label class="btn btn-sm btn-outline-secondary" for="baRight"><i class="bi bi-text-right"></i> Der.</label>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small fw-semibold text-uppercase text-muted d-flex justify-content-between mb-1" style="letter-spacing:.05em">
+                <span>Posición vertical de la franja</span>
+                <span class="badge bg-secondary fw-normal" id="bannerYOffsetDisplay">{{ byo }} px</span>
+              </label>
+              <input type="range" name="banner_y_offset" form="igForm" class="form-range" id="bannerYOffset"
+                     min="-100" max="800" step="10" value="{{ byo }}" title="Posición vertical de la franja en px">
+              <div class="d-flex justify-content-between">
+                <small class="text-muted">↓ abajo</small>
+                <small class="text-muted">↑ arriba</small>
               </div>
             </div>
 
@@ -596,7 +621,7 @@ function _collectPreviewParams() {
     'font_size','text_color','banner_text','banner_color','banner_text_color',
     'text_align','title_y_offset','font_family','font_weight',
     'logo_size','text_bg_color','text_bg_opacity',
-    'banner_style','banner_font_weight'
+    'banner_style','banner_font_weight','banner_y_offset','banner_align'
   ].forEach(f => { const v = fd.get(f); if (v !== null) params.set(f, v); });
   return params;
 }
@@ -659,6 +684,7 @@ _bindSlider('gradHeight',      'gradHeightDisplay',      ' px');
 _bindSlider('fontSize',        'fontSizeDisplay',        ' px');
 _bindSlider('titleYOffset',    'yOffsetDisplay',         ' px');
 _bindSlider('textBgOpacity',   'textBgOpacityDisplay',   '', v => v == '0' ? '0 (off)' : v);
+_bindSlider('bannerYOffset',   'bannerYOffsetDisplay',   ' px');
 
 // Color pickers → preview en cambio
 ['gradient_color','text_color','text_bg_color','banner_color','banner_text_color'].forEach(name => {
@@ -674,6 +700,9 @@ document.querySelectorAll('[name="text_align"]').forEach(el =>
 );
 document.querySelectorAll('[name="banner_style"]').forEach(el =>
   el.addEventListener('change', () => _schedulePreview(250))
+);
+document.querySelectorAll('[name="banner_align"]').forEach(el =>
+  el.addEventListener('change', () => _schedulePreview(200))
 );
 // Banner text: debounce más largo (el usuario escribe)
 document.getElementById('bannerText')?.addEventListener('input', () => _schedulePreview(600));

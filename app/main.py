@@ -227,6 +227,10 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN banner_style VARCHAR(10) DEFAULT 'pill'"))
             if "banner_font_weight" not in ig_cols:
                 conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN banner_font_weight VARCHAR(20) DEFAULT 'bold'"))
+            if "banner_y_offset" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN banner_y_offset INTEGER DEFAULT 0"))
+            if "banner_align" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN banner_align VARCHAR(10) DEFAULT 'center'"))
             # Migrar font_family legacy a nombres reales de Google Fonts
             conn.execute(text("UPDATE instagram_settings SET font_family = 'Montserrat' WHERE font_family = 'sans' OR font_family IS NULL"))
             conn.execute(text("UPDATE instagram_settings SET font_family = 'Playfair Display' WHERE font_family = 'serif'"))

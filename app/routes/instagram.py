@@ -107,6 +107,8 @@ async def instagram_create(
     logo_size: int = Form(180),
     banner_style: str = Form("pill"),
     banner_font_weight: str = Form("bold"),
+    banner_y_offset: int = Form(0),
+    banner_align: str = Form("center"),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -124,7 +126,7 @@ async def instagram_create(
                        font_size, text_color, banner_text, banner_color, banner_text_color,
                        text_align, title_y_offset, font_family, font_weight,
                        text_bg_color, text_bg_opacity, logo_size,
-                       banner_style, banner_font_weight,
+                       banner_style, banner_font_weight, banner_y_offset, banner_align,
                        logo, db)
     db.commit()
     return RedirectResponse(f"/settings/instagram/{cfg.id}?msg=Cuenta+creada+correctamente", status_code=302)
@@ -174,6 +176,8 @@ async def instagram_save(
     logo_size: int = Form(180),
     banner_style: str = Form("pill"),
     banner_font_weight: str = Form("bold"),
+    banner_y_offset: int = Form(0),
+    banner_align: str = Form("center"),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -193,7 +197,7 @@ async def instagram_save(
                            font_size, text_color, banner_text, banner_color, banner_text_color,
                            text_align, title_y_offset, font_family, font_weight,
                            text_bg_color, text_bg_opacity, logo_size,
-                           banner_style, banner_font_weight,
+                           banner_style, banner_font_weight, banner_y_offset, banner_align,
                            logo, db)
         db.commit()
         return RedirectResponse(
@@ -226,6 +230,7 @@ def _apply_form_to_cfg(
     font_family: str, font_weight: str,
     text_bg_color: str, text_bg_opacity: int, logo_size: int,
     banner_style: str, banner_font_weight: str,
+    banner_y_offset: int, banner_align: str,
     logo: Optional[UploadFile], db: Session,
 ):
     from app.services.gfonts_service import LEGACY_MAP
@@ -253,6 +258,8 @@ def _apply_form_to_cfg(
     cfg.text_bg_opacity = max(0, min(220, text_bg_opacity))
     cfg.banner_style = banner_style if banner_style in _VALID_BANNER_STYLES else "pill"
     cfg.banner_font_weight = banner_font_weight if banner_font_weight in _VALID_WEIGHTS else "bold"
+    cfg.banner_y_offset = max(-200, min(800, banner_y_offset))
+    cfg.banner_align = banner_align if banner_align in ("left", "center", "right") else "center"
 
     if app_secret.strip():
         cfg.encrypted_app_secret = encrypt_value(app_secret.strip())
@@ -369,6 +376,8 @@ async def preview_image(
     q_font_weight: Optional[str] = Query(None, alias="font_weight"),
     q_banner_style: Optional[str] = Query(None, alias="banner_style"),
     q_banner_font_weight: Optional[str] = Query(None, alias="banner_font_weight"),
+    q_banner_y_offset: Optional[int] = Query(None, alias="banner_y_offset"),
+    q_banner_align: Optional[str] = Query(None, alias="banner_align"),
 ):
     if not _require_admin(request, db):
         from fastapi.responses import Response
@@ -425,6 +434,8 @@ async def preview_image(
             font_weight=_eff(q_font_weight, cfg.font_weight if cfg else None, "bold"),
             banner_style=_eff(q_banner_style, cfg.banner_style if cfg else None, "pill"),
             banner_font_weight=_eff(q_banner_font_weight, cfg.banner_font_weight if cfg else None, "bold"),
+            banner_y_offset=_eff(q_banner_y_offset, cfg.banner_y_offset if cfg else None, 0),
+            banner_align=_eff(q_banner_align, cfg.banner_align if cfg else None, "center"),
         )
     except Exception as exc:
         log.error("Error generando imagen de preview: %s", exc, exc_info=True)
@@ -560,6 +571,8 @@ async def test_publish_instagram(account_id: int, request: Request, db: Session 
             font_weight=cfg.font_weight or "bold",
             banner_style=cfg.banner_style or "pill",
             banner_font_weight=cfg.banner_font_weight or "bold",
+            banner_y_offset=cfg.banner_y_offset or 0,
+            banner_align=cfg.banner_align or "center",
         )
 
         wp = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).first()

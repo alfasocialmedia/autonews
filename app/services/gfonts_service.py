@@ -213,7 +213,8 @@ def get_font_path(family: str, weight: str = "bold") -> str | None:
     github_path = weights.get(weight) or weights.get("bold") or next(iter(weights.values()))
 
     safe_name = family.replace(" ", "_")
-    cache_file = os.path.join(_cache_dir(), f"{safe_name}-{weight}.ttf")
+    cache_dir = _cache_dir()
+    cache_file = os.path.join(cache_dir, f"{safe_name}-{weight}.ttf")
 
     # 2. Usar caché local si ya se descargó y es válido
     if os.path.exists(cache_file):
@@ -229,19 +230,38 @@ def get_font_path(family: str, weight: str = "bold") -> str | None:
         except Exception:
             pass
 
-    # 3. Descargar desde GitHub google/fonts
+    # 3. Descargar desde GitHub google/fonts (2 intentos)
     url = f"{_GITHUB_BASE}/{github_path}"
-    try:
-        req = _ur.Request(url, headers={"User-Agent": "AutoNews/1.0"})
-        with _ur.urlopen(req, timeout=20) as r:
-            data = r.read()
-        if not _is_valid_ttf(data):
-            log.warning("Archivo de fuente no válido para %s/%s (primeros bytes: %s)", family, weight, data[:4].hex())
-            return None
-        with open(cache_file, "wb") as f:
-            f.write(data)
-        log.info("Fuente descargada: %s %s → %s", family, weight, cache_file)
-        return cache_file
-    except Exception as exc:
-        log.warning("No se pudo descargar %s %s: %s", family, weight, exc)
-        return None
+    for attempt in range(2):
+        try:
+            req = _ur.Request(url, headers={"User-Agent": "AutoNews/1.0"})
+            with _ur.urlopen(req, timeout=15) as r:
+                data = r.read()
+            if not _is_valid_ttf(data):
+                log.warning("Archivo no válido para %s/%s (bytes: %s)", family, weight, data[:4].hex())
+                break
+            with open(cache_file, "wb") as f:
+                f.write(data)
+            log.info("Fuente descargada: %s %s → %s", family, weight, cache_file)
+            return cache_file
+        except Exception as exc:
+            log.warning("Intento %d fallido al descargar %s %s: %s", attempt + 1, family, weight, exc)
+
+    # 4. Fallback al bold de la misma familia (mismo estilo visual, distinto peso)
+    if weight != "bold":
+        bold_bundled = _BUNDLED.get((family, "bold"))
+        if bold_bundled and os.path.exists(bold_bundled) and os.path.getsize(bold_bundled) > 1000:
+            log.warning("Usando bold bundled como fallback para %s %s", family, weight)
+            return bold_bundled
+        bold_cache = os.path.join(cache_dir, f"{safe_name}-bold.ttf")
+        if os.path.exists(bold_cache):
+            try:
+                with open(bold_cache, "rb") as f:
+                    header = f.read(8)
+                if _is_valid_ttf(header):
+                    log.warning("Usando bold cacheado como fallback para %s %s", family, weight)
+                    return bold_cache
+            except Exception:
+                pass
+
+    return None
