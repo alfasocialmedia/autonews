@@ -28,8 +28,17 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     candidates = [
         os.path.join(FONT_DIR, "NotoSans-Bold.ttf"),
         os.path.join(FONT_DIR, "DejaVuSans-Bold.ttf"),
+        # Linux (Docker)
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+        # Windows (desarrollo local)
+        "C:/Windows/Fonts/arialbd.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/calibrib.ttf",
+        "C:/Windows/Fonts/segoeui.ttf",
+        "C:/Windows/Fonts/verdanab.ttf",
     ]
     for path in candidates:
         if os.path.exists(path):
@@ -65,7 +74,9 @@ def _add_gradient(
     gradient = Image.new("RGBA", (img.width, height), (r, g, b, 0))
     draw = ImageDraw.Draw(gradient)
     for y in range(height):
-        alpha = int(max_opacity * (y / height))
+        # Curva cuadrática: se oscurece más rápido hacia el fondo
+        t = y / height
+        alpha = int(max_opacity * (t ** 1.6))
         draw.line([(0, y), (img.width, y)], fill=(r, g, b, alpha))
     base = img.convert("RGBA")
     overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
@@ -80,22 +91,30 @@ def _draw_title(
     text_color: str = "#ffffff",
     bottom_offset: int = 80,
 ) -> Image.Image:
-    """Dibuja el título con sombra. bottom_offset controla cuánto sube desde abajo."""
-    draw = ImageDraw.Draw(img)
+    """Dibuja el título con sombra múltiple para máxima legibilidad."""
     font = _load_font(font_size)
     tr, tg, tb = _hex_to_rgb(text_color)
     max_chars = max(18, int(TARGET_W / (font_size * 0.55)))
     lines = textwrap.wrap(title, width=max_chars)[:4]
-    line_height = font_size + 10
+    line_height = int(font_size * 1.25)
     total_height = len(lines) * line_height
     y = img.height - total_height - bottom_offset
     padding_x = 50
 
+    # Convertir a RGBA para poder componer la sombra con transparencia
+    base = img.convert("RGBA")
+    txt_layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(txt_layer)
+
     for line in lines:
-        draw.text((padding_x + 2, y + 2), line, font=font, fill=(0, 0, 0, 180))
+        # Sombra difusa (3 desplazamientos)
+        for dx, dy in [(3, 3), (2, 2), (1, 1)]:
+            draw.text((padding_x + dx, y + dy), line, font=font, fill=(0, 0, 0, 160))
+        # Texto principal
         draw.text((padding_x, y), line, font=font, fill=(tr, tg, tb, 255))
         y += line_height
-    return img
+
+    return Image.alpha_composite(base, txt_layer).convert("RGB")
 
 
 def _draw_banner(
