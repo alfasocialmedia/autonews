@@ -943,6 +943,15 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
             banner_font_weight=ig.banner_font_weight or "bold",
             banner_y_offset=ig.banner_y_offset or 0,
             banner_align=ig.banner_align or "center",
+            text_bg_padding_x=ig.text_bg_padding_x or 0,
+            text_bg_padding_y=ig.text_bg_padding_y if ig.text_bg_padding_y is not None else 18,
+            text_bg_full_width=ig.text_bg_full_width if ig.text_bg_full_width is not None else True,
+            title_max_lines=ig.title_max_lines or 4,
+            category=ai_result.get("category", "") if ig.show_category else None,
+            show_category=bool(ig.show_category),
+            category_bg_color=ig.category_bg_color or "#e53935",
+            category_text_color=ig.category_text_color or "#ffffff",
+            category_position=ig.category_position or "top-left",
         )
 
         # Subir la imagen procesada al primer sitio WP activo para obtener URL pública

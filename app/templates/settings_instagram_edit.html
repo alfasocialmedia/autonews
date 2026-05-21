@@ -163,10 +163,18 @@
     {% set gh = cfg.gradient_height if cfg and cfg.gradient_height else 480 %}
     {% set tbo = cfg.text_bg_opacity if cfg and cfg.text_bg_opacity is not none else 0 %}
     {% set tbc = cfg.text_bg_color if cfg and cfg.text_bg_color else '#000000' %}
+    {% set tbpx = cfg.text_bg_padding_x if cfg and cfg.text_bg_padding_x is not none else 0 %}
+    {% set tbpy = cfg.text_bg_padding_y if cfg and cfg.text_bg_padding_y is not none else 18 %}
+    {% set tbfw = cfg.text_bg_full_width if cfg and cfg.text_bg_full_width is not none else true %}
+    {% set tml = cfg.title_max_lines if cfg and cfg.title_max_lines else 4 %}
     {% set bs = cfg.banner_style if cfg and cfg.banner_style else 'pill' %}
     {% set bfw = cfg.banner_font_weight if cfg and cfg.banner_font_weight else 'bold' %}
     {% set byo = cfg.banner_y_offset if cfg and cfg.banner_y_offset is not none else 0 %}
     {% set ba = cfg.banner_align if cfg and cfg.banner_align else 'center' %}
+    {% set sc = cfg.show_category if cfg and cfg.show_category is not none else false %}
+    {% set cbc = cfg.category_bg_color if cfg and cfg.category_bg_color else '#e53935' %}
+    {% set ctc = cfg.category_text_color if cfg and cfg.category_text_color else '#ffffff' %}
+    {% set cp = cfg.category_position if cfg and cfg.category_position else 'top-left' %}
 
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
@@ -319,9 +327,19 @@
               </div>
             </div>
 
+            <!-- Límite de líneas -->
+            <div class="mb-3">
+              <label class="form-label small fw-semibold text-uppercase text-muted d-flex justify-content-between mb-1" style="letter-spacing:.05em">
+                <span>Máx. líneas del título</span>
+                <span class="badge bg-secondary fw-normal" id="titleMaxLinesDisplay">{{ tml }}</span>
+              </label>
+              <input type="range" name="title_max_lines" form="igForm" class="form-range" id="titleMaxLines"
+                     min="1" max="6" step="1" value="{{ tml }}" title="Máximo de líneas que puede ocupar el título">
+            </div>
+
             <!-- Fondo del texto -->
             <p class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em">Fondo del texto</p>
-            <div class="row g-2 mb-3">
+            <div class="row g-2 mb-2">
               <div class="col-4">
                 <label class="form-label small mb-1">Color</label>
                 <input type="color" name="text_bg_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
@@ -335,6 +353,30 @@
                 <input type="range" name="text_bg_opacity" form="igForm" class="form-range" id="textBgOpacity"
                        min="0" max="220" step="10" value="{{ tbo }}" title="Opacidad del fondo del texto (0=desactivado)">
                 <div class="form-text">0 = sin fondo.</div>
+              </div>
+            </div>
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" role="switch" name="text_bg_full_width" id="textBgFullWidth" form="igForm"
+                     {% if tbfw %}checked{% endif %}>
+              <label class="form-check-label small" for="textBgFullWidth">Ancho completo</label>
+              <div class="form-text" style="margin-top:0">Desactivado: el fondo se ajusta al ancho del texto.</div>
+            </div>
+            <div class="row g-2 mb-3" id="textBgPaddingRow" {% if tbfw %}style="display:none"{% endif %}>
+              <div class="col-6">
+                <label class="form-label small d-flex justify-content-between mb-1">
+                  <span>Padding lateral</span>
+                  <span class="badge bg-secondary fw-normal" id="textBgPaddingXDisplay">{{ tbpx }} px</span>
+                </label>
+                <input type="range" name="text_bg_padding_x" form="igForm" class="form-range" id="textBgPaddingX"
+                       min="0" max="200" step="5" value="{{ tbpx }}" title="Espacio extra a los lados del fondo">
+              </div>
+              <div class="col-6">
+                <label class="form-label small d-flex justify-content-between mb-1">
+                  <span>Padding vertical</span>
+                  <span class="badge bg-secondary fw-normal" id="textBgPaddingYDisplay">{{ tbpy }} px</span>
+                </label>
+                <input type="range" name="text_bg_padding_y" form="igForm" class="form-range" id="textBgPaddingY"
+                       min="0" max="100" step="2" value="{{ tbpy }}" title="Espacio extra arriba y abajo del fondo">
               </div>
             </div>
 
@@ -400,6 +442,36 @@
               <div class="d-flex justify-content-between">
                 <small class="text-muted">↓ abajo</small>
                 <small class="text-muted">↑ arriba</small>
+              </div>
+            </div>
+
+            <!-- Badge de categoría -->
+            <p class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em">Badge de categoría</p>
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" role="switch" name="show_category" id="showCategory" form="igForm"
+                     {% if sc %}checked{% endif %}>
+              <label class="form-check-label small" for="showCategory">Mostrar categoría en la imagen</label>
+              <div class="form-text" style="margin-top:0">Aparece como badge en la esquina superior (ej: POLICIALES).</div>
+            </div>
+            <div id="categoryRow" {% if not sc %}style="display:none"{% endif %}>
+              <div class="row g-2 mb-2">
+                <div class="col-4">
+                  <label class="form-label small mb-1">Color fondo</label>
+                  <input type="color" name="category_bg_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                         value="{{ cbc }}" title="Color del badge de categoría">
+                </div>
+                <div class="col-4">
+                  <label class="form-label small mb-1">Color texto</label>
+                  <input type="color" name="category_text_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                         value="{{ ctc }}" title="Color del texto del badge">
+                </div>
+                <div class="col-4">
+                  <label class="form-label small mb-1">Posición</label>
+                  <select name="category_position" form="igForm" class="form-select form-select-sm" id="categoryPosition" title="Dónde aparece el badge">
+                    <option value="top-left"  {% if cp == 'top-left'  %}selected{% endif %}>↖ Sup. izq.</option>
+                    <option value="top-right" {% if cp == 'top-right' %}selected{% endif %}>↗ Sup. der.</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -621,8 +693,13 @@ function _collectPreviewParams() {
     'font_size','text_color','banner_text','banner_color','banner_text_color',
     'text_align','title_y_offset','font_family','font_weight',
     'logo_size','text_bg_color','text_bg_opacity',
-    'banner_style','banner_font_weight','banner_y_offset','banner_align'
+    'banner_style','banner_font_weight','banner_y_offset','banner_align',
+    'text_bg_padding_x','text_bg_padding_y','title_max_lines',
+    'category_bg_color','category_text_color','category_position',
   ].forEach(f => { const v = fd.get(f); if (v !== null) params.set(f, v); });
+  // Checkboxes (no aparecen en FormData si están unchecked)
+  params.set('text_bg_full_width', document.getElementById('textBgFullWidth')?.checked ? '1' : '0');
+  params.set('show_category',      document.getElementById('showCategory')?.checked ? '1' : '0');
   return params;
 }
 
@@ -678,20 +755,24 @@ function _bindSlider(id, displayId, suffix, formatFn) {
   });
 }
 
-_bindSlider('logoSize',        'logoSizeDisplay',        ' px');
-_bindSlider('gradOpacity',     'gradOpacityDisplay',     '');
-_bindSlider('gradHeight',      'gradHeightDisplay',      ' px');
-_bindSlider('fontSize',        'fontSizeDisplay',        ' px');
-_bindSlider('titleYOffset',    'yOffsetDisplay',         ' px');
-_bindSlider('textBgOpacity',   'textBgOpacityDisplay',   '', v => v == '0' ? '0 (off)' : v);
-_bindSlider('bannerYOffset',   'bannerYOffsetDisplay',   ' px');
+_bindSlider('logoSize',          'logoSizeDisplay',          ' px');
+_bindSlider('gradOpacity',       'gradOpacityDisplay',       '');
+_bindSlider('gradHeight',        'gradHeightDisplay',        ' px');
+_bindSlider('fontSize',          'fontSizeDisplay',          ' px');
+_bindSlider('titleYOffset',      'yOffsetDisplay',           ' px');
+_bindSlider('titleMaxLines',     'titleMaxLinesDisplay',     '');
+_bindSlider('textBgOpacity',     'textBgOpacityDisplay',     '', v => v == '0' ? '0 (off)' : v);
+_bindSlider('textBgPaddingX',    'textBgPaddingXDisplay',    ' px');
+_bindSlider('textBgPaddingY',    'textBgPaddingYDisplay',    ' px');
+_bindSlider('bannerYOffset',     'bannerYOffsetDisplay',     ' px');
 
 // Color pickers → preview en cambio
-['gradient_color','text_color','text_bg_color','banner_color','banner_text_color'].forEach(name => {
+['gradient_color','text_color','text_bg_color','banner_color','banner_text_color',
+ 'category_bg_color','category_text_color'].forEach(name => {
   document.querySelector(`[name="${name}"]`)?.addEventListener('input', () => _schedulePreview(200));
 });
 // Selects → preview en cambio
-['font_family','font_weight','banner_font_weight'].forEach(name => {
+['font_family','font_weight','banner_font_weight','category_position'].forEach(name => {
   document.querySelector(`[name="${name}"]`)?.addEventListener('change', () => _schedulePreview(300));
 });
 // Radio groups
@@ -706,6 +787,17 @@ document.querySelectorAll('[name="banner_align"]').forEach(el =>
 );
 // Banner text: debounce más largo (el usuario escribe)
 document.getElementById('bannerText')?.addEventListener('input', () => _schedulePreview(600));
+
+// Toggle ancho completo del fondo → mostrar/ocultar sliders de padding
+document.getElementById('textBgFullWidth')?.addEventListener('change', function() {
+  document.getElementById('textBgPaddingRow').style.display = this.checked ? 'none' : '';
+  _schedulePreview(300);
+});
+// Toggle mostrar categoría → mostrar/ocultar controles
+document.getElementById('showCategory')?.addEventListener('change', function() {
+  document.getElementById('categoryRow').style.display = this.checked ? '' : 'none';
+  _schedulePreview(300);
+});
 
 // Botón manual
 const btnPreview = document.getElementById('btnPreview');

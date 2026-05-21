@@ -87,25 +87,25 @@ def _add_gradient(
     return Image.alpha_composite(base, overlay).convert("RGB")
 
 
+def _measure_text_w(draw: ImageDraw.ImageDraw, text: str, font) -> int:
+    try:
+        bb = draw.textbbox((0, 0), text, font=font)
+        return bb[2] - bb[0]
+    except AttributeError:
+        w, _ = draw.textsize(text, font=font)  # type: ignore[attr-defined]
+        return w
+
+
 def _wrap_by_pixels(title: str, font, max_px: int, max_lines: int = 4) -> list[str]:
     """Divide el título en líneas que no superen max_px de ancho real (medición PIL)."""
     tmp_img = Image.new("RGB", (1, 1))
     draw = ImageDraw.Draw(tmp_img)
-
-    def text_width(t: str) -> int:
-        try:
-            bb = draw.textbbox((0, 0), t, font=font)
-            return bb[2] - bb[0]
-        except AttributeError:
-            w, _ = draw.textsize(t, font=font)  # type: ignore[attr-defined]
-            return w
-
     words = title.split()
     lines: list[str] = []
     current: list[str] = []
     for word in words:
         candidate = " ".join(current + [word])
-        if text_width(candidate) <= max_px or not current:
+        if _measure_text_w(draw, candidate, font) <= max_px or not current:
             current.append(word)
         else:
             lines.append(" ".join(current))
@@ -128,13 +128,17 @@ def _draw_title(
     font_weight: str = "bold",
     text_bg_color: str = "#000000",
     text_bg_opacity: int = 0,
+    text_bg_padding_x: int = 0,
+    text_bg_padding_y: int = 18,
+    text_bg_full_width: bool = True,
+    title_max_lines: int = 4,
 ) -> Image.Image:
     """Dibuja el título con sombra múltiple, alineación y tipografía configurables."""
     font = _load_font(font_size, family=font_family, weight=font_weight)
     tr, tg, tb = _hex_to_rgb(text_color)
     padding_x = 50
     usable_w = TARGET_W - padding_x * 2
-    lines = _wrap_by_pixels(title, font, usable_w)
+    lines = _wrap_by_pixels(title, font, usable_w, max_lines=max(1, title_max_lines))
     line_height = int(font_size * 1.25)
     total_height = len(lines) * line_height
     y_start = img.height - total_height - bottom_offset
@@ -145,19 +149,32 @@ def _draw_title(
 
     if text_bg_opacity > 0:
         bgr, bgg, bgb = _hex_to_rgb(text_bg_color)
+        if text_bg_full_width:
+            bg_x0, bg_x1 = 0, TARGET_W
+        else:
+            # Calcular el ancho real máximo de las líneas
+            max_line_w = max(
+                (_measure_text_w(draw, ln, font) for ln in lines),
+                default=usable_w,
+            )
+            if text_align == "center":
+                cx = img.width // 2
+                bg_x0 = max(0, cx - max_line_w // 2 - text_bg_padding_x)
+                bg_x1 = min(TARGET_W, cx + max_line_w // 2 + text_bg_padding_x)
+            elif text_align == "right":
+                bg_x0 = max(0, img.width - padding_x - max_line_w - text_bg_padding_x)
+                bg_x1 = min(TARGET_W, img.width - padding_x + text_bg_padding_x)
+            else:
+                bg_x0 = max(0, padding_x - text_bg_padding_x)
+                bg_x1 = min(TARGET_W, padding_x + max_line_w + text_bg_padding_x)
         draw.rectangle(
-            [0, y_start - 18, TARGET_W, y_start + total_height + 18],
+            [bg_x0, y_start - text_bg_padding_y, bg_x1, y_start + total_height + text_bg_padding_y],
             fill=(bgr, bgg, bgb, min(255, text_bg_opacity)),
         )
 
     y = y_start
     for line in lines:
-        try:
-            bbox = draw.textbbox((0, 0), line, font=font)
-            line_w = bbox[2] - bbox[0]
-        except AttributeError:
-            line_w, _ = draw.textsize(line, font=font)  # type: ignore[attr-defined]
-
+        line_w = _measure_text_w(draw, line, font)
         if text_align == "center":
             x = (img.width - line_w) // 2
         elif text_align == "right":
@@ -251,6 +268,52 @@ def _draw_banner(
     return img
 
 
+def _draw_category_badge(
+    img: Image.Image,
+    category: str,
+    bg_color: str = "#e53935",
+    text_color: str = "#ffffff",
+    font_family: str = "Montserrat",
+    font_weight: str = "bold",
+    position: str = "top-left",
+) -> Image.Image:
+    """Dibuja el badge de categoría (ej: 'POLICIALES') en la esquina superior indicada."""
+    if not category or not category.strip():
+        return img
+
+    text = category.upper().strip()
+    font = _load_font(28, family=font_family, weight=font_weight)
+
+    tmp_draw = ImageDraw.Draw(img)
+    try:
+        bbox = tmp_draw.textbbox((0, 0), text, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        text_top = bbox[1]
+    except AttributeError:
+        text_w, text_h = tmp_draw.textsize(text, font=font)  # type: ignore[attr-defined]
+        text_top = 0
+
+    pad_x, pad_y = 24, 10
+    box_w = min(text_w + pad_x * 2, img.width - BANNER_MARGIN * 2)
+    box_h = text_h + pad_y * 2
+    margin = BANNER_MARGIN
+
+    x0 = (img.width - box_w - margin) if position == "top-right" else margin
+    y0 = margin
+    x1 = x0 + box_w
+    y1 = y0 + box_h
+
+    br, bg_, bb = _hex_to_rgb(bg_color)
+    tr, tg, tb = _hex_to_rgb(text_color)
+    draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle([x0, y0, x1, y1], radius=box_h // 2, fill=(br, bg_, bb))
+    tx = x0 + (box_w - text_w) // 2
+    ty = y0 + (box_h - text_h) // 2 - text_top
+    draw.text((tx, ty), text, font=font, fill=(tr, tg, tb))
+    return img
+
+
 def _paste_logo(img: Image.Image, logo_path: str, position: str, size: int = LOGO_MAX_SIZE) -> Image.Image:
     if not logo_path or not os.path.exists(logo_path):
         return img
@@ -297,12 +360,23 @@ def build_instagram_image(
     banner_font_weight: str = "bold",
     banner_y_offset: int = 0,
     banner_align: str = "center",
+    # Nuevos parámetros
+    text_bg_padding_x: int = 0,
+    text_bg_padding_y: int = 18,
+    text_bg_full_width: bool = True,
+    title_max_lines: int = 4,
+    category: str | None = None,
+    show_category: bool = False,
+    category_bg_color: str = "#e53935",
+    category_text_color: str = "#ffffff",
+    category_position: str = "top-left",
 ) -> bytes:
     """
     Pipeline completo: recibe bytes de imagen, devuelve JPEG 1080×1440.
     font_weight / banner_font_weight: "regular" | "medium" | "bold" | "extrabold"
     banner_style: "pill" | "rect" | "none"
-    text_bg_opacity > 0: rectángulo semitransparente detrás del título.
+    text_bg_opacity > 0: rectángulo detrás del título (ancho y padding controlables).
+    show_category: muestra badge de categoría en la esquina superior.
     """
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img = _crop_center(img, TARGET_W, TARGET_H)
@@ -318,6 +392,10 @@ def build_instagram_image(
         text_align=text_align,
         font_family=font_family, font_weight=font_weight,
         text_bg_color=text_bg_color, text_bg_opacity=text_bg_opacity,
+        text_bg_padding_x=text_bg_padding_x,
+        text_bg_padding_y=text_bg_padding_y,
+        text_bg_full_width=text_bg_full_width,
+        title_max_lines=title_max_lines,
     )
 
     if banner_text:
@@ -327,6 +405,14 @@ def build_instagram_image(
             banner_style=banner_style,
             font_family=font_family, font_weight=banner_font_weight,
             y_offset=banner_y_offset, align=banner_align,
+        )
+
+    if show_category and category:
+        img = _draw_category_badge(
+            img, category,
+            bg_color=category_bg_color, text_color=category_text_color,
+            font_family=font_family, font_weight=font_weight,
+            position=category_position,
         )
 
     if logo_path:

@@ -109,6 +109,14 @@ async def instagram_create(
     banner_font_weight: str = Form("bold"),
     banner_y_offset: int = Form(0),
     banner_align: str = Form("center"),
+    text_bg_padding_x: int = Form(0),
+    text_bg_padding_y: int = Form(18),
+    text_bg_full_width: str = Form("on"),
+    title_max_lines: int = Form(4),
+    show_category: str = Form(""),
+    category_bg_color: str = Form("#e53935"),
+    category_text_color: str = Form("#ffffff"),
+    category_position: str = Form("top-left"),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -127,6 +135,9 @@ async def instagram_create(
                        text_align, title_y_offset, font_family, font_weight,
                        text_bg_color, text_bg_opacity, logo_size,
                        banner_style, banner_font_weight, banner_y_offset, banner_align,
+                       text_bg_padding_x, text_bg_padding_y, text_bg_full_width,
+                       title_max_lines, show_category, category_bg_color,
+                       category_text_color, category_position,
                        logo, db)
     db.commit()
     return RedirectResponse(f"/settings/instagram/{cfg.id}?msg=Cuenta+creada+correctamente", status_code=302)
@@ -178,6 +189,14 @@ async def instagram_save(
     banner_font_weight: str = Form("bold"),
     banner_y_offset: int = Form(0),
     banner_align: str = Form("center"),
+    text_bg_padding_x: int = Form(0),
+    text_bg_padding_y: int = Form(18),
+    text_bg_full_width: str = Form("on"),
+    title_max_lines: int = Form(4),
+    show_category: str = Form(""),
+    category_bg_color: str = Form("#e53935"),
+    category_text_color: str = Form("#ffffff"),
+    category_position: str = Form("top-left"),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -198,6 +217,9 @@ async def instagram_save(
                            text_align, title_y_offset, font_family, font_weight,
                            text_bg_color, text_bg_opacity, logo_size,
                            banner_style, banner_font_weight, banner_y_offset, banner_align,
+                           text_bg_padding_x, text_bg_padding_y, text_bg_full_width,
+                           title_max_lines, show_category, category_bg_color,
+                           category_text_color, category_position,
                            logo, db)
         db.commit()
         return RedirectResponse(
@@ -231,6 +253,9 @@ def _apply_form_to_cfg(
     text_bg_color: str, text_bg_opacity: int, logo_size: int,
     banner_style: str, banner_font_weight: str,
     banner_y_offset: int, banner_align: str,
+    text_bg_padding_x: int, text_bg_padding_y: int, text_bg_full_width: str,
+    title_max_lines: int, show_category: str,
+    category_bg_color: str, category_text_color: str, category_position: str,
     logo: Optional[UploadFile], db: Session,
 ):
     from app.services.gfonts_service import LEGACY_MAP
@@ -260,6 +285,14 @@ def _apply_form_to_cfg(
     cfg.banner_font_weight = banner_font_weight if banner_font_weight in _VALID_WEIGHTS else "bold"
     cfg.banner_y_offset = max(-200, min(800, banner_y_offset))
     cfg.banner_align = banner_align if banner_align in ("left", "center", "right") else "center"
+    cfg.text_bg_padding_x = max(0, min(200, text_bg_padding_x))
+    cfg.text_bg_padding_y = max(0, min(100, text_bg_padding_y))
+    cfg.text_bg_full_width = text_bg_full_width.lower() in ("on", "true", "1", "yes")
+    cfg.title_max_lines = max(1, min(6, title_max_lines))
+    cfg.show_category = show_category.lower() in ("on", "true", "1", "yes")
+    cfg.category_bg_color = category_bg_color if category_bg_color.startswith("#") else "#e53935"
+    cfg.category_text_color = category_text_color if category_text_color.startswith("#") else "#ffffff"
+    cfg.category_position = category_position if category_position in ("top-left", "top-right") else "top-left"
 
     if app_secret.strip():
         cfg.encrypted_app_secret = encrypt_value(app_secret.strip())
@@ -378,6 +411,14 @@ async def preview_image(
     q_banner_font_weight: Optional[str] = Query(None, alias="banner_font_weight"),
     q_banner_y_offset: Optional[int] = Query(None, alias="banner_y_offset"),
     q_banner_align: Optional[str] = Query(None, alias="banner_align"),
+    q_text_bg_padding_x: Optional[int] = Query(None, alias="text_bg_padding_x"),
+    q_text_bg_padding_y: Optional[int] = Query(None, alias="text_bg_padding_y"),
+    q_text_bg_full_width: Optional[int] = Query(None, alias="text_bg_full_width"),
+    q_title_max_lines: Optional[int] = Query(None, alias="title_max_lines"),
+    q_show_category: Optional[int] = Query(None, alias="show_category"),
+    q_category_bg_color: Optional[str] = Query(None, alias="category_bg_color"),
+    q_category_text_color: Optional[str] = Query(None, alias="category_text_color"),
+    q_category_position: Optional[str] = Query(None, alias="category_position"),
 ):
     if not _require_admin(request, db):
         from fastapi.responses import Response
@@ -436,6 +477,15 @@ async def preview_image(
             banner_font_weight=_eff(q_banner_font_weight, cfg.banner_font_weight if cfg else None, "bold"),
             banner_y_offset=_eff(q_banner_y_offset, cfg.banner_y_offset if cfg else None, 0),
             banner_align=_eff(q_banner_align, cfg.banner_align if cfg else None, "center"),
+            text_bg_padding_x=_eff(q_text_bg_padding_x, cfg.text_bg_padding_x if cfg else None, 0),
+            text_bg_padding_y=_eff(q_text_bg_padding_y, cfg.text_bg_padding_y if cfg else None, 18),
+            text_bg_full_width=bool(_eff(q_text_bg_full_width, (1 if cfg and cfg.text_bg_full_width else 0) if cfg else None, 1)),
+            title_max_lines=_eff(q_title_max_lines, cfg.title_max_lines if cfg else None, 4),
+            category="Categoría de ejemplo" if _eff(q_show_category, (1 if cfg and cfg.show_category else 0) if cfg else None, 0) else None,
+            show_category=bool(_eff(q_show_category, (1 if cfg and cfg.show_category else 0) if cfg else None, 0)),
+            category_bg_color=_eff(q_category_bg_color, cfg.category_bg_color if cfg else None, "#e53935"),
+            category_text_color=_eff(q_category_text_color, cfg.category_text_color if cfg else None, "#ffffff"),
+            category_position=_eff(q_category_position, cfg.category_position if cfg else None, "top-left"),
         )
     except Exception as exc:
         log.error("Error generando imagen de preview: %s", exc, exc_info=True)

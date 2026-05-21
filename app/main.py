@@ -231,6 +231,22 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN banner_y_offset INTEGER DEFAULT 0"))
             if "banner_align" not in ig_cols:
                 conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN banner_align VARCHAR(10) DEFAULT 'center'"))
+            if "text_bg_padding_x" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN text_bg_padding_x INTEGER DEFAULT 0"))
+            if "text_bg_padding_y" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN text_bg_padding_y INTEGER DEFAULT 18"))
+            if "text_bg_full_width" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN text_bg_full_width BOOLEAN DEFAULT 1"))
+            if "title_max_lines" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN title_max_lines INTEGER DEFAULT 4"))
+            if "show_category" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN show_category BOOLEAN DEFAULT 0"))
+            if "category_bg_color" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN category_bg_color VARCHAR(10) DEFAULT '#e53935'"))
+            if "category_text_color" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN category_text_color VARCHAR(10) DEFAULT '#ffffff'"))
+            if "category_position" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN category_position VARCHAR(20) DEFAULT 'top-left'"))
             # Migrar font_family legacy a nombres reales de Google Fonts
             conn.execute(text("UPDATE instagram_settings SET font_family = 'Montserrat' WHERE font_family = 'sans' OR font_family IS NULL"))
             conn.execute(text("UPDATE instagram_settings SET font_family = 'Playfair Display' WHERE font_family = 'serif'"))

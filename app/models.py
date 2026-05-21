@@ -323,6 +323,17 @@ class InstagramSettings(Base):
     banner_font_weight = Column(String(20), default="bold")
     banner_y_offset = Column(Integer, default=0)
     banner_align = Column(String(10), default="center")
+    # Fondo del título
+    text_bg_padding_x = Column(Integer, default=0)
+    text_bg_padding_y = Column(Integer, default=18)
+    text_bg_full_width = Column(Boolean, default=True)
+    # Límite de líneas
+    title_max_lines = Column(Integer, default=4)
+    # Badge de categoría
+    show_category = Column(Boolean, default=False)
+    category_bg_color = Column(String(10), default="#e53935")
+    category_text_color = Column(String(10), default="#ffffff")
+    category_position = Column(String(20), default="top-left")
     # Control
     is_active = Column(Boolean, default=False)
     max_posts_per_day = Column(Integer, default=10)
