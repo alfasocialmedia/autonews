@@ -122,26 +122,47 @@ def _draw_title(
     title: str,
     font_size: int = 62,
     text_color: str = "#ffffff",
-    bottom_offset: int = 80,
     text_align: str = "left",
     font_family: str = "Montserrat",
     font_weight: str = "bold",
     text_bg_color: str = "#000000",
     text_bg_opacity: int = 0,
-    text_bg_padding_x: int = 0,
+    text_bg_padding_x: int = 40,
     text_bg_padding_y: int = 18,
-    text_bg_full_width: bool = True,
     title_max_lines: int = 4,
+    text_box_x_pct: int = 0,
+    text_box_y_pct: int = 70,
+    text_box_w_pct: int = 100,
 ) -> Image.Image:
-    """Dibuja el título con sombra múltiple, alineación y tipografía configurables."""
+    """Dibuja el título dentro de una caja posicionable.
+
+    La caja define el área del título: posición (x_pct, y_pct) y ancho (w_pct)
+    en porcentaje del tamaño de la imagen. El alto se ajusta automáticamente
+    al contenido. El texto nunca se corta a mitad de palabra ni desborda la caja.
+    """
     font = _load_font(font_size, family=font_family, weight=font_weight)
     tr, tg, tb = _hex_to_rgb(text_color)
-    padding_x = 50
-    usable_w = TARGET_W - padding_x * 2
+
+    # Calcular dimensiones de la caja en píxeles
+    box_x = int(TARGET_W * max(0, min(95, text_box_x_pct)) / 100)
+    box_y = int(TARGET_H * max(0, min(95, text_box_y_pct)) / 100)
+    box_w = int(TARGET_W * max(10, min(100, text_box_w_pct)) / 100)
+    # La caja no puede salirse por la derecha
+    box_w = min(box_w, TARGET_W - box_x)
+
+    pad_x = max(0, text_bg_padding_x)
+    pad_y = max(0, text_bg_padding_y)
+    usable_w = max(1, box_w - 2 * pad_x)
+
     lines = _wrap_by_pixels(title, font, usable_w, max_lines=max(1, title_max_lines))
     line_height = int(font_size * 1.25)
-    total_height = len(lines) * line_height
-    y_start = img.height - total_height - bottom_offset
+    total_text_h = len(lines) * line_height
+
+    # Alto de la caja: se ajusta exactamente al texto + padding vertical
+    box_h = total_text_h + 2 * pad_y
+    # No desbordar por abajo
+    if box_y + box_h > TARGET_H:
+        box_h = max(line_height, TARGET_H - box_y)
 
     base = img.convert("RGBA")
     txt_layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
@@ -149,38 +170,20 @@ def _draw_title(
 
     if text_bg_opacity > 0:
         bgr, bgg, bgb = _hex_to_rgb(text_bg_color)
-        if text_bg_full_width:
-            bg_x0, bg_x1 = 0, TARGET_W
-        else:
-            # Calcular el ancho real máximo de las líneas
-            max_line_w = max(
-                (_measure_text_w(draw, ln, font) for ln in lines),
-                default=usable_w,
-            )
-            if text_align == "center":
-                cx = img.width // 2
-                bg_x0 = max(0, cx - max_line_w // 2 - text_bg_padding_x)
-                bg_x1 = min(TARGET_W, cx + max_line_w // 2 + text_bg_padding_x)
-            elif text_align == "right":
-                bg_x0 = max(0, img.width - padding_x - max_line_w - text_bg_padding_x)
-                bg_x1 = min(TARGET_W, img.width - padding_x + text_bg_padding_x)
-            else:
-                bg_x0 = max(0, padding_x - text_bg_padding_x)
-                bg_x1 = min(TARGET_W, padding_x + max_line_w + text_bg_padding_x)
         draw.rectangle(
-            [bg_x0, y_start - text_bg_padding_y, bg_x1, y_start + total_height + text_bg_padding_y],
+            [box_x, box_y, box_x + box_w, box_y + box_h],
             fill=(bgr, bgg, bgb, min(255, text_bg_opacity)),
         )
 
-    y = y_start
+    y = box_y + pad_y
     for line in lines:
         line_w = _measure_text_w(draw, line, font)
         if text_align == "center":
-            x = (img.width - line_w) // 2
+            x = box_x + pad_x + (usable_w - line_w) // 2
         elif text_align == "right":
-            x = img.width - line_w - padding_x
+            x = box_x + box_w - pad_x - line_w
         else:
-            x = padding_x
+            x = box_x + pad_x
 
         for dx, dy in [(3, 3), (2, 2), (1, 1)]:
             draw.text((x + dx, y + dy), line, font=font, fill=(0, 0, 0, 160))
@@ -352,7 +355,7 @@ def build_instagram_image(
     banner_color: str = "#e53935",
     banner_text_color: str = "#ffffff",
     text_align: str = "left",
-    title_y_offset: int = 0,
+    title_y_offset: int = 0,   # legacy, no usado
     font_family: str = "Montserrat",
     font_weight: str = "bold",
     text_bg_color: str = "#000000",
@@ -361,42 +364,42 @@ def build_instagram_image(
     banner_font_weight: str = "bold",
     banner_y_offset: int = 0,
     banner_align: str = "center",
-    # Nuevos parámetros
-    text_bg_padding_x: int = 0,
+    text_bg_padding_x: int = 40,
     text_bg_padding_y: int = 18,
-    text_bg_full_width: bool = True,
+    text_bg_full_width: bool = True,   # legacy, no usado
     title_max_lines: int = 4,
     category: str | None = None,
     show_category: bool = False,
     category_bg_color: str = "#e53935",
     category_text_color: str = "#ffffff",
     category_x_percent: int = 0,
+    text_box_x_pct: int = 0,
+    text_box_y_pct: int = 70,
+    text_box_w_pct: int = 100,
 ) -> bytes:
     """
     Pipeline completo: recibe bytes de imagen, devuelve JPEG 1080×1440.
     font_weight / banner_font_weight: "regular" | "medium" | "bold" | "extrabold"
     banner_style: "pill" | "rect" | "none"
-    text_bg_opacity > 0: rectángulo detrás del título (ancho y padding controlables).
+    text_bg_opacity > 0: rectángulo detrás del título (caja posicionable).
     show_category: muestra badge de categoría en la esquina superior.
     """
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img = _crop_center(img, TARGET_W, TARGET_H)
     img = _add_gradient(img, gradient_height, color=gradient_color, max_opacity=gradient_opacity)
 
-    base_bottom = (BANNER_HEIGHT + BANNER_MARGIN + 20) if banner_text else 80
-    title_bottom = max(10, base_bottom + title_y_offset)
-
     img = _draw_title(
         img, title,
         font_size=font_size, text_color=text_color,
-        bottom_offset=title_bottom,
         text_align=text_align,
         font_family=font_family, font_weight=font_weight,
         text_bg_color=text_bg_color, text_bg_opacity=text_bg_opacity,
         text_bg_padding_x=text_bg_padding_x,
         text_bg_padding_y=text_bg_padding_y,
-        text_bg_full_width=text_bg_full_width,
         title_max_lines=title_max_lines,
+        text_box_x_pct=text_box_x_pct,
+        text_box_y_pct=text_box_y_pct,
+        text_box_w_pct=text_box_w_pct,
     )
 
     if banner_text:

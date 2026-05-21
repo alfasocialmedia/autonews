@@ -163,9 +163,7 @@
     {% set gh = cfg.gradient_height if cfg and cfg.gradient_height else 480 %}
     {% set tbo = cfg.text_bg_opacity if cfg and cfg.text_bg_opacity is not none else 0 %}
     {% set tbc = cfg.text_bg_color if cfg and cfg.text_bg_color else '#000000' %}
-    {% set tbpx = cfg.text_bg_padding_x if cfg and cfg.text_bg_padding_x is not none else 0 %}
     {% set tbpy = cfg.text_bg_padding_y if cfg and cfg.text_bg_padding_y is not none else 18 %}
-    {% set tbfw = cfg.text_bg_full_width if cfg and cfg.text_bg_full_width is not none else true %}
     {% set tml = cfg.title_max_lines if cfg and cfg.title_max_lines else 4 %}
     {% set bs = cfg.banner_style if cfg and cfg.banner_style else 'pill' %}
     {% set bfw = cfg.banner_font_weight if cfg and cfg.banner_font_weight else 'bold' %}
@@ -176,6 +174,10 @@
     {% set ctc = cfg.category_text_color if cfg and cfg.category_text_color else '#ffffff' %}
     {% set cp = cfg.category_position if cfg and cfg.category_position else 'top-left' %}
     {% set cxp = cfg.category_x_percent if cfg and cfg.category_x_percent is not none else 0 %}
+    {% set tbx = cfg.text_box_x_pct if cfg and cfg.text_box_x_pct is not none else 0 %}
+    {% set tby = cfg.text_box_y_pct if cfg and cfg.text_box_y_pct is not none else 70 %}
+    {% set tbw = cfg.text_box_w_pct if cfg and cfg.text_box_w_pct is not none else 100 %}
+    {% set tbpx = cfg.text_bg_padding_x if cfg and cfg.text_bg_padding_x is not none else 40 %}
 
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
@@ -291,18 +293,6 @@
                   <label class="btn btn-sm btn-outline-secondary" for="align_right"><i class="bi bi-text-right"></i> Der.</label>
                 </div>
               </div>
-              <div class="mb-2">
-                <label class="form-label small d-flex justify-content-between mb-1">
-                  <span>Posición vertical</span>
-                  <span class="badge bg-secondary fw-normal" id="yOffsetDisplay">{{ yo }} px</span>
-                </label>
-                <input type="range" name="title_y_offset" form="igForm" class="form-range" id="titleYOffset"
-                       min="-100" max="900" step="10" value="{{ yo }}">
-                <div class="d-flex justify-content-between">
-                  <small class="text-muted">↓ más abajo</small>
-                  <small class="text-muted">↑ más arriba</small>
-                </div>
-              </div>
               <div>
                 <label class="form-label small d-flex justify-content-between mb-1">
                   <span>Máx. líneas</span>
@@ -336,24 +326,43 @@
               </div>
               <div class="mb-2">
                 <label class="form-label small d-flex justify-content-between mb-1">
-                  <span>Padding vertical</span>
-                  <span class="badge bg-secondary fw-normal" id="textBgPaddingYDisplay">{{ tbpy }} px</span>
+                  <span>Posición X (izq→der)</span>
+                  <span class="badge bg-secondary fw-normal" id="textBoxXDisplay">{{ tbx }}%</span>
                 </label>
-                <input type="range" name="text_bg_padding_y" form="igForm" class="form-range" id="textBgPaddingY"
-                       min="0" max="100" step="2" value="{{ tbpy }}">
+                <input type="range" name="text_box_x_pct" form="igForm" class="form-range" id="textBoxX"
+                       min="0" max="90" step="5" value="{{ tbx }}">
               </div>
-              <div class="form-check form-switch mb-2">
-                <input class="form-check-input" type="checkbox" role="switch" name="text_bg_full_width" id="textBgFullWidth" form="igForm"
-                       {% if tbfw %}checked{% endif %}>
-                <label class="form-check-label small" for="textBgFullWidth">Ancho completo</label>
-              </div>
-              <div id="textBgPaddingRow" {% if tbfw %}style="display:none"{% endif %}>
+              <div class="mb-2">
                 <label class="form-label small d-flex justify-content-between mb-1">
-                  <span>Padding lateral</span>
+                  <span>Posición Y (arriba→abajo)</span>
+                  <span class="badge bg-secondary fw-normal" id="textBoxYDisplay">{{ tby }}%</span>
+                </label>
+                <input type="range" name="text_box_y_pct" form="igForm" class="form-range" id="textBoxY"
+                       min="0" max="95" step="5" value="{{ tby }}">
+              </div>
+              <div class="mb-2">
+                <label class="form-label small d-flex justify-content-between mb-1">
+                  <span>Ancho del cuadro</span>
+                  <span class="badge bg-secondary fw-normal" id="textBoxWDisplay">{{ tbw }}%</span>
+                </label>
+                <input type="range" name="text_box_w_pct" form="igForm" class="form-range" id="textBoxW"
+                       min="10" max="100" step="5" value="{{ tbw }}">
+              </div>
+              <div class="mb-2">
+                <label class="form-label small d-flex justify-content-between mb-1">
+                  <span>Padding interno (lateral)</span>
                   <span class="badge bg-secondary fw-normal" id="textBgPaddingXDisplay">{{ tbpx }} px</span>
                 </label>
                 <input type="range" name="text_bg_padding_x" form="igForm" class="form-range" id="textBgPaddingX"
                        min="0" max="200" step="5" value="{{ tbpx }}">
+              </div>
+              <div>
+                <label class="form-label small d-flex justify-content-between mb-1">
+                  <span>Padding interno (vertical)</span>
+                  <span class="badge bg-secondary fw-normal" id="textBgPaddingYDisplay">{{ tbpy }} px</span>
+                </label>
+                <input type="range" name="text_bg_padding_y" form="igForm" class="form-range" id="textBgPaddingY"
+                       min="0" max="100" step="2" value="{{ tbpy }}">
               </div>
             </div>
 
@@ -714,15 +723,15 @@ function _collectPreviewParams() {
   [
     'gradient_color','gradient_opacity','gradient_height',
     'font_size','text_color','banner_text','banner_color','banner_text_color',
-    'text_align','title_y_offset','font_family','font_weight',
+    'text_align','font_family','font_weight',
     'logo_size','text_bg_color','text_bg_opacity',
     'banner_style','banner_font_weight','banner_y_offset','banner_align',
     'text_bg_padding_x','text_bg_padding_y','title_max_lines',
     'category_bg_color','category_text_color','category_x_percent',
+    'text_box_x_pct','text_box_y_pct','text_box_w_pct',
   ].forEach(f => { const v = fd.get(f); if (v !== null) params.set(f, v); });
   // Checkboxes (no aparecen en FormData si están unchecked)
-  params.set('text_bg_full_width', document.getElementById('textBgFullWidth')?.checked ? '1' : '0');
-  params.set('show_category',      document.getElementById('showCategory')?.checked ? '1' : '0');
+  params.set('show_category', document.getElementById('showCategory')?.checked ? '1' : '0');
   return params;
 }
 
@@ -782,11 +791,13 @@ _bindSlider('logoSize',           'logoSizeDisplay',           ' px');
 _bindSlider('gradOpacity',        'gradOpacityDisplay',        '');
 _bindSlider('gradHeight',         'gradHeightDisplay',         ' px');
 _bindSlider('fontSize',           'fontSizeDisplay',           ' px');
-_bindSlider('titleYOffset',       'yOffsetDisplay',            ' px');
 _bindSlider('titleMaxLines',      'titleMaxLinesDisplay',      '');
 _bindSlider('textBgOpacity',      'textBgOpacityDisplay',      '', v => v == '0' ? '0 (off)' : v);
 _bindSlider('textBgPaddingX',     'textBgPaddingXDisplay',     ' px');
 _bindSlider('textBgPaddingY',     'textBgPaddingYDisplay',     ' px');
+_bindSlider('textBoxX',           'textBoxXDisplay',           '%');
+_bindSlider('textBoxY',           'textBoxYDisplay',           '%');
+_bindSlider('textBoxW',           'textBoxWDisplay',           '%');
 _bindSlider('bannerYOffset',      'bannerYOffsetDisplay',      ' px');
 _bindSlider('categoryXPercent',   'categoryXPercentDisplay',   '%');
 
@@ -812,11 +823,6 @@ document.querySelectorAll('[name="banner_align"]').forEach(el =>
 // Banner text: debounce más largo (el usuario escribe)
 document.getElementById('bannerText')?.addEventListener('input', () => _schedulePreview(600));
 
-// Toggle ancho completo del fondo → mostrar/ocultar sliders de padding
-document.getElementById('textBgFullWidth')?.addEventListener('change', function() {
-  document.getElementById('textBgPaddingRow').style.display = this.checked ? 'none' : '';
-  _schedulePreview(300);
-});
 // Toggle mostrar categoría → mostrar/ocultar controles
 document.getElementById('showCategory')?.addEventListener('change', function() {
   document.getElementById('categoryRow').style.display = this.checked ? '' : 'none';

@@ -958,6 +958,9 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
             category_bg_color=ig.category_bg_color or "#e53935",
             category_text_color=ig.category_text_color or "#ffffff",
             category_x_percent=ig.category_x_percent if ig.category_x_percent is not None else 0,
+            text_box_x_pct=ig.text_box_x_pct if ig.text_box_x_pct is not None else 0,
+            text_box_y_pct=ig.text_box_y_pct if ig.text_box_y_pct is not None else 70,
+            text_box_w_pct=ig.text_box_w_pct if ig.text_box_w_pct is not None else 100,
         )
         except Exception as build_exc:
             log.error("[IG] Error en build_instagram_image: %s", build_exc, exc_info=True)
