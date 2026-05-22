@@ -279,8 +279,9 @@ def _draw_category_badge(
     font_family: str = "Montserrat",
     font_weight: str = "bold",
     x_percent: int = 0,
+    y_percent: int = 0,
 ) -> Image.Image:
-    """Dibuja el badge de categoría (ej: 'POLICIALES'). x_percent 0=izquierda, 100=derecha."""
+    """Dibuja el badge de categoría. x_percent 0=izq 100=der, y_percent 0=arriba 100=abajo."""
     if not category or not category.strip():
         return img
 
@@ -302,9 +303,10 @@ def _draw_category_badge(
     box_h = text_h + pad_y * 2
     margin = BANNER_MARGIN
 
-    travel = max(0, img.width - box_w - margin * 2)
-    x0 = margin + travel * max(0, min(100, x_percent)) // 100
-    y0 = margin
+    travel_x = max(0, img.width - box_w - margin * 2)
+    travel_y = max(0, img.height - box_h - margin * 2)
+    x0 = margin + travel_x * max(0, min(100, x_percent)) // 100
+    y0 = margin + travel_y * max(0, min(100, y_percent)) // 100
     x1 = x0 + box_w
     y1 = y0 + box_h
 
@@ -373,6 +375,9 @@ def build_instagram_image(
     category_bg_color: str = "#e53935",
     category_text_color: str = "#ffffff",
     category_x_percent: int = 0,
+    category_y_percent: int = 0,
+    banner_font_family: str = "Montserrat",
+    category_font_family: str = "Montserrat",
     text_box_x_pct: int = 0,
     text_box_y_pct: int = 70,
     text_box_w_pct: int = 100,
@@ -407,7 +412,7 @@ def build_instagram_image(
             img, banner_text,
             bg_color=banner_color, text_color=banner_text_color,
             banner_style=banner_style,
-            font_family=font_family, font_weight=banner_font_weight,
+            font_family=banner_font_family, font_weight=banner_font_weight,
             y_offset=banner_y_offset, align=banner_align,
         )
 
@@ -415,8 +420,9 @@ def build_instagram_image(
         img = _draw_category_badge(
             img, category,
             bg_color=category_bg_color, text_color=category_text_color,
-            font_family=font_family, font_weight=font_weight,
+            font_family=category_font_family, font_weight=font_weight,
             x_percent=category_x_percent,
+            y_percent=category_y_percent,
         )
 
     if logo_path:

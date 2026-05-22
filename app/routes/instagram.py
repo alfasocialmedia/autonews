@@ -117,6 +117,9 @@ async def instagram_create(
     category_bg_color: str = Form("#e53935"),
     category_text_color: str = Form("#ffffff"),
     category_x_percent: int = Form(0),
+    category_y_percent: int = Form(0),
+    banner_font_family: str = Form("Montserrat"),
+    category_font_family: str = Form("Montserrat"),
     text_box_x_pct: int = Form(0),
     text_box_y_pct: int = Form(70),
     text_box_w_pct: int = Form(100),
@@ -140,7 +143,8 @@ async def instagram_create(
                        banner_style, banner_font_weight, banner_y_offset, banner_align,
                        text_bg_padding_x, text_bg_padding_y, text_bg_full_width,
                        title_max_lines, show_category, category_bg_color,
-                       category_text_color, category_x_percent,
+                       category_text_color, category_x_percent, category_y_percent,
+                       banner_font_family, category_font_family,
                        text_box_x_pct, text_box_y_pct, text_box_w_pct,
                        logo, db)
     db.commit()
@@ -201,6 +205,9 @@ async def instagram_save(
     category_bg_color: str = Form("#e53935"),
     category_text_color: str = Form("#ffffff"),
     category_x_percent: int = Form(0),
+    category_y_percent: int = Form(0),
+    banner_font_family: str = Form("Montserrat"),
+    category_font_family: str = Form("Montserrat"),
     text_box_x_pct: int = Form(0),
     text_box_y_pct: int = Form(70),
     text_box_w_pct: int = Form(100),
@@ -226,7 +233,8 @@ async def instagram_save(
                            banner_style, banner_font_weight, banner_y_offset, banner_align,
                            text_bg_padding_x, text_bg_padding_y, text_bg_full_width,
                            title_max_lines, show_category, category_bg_color,
-                           category_text_color, category_x_percent,
+                           category_text_color, category_x_percent, category_y_percent,
+                           banner_font_family, category_font_family,
                            text_box_x_pct, text_box_y_pct, text_box_w_pct,
                            logo, db)
         db.commit()
@@ -263,7 +271,8 @@ def _apply_form_to_cfg(
     banner_y_offset: int, banner_align: str,
     text_bg_padding_x: int, text_bg_padding_y: int, text_bg_full_width: str,
     title_max_lines: int, show_category: str,
-    category_bg_color: str, category_text_color: str, category_x_percent: int,
+    category_bg_color: str, category_text_color: str, category_x_percent: int, category_y_percent: int,
+    banner_font_family: str, category_font_family: str,
     text_box_x_pct: int, text_box_y_pct: int, text_box_w_pct: int,
     logo: Optional[UploadFile], db: Session,
 ):
@@ -302,7 +311,11 @@ def _apply_form_to_cfg(
     cfg.category_bg_color = category_bg_color if category_bg_color.startswith("#") else "#e53935"
     cfg.category_text_color = category_text_color if category_text_color.startswith("#") else "#ffffff"
     cfg.category_x_percent = max(0, min(100, category_x_percent))
+    cfg.category_y_percent = max(0, min(100, category_y_percent))
     cfg.category_position = "top-right" if cfg.category_x_percent >= 50 else "top-left"
+    from app.services.gfonts_service import LEGACY_MAP as _LM
+    cfg.banner_font_family = _LM.get(banner_font_family, banner_font_family) if banner_font_family in _VALID_FONTS or banner_font_family in _LM else "Montserrat"
+    cfg.category_font_family = _LM.get(category_font_family, category_font_family) if category_font_family in _VALID_FONTS or category_font_family in _LM else "Montserrat"
     cfg.text_box_x_pct = max(0, min(90, text_box_x_pct))
     cfg.text_box_y_pct = max(0, min(95, text_box_y_pct))
     cfg.text_box_w_pct = max(10, min(100, text_box_w_pct))
@@ -432,6 +445,9 @@ async def preview_image(
     q_category_bg_color: Optional[str] = Query(None, alias="category_bg_color"),
     q_category_text_color: Optional[str] = Query(None, alias="category_text_color"),
     q_category_x_percent: Optional[int] = Query(None, alias="category_x_percent"),
+    q_category_y_percent: Optional[int] = Query(None, alias="category_y_percent"),
+    q_banner_font_family: Optional[str] = Query(None, alias="banner_font_family"),
+    q_category_font_family: Optional[str] = Query(None, alias="category_font_family"),
     q_text_box_x_pct: Optional[int] = Query(None, alias="text_box_x_pct"),
     q_text_box_y_pct: Optional[int] = Query(None, alias="text_box_y_pct"),
     q_text_box_w_pct: Optional[int] = Query(None, alias="text_box_w_pct"),
@@ -502,6 +518,9 @@ async def preview_image(
             category_bg_color=_eff(q_category_bg_color, cfg.category_bg_color if cfg else None, "#e53935"),
             category_text_color=_eff(q_category_text_color, cfg.category_text_color if cfg else None, "#ffffff"),
             category_x_percent=_eff(q_category_x_percent, cfg.category_x_percent if cfg else None, 0),
+            category_y_percent=_eff(q_category_y_percent, cfg.category_y_percent if cfg else None, 0),
+            banner_font_family=_eff(q_banner_font_family, cfg.banner_font_family if cfg else None, "Montserrat"),
+            category_font_family=_eff(q_category_font_family, cfg.category_font_family if cfg else None, "Montserrat"),
             text_box_x_pct=_eff(q_text_box_x_pct, cfg.text_box_x_pct if cfg else None, 0),
             text_box_y_pct=_eff(q_text_box_y_pct, cfg.text_box_y_pct if cfg else None, 70),
             text_box_w_pct=_eff(q_text_box_w_pct, cfg.text_box_w_pct if cfg else None, 100),
@@ -651,6 +670,9 @@ async def test_publish_instagram(account_id: int, request: Request, db: Session 
             category_bg_color=cfg.category_bg_color or "#e53935",
             category_text_color=cfg.category_text_color or "#ffffff",
             category_x_percent=cfg.category_x_percent if cfg.category_x_percent is not None else 0,
+            category_y_percent=cfg.category_y_percent if cfg.category_y_percent is not None else 0,
+            banner_font_family=cfg.banner_font_family or "Montserrat",
+            category_font_family=cfg.category_font_family or "Montserrat",
             text_box_x_pct=cfg.text_box_x_pct if cfg.text_box_x_pct is not None else 0,
             text_box_y_pct=cfg.text_box_y_pct if cfg.text_box_y_pct is not None else 70,
             text_box_w_pct=cfg.text_box_w_pct if cfg.text_box_w_pct is not None else 100,

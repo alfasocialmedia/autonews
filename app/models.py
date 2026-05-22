@@ -332,12 +332,16 @@ class InstagramSettings(Base):
     text_box_w_pct = Column(Integer, default=100)      # ancho del cuadro (% ancho imagen)
     # Límite de líneas
     title_max_lines = Column(Integer, default=4)
+    # Fuentes independientes por sección
+    banner_font_family = Column(String(50), default="Montserrat")
+    category_font_family = Column(String(50), default="Montserrat")
     # Badge de categoría
     show_category = Column(Boolean, default=False)
     category_bg_color = Column(String(10), default="#e53935")
     category_text_color = Column(String(10), default="#ffffff")
     category_position = Column(String(20), default="top-left")
     category_x_percent = Column(Integer, default=0)
+    category_y_percent = Column(Integer, default=0)
     # Control
     is_active = Column(Boolean, default=False)
     max_posts_per_day = Column(Integer, default=10)
