@@ -33,13 +33,19 @@ _BUNDLED_FALLBACKS = [
 
 def _load_font(size: int, family: str = "Montserrat", weight: str = "bold") -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     """Carga fuente desde gfonts_service (con descarga y caché) con fallback a bundleadas."""
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
     from app.services.gfonts_service import get_font_path
     path = get_font_path(family, weight)
     if path and os.path.exists(path):
         try:
             return ImageFont.truetype(path, size)
-        except Exception:
-            pass
+        except Exception as _e:
+            _log.warning("Fuente %s/%s: error al cargar '%s': %s", family, weight, path, _e)
+    elif path:
+        _log.warning("Fuente %s/%s: archivo no existe en '%s'", family, weight, path)
+    else:
+        _log.warning("Fuente %s/%s: no se pudo obtener ruta (sin internet o sin caché)", family, weight)
     # Fallback a fuentes bundleadas
     for p in _BUNDLED_FALLBACKS:
         if os.path.exists(p):
@@ -133,12 +139,14 @@ def _draw_title(
     text_box_x_pct: int = 0,
     text_box_y_pct: int = 70,
     text_box_w_pct: int = 100,
+    max_bottom_y: int | None = None,
 ) -> Image.Image:
     """Dibuja el título dentro de una caja posicionable.
 
     La caja define el área del título: posición (x_pct, y_pct) y ancho (w_pct)
     en porcentaje del tamaño de la imagen. El alto se ajusta automáticamente
     al contenido. El texto nunca se corta a mitad de palabra ni desborda la caja.
+    Si max_bottom_y se indica, la caja sube automáticamente para no superponerse.
     """
     font = _load_font(font_size, family=font_family, weight=font_weight)
     tr, tg, tb = _hex_to_rgb(text_color)
@@ -160,6 +168,11 @@ def _draw_title(
 
     # Alto de la caja: se ajusta exactamente al texto + padding vertical
     box_h = total_text_h + 2 * pad_y
+
+    # Auto-subir si el título taparía la franja inferior
+    if max_bottom_y is not None and box_y + box_h > max_bottom_y:
+        box_y = max(0, max_bottom_y - box_h)
+
     # No desbordar por abajo
     if box_y + box_h > TARGET_H:
         box_h = max(line_height, TARGET_H - box_y)
@@ -203,9 +216,11 @@ def _draw_banner(
     font_weight: str = "bold",
     y_offset: int = 0,
     align: str = "center",
+    title_x: int | None = None,
 ) -> Image.Image:
     """Dibuja la franja inferior con estilo configurable: 'pill', 'rect' o 'none'.
-    y_offset > 0 sube la franja, < 0 la baja. align: 'left'|'center'|'right'."""
+    y_offset > 0 sube la franja, < 0 la baja. align: 'left'|'center'|'right'.
+    title_x: si se indica y align=='left', alinea el borde izquierdo con el título."""
     if not text or not text.strip():
         return img
 
@@ -227,7 +242,7 @@ def _draw_banner(
     if banner_style == "none":
         # Solo texto con sombra, sin fondo
         if align == "left":
-            tx = BANNER_MARGIN
+            tx = title_x if title_x is not None else BANNER_MARGIN
         elif align == "right":
             tx = img.width - text_w - BANNER_MARGIN
         else:
@@ -248,7 +263,8 @@ def _draw_banner(
     box_h = text_h + pad_y * 2
 
     if align == "left":
-        x0 = BANNER_MARGIN
+        x0 = title_x if title_x is not None else BANNER_MARGIN
+        x0 = max(0, min(x0, img.width - box_w - BANNER_MARGIN))
     elif align == "right":
         x0 = img.width - box_w - BANNER_MARGIN
     else:
@@ -393,6 +409,12 @@ def build_instagram_image(
     img = _crop_center(img, TARGET_W, TARGET_H)
     img = _add_gradient(img, gradient_height, color=gradient_color, max_opacity=gradient_opacity)
 
+    # Borde superior del banner para que el título suba automáticamente si es largo
+    title_box_x = int(TARGET_W * max(0, min(95, text_box_x_pct)) / 100)
+    banner_max_bottom_y: int | None = None
+    if banner_text and banner_text.strip():
+        banner_max_bottom_y = TARGET_H - BANNER_HEIGHT - BANNER_MARGIN - banner_y_offset - 12
+
     img = _draw_title(
         img, title,
         font_size=font_size, text_color=text_color,
@@ -405,6 +427,7 @@ def build_instagram_image(
         text_box_x_pct=text_box_x_pct,
         text_box_y_pct=text_box_y_pct,
         text_box_w_pct=text_box_w_pct,
+        max_bottom_y=banner_max_bottom_y,
     )
 
     if banner_text:
@@ -414,6 +437,7 @@ def build_instagram_image(
             banner_style=banner_style,
             font_family=banner_font_family, font_weight=banner_font_weight,
             y_offset=banner_y_offset, align=banner_align,
+            title_x=title_box_x if banner_align == "left" else None,
         )
 
     if show_category and category:
