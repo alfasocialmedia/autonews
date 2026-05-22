@@ -183,6 +183,14 @@
     {% set tby = cfg.text_box_y_pct if cfg and cfg.text_box_y_pct is not none else 70 %}
     {% set tbw = cfg.text_box_w_pct if cfg and cfg.text_box_w_pct is not none else 100 %}
     {% set tbpx = cfg.text_bg_padding_x if cfg and cfg.text_bg_padding_x is not none else 40 %}
+    {% set tbbr = cfg.text_bg_border_radius if cfg and cfg.text_bg_border_radius is not none else 0 %}
+    {% set tbbw = cfg.text_bg_border_width if cfg and cfg.text_bg_border_width is not none else 0 %}
+    {% set tbbc = cfg.text_bg_border_color if cfg and cfg.text_bg_border_color else '#ffffff' %}
+    {% set tbhp = cfg.text_bg_height_pct if cfg and cfg.text_bg_height_pct is not none else 0 %}
+    {% set banbr = cfg.banner_border_radius if cfg and cfg.banner_border_radius is not none else '' %}
+    {% set banbw = cfg.banner_border_width if cfg and cfg.banner_border_width is not none else 0 %}
+    {% set banbc = cfg.banner_border_color if cfg and cfg.banner_border_color else '#ffffff' %}
+    {% set banfw = cfg.banner_full_width if cfg and cfg.banner_full_width is not none else false %}
 
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
@@ -361,13 +369,45 @@
                 <input type="range" name="text_bg_padding_x" form="igForm" class="form-range" id="textBgPaddingX"
                        min="0" max="200" step="5" value="{{ tbpx }}">
               </div>
-              <div>
+              <div class="mb-2">
                 <label class="form-label small d-flex justify-content-between mb-1">
                   <span>Padding interno (vertical)</span>
                   <span class="badge bg-secondary fw-normal" id="textBgPaddingYDisplay">{{ tbpy }} px</span>
                 </label>
                 <input type="range" name="text_bg_padding_y" form="igForm" class="form-range" id="textBgPaddingY"
                        min="0" max="100" step="2" value="{{ tbpy }}">
+              </div>
+              <div class="mb-2">
+                <label class="form-label small d-flex justify-content-between mb-1">
+                  <span>Alto fijo del cuadro</span>
+                  <span class="badge bg-secondary fw-normal" id="textBgHeightPctDisplay">{% if tbhp %}{{ tbhp }}%{% else %}Auto{% endif %}</span>
+                </label>
+                <input type="range" name="text_bg_height_pct" form="igForm" class="form-range" id="textBgHeightPct"
+                       min="0" max="80" step="2" value="{{ tbhp }}">
+                <div class="form-text">0 = altura automática según el texto.</div>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small d-flex justify-content-between mb-1">
+                  <span>Esquinas redondeadas</span>
+                  <span class="badge bg-secondary fw-normal" id="textBgBorderRadiusDisplay">{% if tbbr %}{{ tbbr }} px{% else %}0 (recto){% endif %}</span>
+                </label>
+                <input type="range" name="text_bg_border_radius" form="igForm" class="form-range" id="textBgBorderRadius"
+                       min="0" max="500" step="5" value="{{ tbbr }}">
+              </div>
+              <div class="row g-2">
+                <div class="col-8">
+                  <label class="form-label small d-flex justify-content-between mb-1" for="textBgBorderWidth">
+                    <span>Trazo (borde)</span>
+                    <span class="badge bg-secondary fw-normal" id="textBgBorderWidthDisplay">{% if tbbw %}{{ tbbw }} px{% else %}Sin trazo{% endif %}</span>
+                  </label>
+                  <input type="range" name="text_bg_border_width" form="igForm" class="form-range" id="textBgBorderWidth"
+                         min="0" max="40" step="1" value="{{ tbbw }}">
+                </div>
+                <div class="col-4">
+                  <label class="form-label small mb-1">Color trazo</label>
+                  <input type="color" name="text_bg_border_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                         value="{{ tbbc }}">
+                </div>
               </div>
             </div>
 
@@ -448,7 +488,7 @@
                   <label class="btn btn-sm btn-outline-secondary" for="baRight"><i class="bi bi-text-right"></i> Der.</label>
                 </div>
               </div>
-              <div>
+              <div class="mb-2">
                 <label class="form-label small d-flex justify-content-between mb-1">
                   <span>Posición vertical</span>
                   <span class="badge bg-secondary fw-normal" id="bannerYOffsetDisplay">{{ byo }} px</span>
@@ -458,6 +498,35 @@
                 <div class="d-flex justify-content-between">
                   <small class="text-muted">↓ más abajo</small>
                   <small class="text-muted">↑ más arriba</small>
+                </div>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" role="switch" name="banner_full_width" id="bannerFullWidth" form="igForm"
+                       {% if banfw %}checked{% endif %}>
+                <label class="form-check-label small" for="bannerFullWidth">Ancho completo (borde a borde)</label>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small d-flex justify-content-between mb-1">
+                  <span>Esquinas redondeadas</span>
+                  <span class="badge bg-secondary fw-normal" id="bannerBorderRadiusDisplay">{% if banbr != '' %}{{ banbr }} px{% else %}Auto (estilo){% endif %}</span>
+                </label>
+                <input type="range" name="banner_border_radius" form="igForm" class="form-range" id="bannerBorderRadius"
+                       min="-1" max="200" step="1" value="{{ banbr if banbr != '' else -1 }}">
+                <div class="form-text">-1 = automático según estilo (píldora/rect).</div>
+              </div>
+              <div class="row g-2">
+                <div class="col-8">
+                  <label class="form-label small d-flex justify-content-between mb-1" for="bannerBorderWidth">
+                    <span>Trazo (borde)</span>
+                    <span class="badge bg-secondary fw-normal" id="bannerBorderWidthDisplay">{% if banbw %}{{ banbw }} px{% else %}Sin trazo{% endif %}</span>
+                  </label>
+                  <input type="range" name="banner_border_width" form="igForm" class="form-range" id="bannerBorderWidth"
+                         min="0" max="20" step="1" value="{{ banbw }}">
+                </div>
+                <div class="col-4">
+                  <label class="form-label small mb-1">Color trazo</label>
+                  <input type="color" name="banner_border_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
+                         value="{{ banbc }}">
                 </div>
               </div>
             </div>
@@ -785,9 +854,12 @@ function _collectPreviewParams() {
     'category_bg_color','category_text_color','category_x_percent','category_y_percent',
     'category_font_family',
     'text_box_x_pct','text_box_y_pct','text_box_w_pct',
+    'text_bg_border_radius','text_bg_border_width','text_bg_border_color','text_bg_height_pct',
+    'banner_border_radius','banner_border_width','banner_border_color',
   ].forEach(f => { const v = fd.get(f); if (v !== null) params.set(f, v); });
   // Checkboxes (no aparecen en FormData si están unchecked)
   params.set('show_category', document.getElementById('showCategory')?.checked ? '1' : '0');
+  params.set('banner_full_width', document.getElementById('bannerFullWidth')?.checked ? '1' : '0');
   return params;
 }
 
@@ -860,13 +932,18 @@ _bindSlider('textBgPaddingY',     'textBgPaddingYDisplay',     ' px');
 _bindSlider('textBoxX',           'textBoxXDisplay',           '%');
 _bindSlider('textBoxY',           'textBoxYDisplay',           '%');
 _bindSlider('textBoxW',           'textBoxWDisplay',           '%');
-_bindSlider('bannerYOffset',      'bannerYOffsetDisplay',      ' px');
-_bindSlider('categoryXPercent',   'categoryXPercentDisplay',   '%');
-_bindSlider('categoryYPercent',   'categoryYPercentDisplay',   '%');
+_bindSlider('bannerYOffset',        'bannerYOffsetDisplay',        ' px');
+_bindSlider('categoryXPercent',     'categoryXPercentDisplay',     '%');
+_bindSlider('categoryYPercent',     'categoryYPercentDisplay',     '%');
+_bindSlider('textBgHeightPct',      'textBgHeightPctDisplay',      '', v => v == '0' ? 'Auto' : v + '%');
+_bindSlider('textBgBorderRadius',   'textBgBorderRadiusDisplay',   '', v => v == '0' ? '0 (recto)' : v + ' px');
+_bindSlider('textBgBorderWidth',    'textBgBorderWidthDisplay',    '', v => v == '0' ? 'Sin trazo' : v + ' px');
+_bindSlider('bannerBorderRadius',   'bannerBorderRadiusDisplay',   '', v => v == '-1' ? 'Auto (estilo)' : v + ' px');
+_bindSlider('bannerBorderWidth',    'bannerBorderWidthDisplay',    '', v => v == '0' ? 'Sin trazo' : v + ' px');
 
 // Color pickers → preview en cambio
 ['gradient_color','text_color','text_bg_color','banner_color','banner_text_color',
- 'category_bg_color','category_text_color'].forEach(name => {
+ 'category_bg_color','category_text_color','text_bg_border_color','banner_border_color'].forEach(name => {
   document.querySelector(`[name="${name}"]`)?.addEventListener('input', () => _schedulePreview(200));
 });
 // Selects → preview en cambio
@@ -892,6 +969,8 @@ document.getElementById('showCategory')?.addEventListener('change', function() {
   document.getElementById('categoryRow').style.display = this.checked ? '' : 'none';
   _schedulePreview(300);
 });
+// Toggle ancho completo banner
+document.getElementById('bannerFullWidth')?.addEventListener('change', () => _schedulePreview(250));
 
 // Botón manual
 const btnPreview = document.getElementById('btnPreview');

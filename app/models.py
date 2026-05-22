@@ -342,6 +342,16 @@ class InstagramSettings(Base):
     category_position = Column(String(20), default="top-left")
     category_x_percent = Column(Integer, default=0)
     category_y_percent = Column(Integer, default=0)
+    # Fondo del título — bordes y trazo
+    text_bg_border_radius = Column(Integer, default=0)          # radio de esquinas (px)
+    text_bg_border_width = Column(Integer, default=0)           # grosor del trazo (px)
+    text_bg_border_color = Column(String(10), default="#ffffff") # color del trazo
+    text_bg_height_pct = Column(Integer, default=0)             # alto fijo (% imagen); 0=auto
+    # Franja inferior — control fino
+    banner_border_radius = Column(Integer, nullable=True, default=None)  # None=usar pill/rect lógica
+    banner_border_width = Column(Integer, default=0)
+    banner_border_color = Column(String(10), default="#ffffff")
+    banner_full_width = Column(Boolean, default=False)
     # Control
     is_active = Column(Boolean, default=False)
     max_posts_per_day = Column(Integer, default=10)

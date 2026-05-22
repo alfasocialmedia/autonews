@@ -123,6 +123,14 @@ async def instagram_create(
     text_box_x_pct: int = Form(0),
     text_box_y_pct: int = Form(70),
     text_box_w_pct: int = Form(100),
+    text_bg_border_radius: int = Form(0),
+    text_bg_border_width: int = Form(0),
+    text_bg_border_color: str = Form("#ffffff"),
+    text_bg_height_pct: int = Form(0),
+    banner_border_radius: str = Form(""),
+    banner_border_width: int = Form(0),
+    banner_border_color: str = Form("#ffffff"),
+    banner_full_width: str = Form(""),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -146,6 +154,9 @@ async def instagram_create(
                        category_text_color, category_x_percent, category_y_percent,
                        banner_font_family, category_font_family,
                        text_box_x_pct, text_box_y_pct, text_box_w_pct,
+                       text_bg_border_radius, text_bg_border_width, text_bg_border_color,
+                       text_bg_height_pct, banner_border_radius, banner_border_width,
+                       banner_border_color, banner_full_width,
                        logo, db)
     db.commit()
     return RedirectResponse(f"/settings/instagram/{cfg.id}?msg=Cuenta+creada+correctamente", status_code=302)
@@ -211,6 +222,14 @@ async def instagram_save(
     text_box_x_pct: int = Form(0),
     text_box_y_pct: int = Form(70),
     text_box_w_pct: int = Form(100),
+    text_bg_border_radius: int = Form(0),
+    text_bg_border_width: int = Form(0),
+    text_bg_border_color: str = Form("#ffffff"),
+    text_bg_height_pct: int = Form(0),
+    banner_border_radius: str = Form(""),
+    banner_border_width: int = Form(0),
+    banner_border_color: str = Form("#ffffff"),
+    banner_full_width: str = Form(""),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -236,6 +255,9 @@ async def instagram_save(
                            category_text_color, category_x_percent, category_y_percent,
                            banner_font_family, category_font_family,
                            text_box_x_pct, text_box_y_pct, text_box_w_pct,
+                           text_bg_border_radius, text_bg_border_width, text_bg_border_color,
+                           text_bg_height_pct, banner_border_radius, banner_border_width,
+                           banner_border_color, banner_full_width,
                            logo, db)
         db.commit()
         return RedirectResponse(
@@ -274,6 +296,9 @@ def _apply_form_to_cfg(
     category_bg_color: str, category_text_color: str, category_x_percent: int, category_y_percent: int,
     banner_font_family: str, category_font_family: str,
     text_box_x_pct: int, text_box_y_pct: int, text_box_w_pct: int,
+    text_bg_border_radius: int, text_bg_border_width: int, text_bg_border_color: str,
+    text_bg_height_pct: int, banner_border_radius: str, banner_border_width: int,
+    banner_border_color: str, banner_full_width: str,
     logo: Optional[UploadFile], db: Session,
 ):
     from app.services.gfonts_service import LEGACY_MAP
@@ -319,6 +344,14 @@ def _apply_form_to_cfg(
     cfg.text_box_x_pct = max(0, min(90, text_box_x_pct))
     cfg.text_box_y_pct = max(0, min(95, text_box_y_pct))
     cfg.text_box_w_pct = max(10, min(100, text_box_w_pct))
+    cfg.text_bg_border_radius = max(0, min(500, text_bg_border_radius))
+    cfg.text_bg_border_width = max(0, min(40, text_bg_border_width))
+    cfg.text_bg_border_color = text_bg_border_color if text_bg_border_color.startswith("#") else "#ffffff"
+    cfg.text_bg_height_pct = max(0, min(80, text_bg_height_pct))
+    cfg.banner_border_radius = int(banner_border_radius) if banner_border_radius.strip().lstrip("-").isdigit() else None
+    cfg.banner_border_width = max(0, min(20, banner_border_width))
+    cfg.banner_border_color = banner_border_color if banner_border_color.startswith("#") else "#ffffff"
+    cfg.banner_full_width = banner_full_width.lower() in ("on", "true", "1", "yes")
 
     if app_secret.strip():
         cfg.encrypted_app_secret = encrypt_value(app_secret.strip())
@@ -451,6 +484,14 @@ async def preview_image(
     q_text_box_x_pct: Optional[int] = Query(None, alias="text_box_x_pct"),
     q_text_box_y_pct: Optional[int] = Query(None, alias="text_box_y_pct"),
     q_text_box_w_pct: Optional[int] = Query(None, alias="text_box_w_pct"),
+    q_text_bg_border_radius: Optional[int] = Query(None, alias="text_bg_border_radius"),
+    q_text_bg_border_width: Optional[int] = Query(None, alias="text_bg_border_width"),
+    q_text_bg_border_color: Optional[str] = Query(None, alias="text_bg_border_color"),
+    q_text_bg_height_pct: Optional[int] = Query(None, alias="text_bg_height_pct"),
+    q_banner_border_radius: Optional[int] = Query(None, alias="banner_border_radius"),
+    q_banner_border_width: Optional[int] = Query(None, alias="banner_border_width"),
+    q_banner_border_color: Optional[str] = Query(None, alias="banner_border_color"),
+    q_banner_full_width: Optional[int] = Query(None, alias="banner_full_width"),
 ):
     if not _require_admin(request, db):
         from fastapi.responses import Response
@@ -524,6 +565,14 @@ async def preview_image(
             text_box_x_pct=_eff(q_text_box_x_pct, cfg.text_box_x_pct if cfg else None, 0),
             text_box_y_pct=_eff(q_text_box_y_pct, cfg.text_box_y_pct if cfg else None, 70),
             text_box_w_pct=_eff(q_text_box_w_pct, cfg.text_box_w_pct if cfg else None, 100),
+            text_bg_border_radius=_eff(q_text_bg_border_radius, cfg.text_bg_border_radius if cfg else None, 0),
+            text_bg_border_width=_eff(q_text_bg_border_width, cfg.text_bg_border_width if cfg else None, 0),
+            text_bg_border_color=_eff(q_text_bg_border_color, cfg.text_bg_border_color if cfg else None, "#ffffff"),
+            text_bg_height_pct=_eff(q_text_bg_height_pct, cfg.text_bg_height_pct if cfg else None, 0),
+            banner_border_radius=_eff(q_banner_border_radius, cfg.banner_border_radius if cfg else None, None),
+            banner_border_width=_eff(q_banner_border_width, cfg.banner_border_width if cfg else None, 0),
+            banner_border_color=_eff(q_banner_border_color, cfg.banner_border_color if cfg else None, "#ffffff"),
+            banner_full_width=bool(_eff(q_banner_full_width, (1 if cfg and cfg.banner_full_width else 0) if cfg else None, 0)),
         )
     except Exception as exc:
         log.error("Error generando imagen de preview: %s", exc, exc_info=True)

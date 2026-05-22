@@ -966,6 +966,14 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
             text_box_x_pct=ig.text_box_x_pct if ig.text_box_x_pct is not None else 0,
             text_box_y_pct=ig.text_box_y_pct if ig.text_box_y_pct is not None else 70,
             text_box_w_pct=ig.text_box_w_pct if ig.text_box_w_pct is not None else 100,
+            text_bg_border_radius=ig.text_bg_border_radius if ig.text_bg_border_radius is not None else 0,
+            text_bg_border_width=ig.text_bg_border_width if ig.text_bg_border_width is not None else 0,
+            text_bg_border_color=ig.text_bg_border_color or "#ffffff",
+            text_bg_height_pct=ig.text_bg_height_pct if ig.text_bg_height_pct is not None else 0,
+            banner_border_radius=ig.banner_border_radius,
+            banner_border_width=ig.banner_border_width if ig.banner_border_width is not None else 0,
+            banner_border_color=ig.banner_border_color or "#ffffff",
+            banner_full_width=bool(ig.banner_full_width),
         )
         except Exception as build_exc:
             log.error("[IG] Error en build_instagram_image: %s", build_exc, exc_info=True)

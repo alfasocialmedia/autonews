@@ -140,12 +140,17 @@ def _draw_title(
     text_box_y_pct: int = 70,
     text_box_w_pct: int = 100,
     max_bottom_y: int | None = None,
+    text_bg_border_radius: int = 0,
+    text_bg_border_width: int = 0,
+    text_bg_border_color: str = "#ffffff",
+    text_bg_height_pct: int = 0,
 ) -> Image.Image:
     """Dibuja el título dentro de una caja posicionable.
 
     La caja define el área del título: posición (x_pct, y_pct) y ancho (w_pct)
-    en porcentaje del tamaño de la imagen. El alto se ajusta automáticamente
-    al contenido. El texto nunca se corta a mitad de palabra ni desborda la caja.
+    en porcentaje del tamaño de la imagen. El alto puede ser automático (basado
+    en el texto) o fijo (text_bg_height_pct > 0). Cuando el alto es fijo, el
+    texto se centra verticalmente dentro de la caja.
     Si max_bottom_y se indica, la caja sube automáticamente para no superponerse.
     """
     font = _load_font(font_size, family=font_family, weight=font_weight)
@@ -166,8 +171,11 @@ def _draw_title(
     line_height = int(font_size * 1.25)
     total_text_h = len(lines) * line_height
 
-    # Alto de la caja: se ajusta exactamente al texto + padding vertical
-    box_h = total_text_h + 2 * pad_y
+    # Alto de la caja: fijo por porcentaje o automático según contenido
+    if text_bg_height_pct and text_bg_height_pct > 0:
+        box_h = int(TARGET_H * max(1, min(80, text_bg_height_pct)) / 100)
+    else:
+        box_h = total_text_h + 2 * pad_y
 
     # Auto-subir si el título taparía la franja inferior
     if max_bottom_y is not None and box_y + box_h > max_bottom_y:
@@ -181,14 +189,34 @@ def _draw_title(
     txt_layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(txt_layer)
 
+    radius = max(0, min(text_bg_border_radius, min(box_w, box_h) // 2))
+    fill_color = None
     if text_bg_opacity > 0:
         bgr, bgg, bgb = _hex_to_rgb(text_bg_color)
-        draw.rectangle(
-            [box_x, box_y, box_x + box_w, box_y + box_h],
-            fill=(bgr, bgg, bgb, min(255, text_bg_opacity)),
-        )
+        fill_color = (bgr, bgg, bgb, min(255, text_bg_opacity))
 
-    y = box_y + pad_y
+    outline_color = None
+    outline_width = max(1, text_bg_border_width)
+    if text_bg_border_width > 0:
+        br2, bg2, bb2 = _hex_to_rgb(text_bg_border_color)
+        outline_color = (br2, bg2, bb2, 255)
+
+    if fill_color is not None or outline_color is not None:
+        rect = [box_x, box_y, box_x + box_w, box_y + box_h]
+        if radius > 0:
+            draw.rounded_rectangle(rect, radius=radius, fill=fill_color,
+                                   outline=outline_color, width=outline_width)
+        else:
+            draw.rectangle(rect, fill=fill_color,
+                           outline=outline_color, width=outline_width)
+
+    # Posición vertical del texto: centrado si el alto es fijo, al tope si es automático
+    if text_bg_height_pct and text_bg_height_pct > 0:
+        text_start_y = box_y + max(pad_y, (box_h - total_text_h) // 2)
+    else:
+        text_start_y = box_y + pad_y
+
+    y = text_start_y
     for line in lines:
         line_w = _measure_text_w(draw, line, font)
         if text_align == "center":
@@ -217,10 +245,16 @@ def _draw_banner(
     y_offset: int = 0,
     align: str = "center",
     title_x: int | None = None,
+    banner_border_radius: int | None = None,
+    banner_border_width: int = 0,
+    banner_border_color: str = "#ffffff",
+    banner_full_width: bool = False,
 ) -> Image.Image:
     """Dibuja la franja inferior con estilo configurable: 'pill', 'rect' o 'none'.
     y_offset > 0 sube la franja, < 0 la baja. align: 'left'|'center'|'right'.
-    title_x: si se indica y align=='left', alinea el borde izquierdo con el título."""
+    banner_border_radius: radio explícito en px (None=usar lógica pill/rect).
+    banner_full_width: extiende la caja de borde a borde de la imagen.
+    """
     if not text or not text.strip():
         return img
 
@@ -259,27 +293,47 @@ def _draw_banner(
     br, bg_, bb = _hex_to_rgb(bg_color)
     pad_x = 48
     pad_y = 14
-    box_w = min(text_w + pad_x * 2, img.width - BANNER_MARGIN * 2)
     box_h = text_h + pad_y * 2
 
-    if align == "left":
-        x0 = title_x if title_x is not None else BANNER_MARGIN
-        x0 = max(0, min(x0, img.width - box_w - BANNER_MARGIN))
-    elif align == "right":
-        x0 = img.width - box_w - BANNER_MARGIN
+    if banner_full_width:
+        x0, x1 = 0, img.width
+        box_w = img.width
     else:
-        x0 = (img.width - box_w) // 2
+        box_w = min(text_w + pad_x * 2, img.width - BANNER_MARGIN * 2)
+        if align == "left":
+            x0 = title_x if title_x is not None else BANNER_MARGIN
+            x0 = max(0, min(x0, img.width - box_w - BANNER_MARGIN))
+        elif align == "right":
+            x0 = img.width - box_w - BANNER_MARGIN
+        else:
+            x0 = (img.width - box_w) // 2
+        x1 = x0 + box_w
+
     y0 = img.height - box_h - BANNER_MARGIN - y_offset
-    x1 = x0 + box_w
     y1 = y0 + box_h
 
-    draw = ImageDraw.Draw(img)
-    if banner_style == "rect":
-        draw.rectangle([x0, y0, x1, y1], fill=(br, bg_, bb))
-    else:
-        # pill (default)
+    # Calcular radio: explícito > automático por estilo (-1 = usar lógica de estilo)
+    if banner_border_radius is not None and banner_border_radius >= 0:
+        radius = max(0, min(banner_border_radius, box_h // 2))
+    elif banner_style == "pill":
         radius = box_h // 2
-        draw.rounded_rectangle([x0, y0, x1, y1], radius=radius, fill=(br, bg_, bb))
+    else:
+        radius = 0
+
+    outline_color = None
+    outline_width = max(1, banner_border_width)
+    if banner_border_width > 0:
+        bo_r, bo_g, bo_b = _hex_to_rgb(banner_border_color)
+        outline_color = (bo_r, bo_g, bo_b)
+
+    draw = ImageDraw.Draw(img)
+    if radius > 0:
+        draw.rounded_rectangle([x0, y0, x1, y1], radius=radius,
+                               fill=(br, bg_, bb),
+                               outline=outline_color, width=outline_width)
+    else:
+        draw.rectangle([x0, y0, x1, y1], fill=(br, bg_, bb),
+                       outline=outline_color, width=outline_width)
 
     tx = x0 + (box_w - text_w) // 2
     ty = y0 + (box_h - text_h) // 2 - text_top
@@ -397,12 +451,27 @@ def build_instagram_image(
     text_box_x_pct: int = 0,
     text_box_y_pct: int = 70,
     text_box_w_pct: int = 100,
+    # Fondo del título — nuevas opciones
+    text_bg_border_radius: int = 0,
+    text_bg_border_width: int = 0,
+    text_bg_border_color: str = "#ffffff",
+    text_bg_height_pct: int = 0,
+    # Franja inferior — nuevas opciones
+    banner_border_radius: int | None = None,
+    banner_border_width: int = 0,
+    banner_border_color: str = "#ffffff",
+    banner_full_width: bool = False,
 ) -> bytes:
     """
     Pipeline completo: recibe bytes de imagen, devuelve JPEG 1080×1440.
     font_weight / banner_font_weight: "regular" | "medium" | "bold" | "extrabold"
     banner_style: "pill" | "rect" | "none"
     text_bg_opacity > 0: rectángulo detrás del título (caja posicionable).
+    text_bg_border_radius > 0: esquinas redondeadas del fondo (px).
+    text_bg_border_width > 0: trazo/borde alrededor del fondo.
+    text_bg_height_pct > 0: alto fijo del cuadro (% de la imagen); 0 = automático.
+    banner_border_radius: radio explícito del banner (None = usa pill/rect lógica).
+    banner_full_width: extiende el banner de borde a borde.
     show_category: muestra badge de categoría en la esquina superior.
     """
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -428,6 +497,10 @@ def build_instagram_image(
         text_box_y_pct=text_box_y_pct,
         text_box_w_pct=text_box_w_pct,
         max_bottom_y=banner_max_bottom_y,
+        text_bg_border_radius=text_bg_border_radius,
+        text_bg_border_width=text_bg_border_width,
+        text_bg_border_color=text_bg_border_color,
+        text_bg_height_pct=text_bg_height_pct,
     )
 
     if banner_text:
@@ -438,6 +511,10 @@ def build_instagram_image(
             font_family=banner_font_family, font_weight=banner_font_weight,
             y_offset=banner_y_offset, align=banner_align,
             title_x=title_box_x if banner_align == "left" else None,
+            banner_border_radius=banner_border_radius,
+            banner_border_width=banner_border_width,
+            banner_border_color=banner_border_color,
+            banner_full_width=banner_full_width,
         )
 
     if show_category and category:
