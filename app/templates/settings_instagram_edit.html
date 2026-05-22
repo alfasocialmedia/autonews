@@ -650,7 +650,7 @@
 
           <!-- Columna derecha: preview -->
           <div class="col-md-6 d-flex flex-column align-items-center justify-content-start">
-            <div id="previewContainer" class="w-100 text-center">
+            <div id="previewContainer" class="w-100 text-center" style="position:relative">
               <div id="previewSpinner" class="py-4 text-muted" style="display:none">
                 <span class="spinner-border spinner-border-sm me-1"></span>
                 <small>Generando…</small>
@@ -658,6 +658,12 @@
               <img id="previewImg" src="" alt="Vista previa Instagram"
                    class="rounded shadow" style="display:none;max-width:100%;max-height:600px">
               <p id="previewDim" class="text-muted mt-1 mb-0" style="display:none;font-size:.7rem">1080 × 1440 px · 4:5</p>
+            </div>
+            <div id="overlayControls" class="mt-2 d-flex gap-2 align-items-center" style="display:none!important">
+              <button type="button" class="btn btn-sm btn-outline-info" id="btnToggleOverlay">
+                <i class="bi bi-crop me-1"></i><span id="overlayBtnTxt">Ocultar guía</span>
+              </button>
+              <small class="text-muted">Arrastrá el recuadro para posicionar · bordes para redimensionar</small>
             </div>
             <p class="text-muted small mt-3 mb-0 text-center" id="previewHint">
               <i class="bi bi-hourglass-split me-1"></i>Cargando vista previa…
@@ -908,6 +914,12 @@ function _runPreview() {
       if (hint) hint.style.display = 'none';
       _previewLoaded = true;
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>'; }
+      // Inicializar overlay drag/resize después de que la imagen se renderice
+      const _doOverlay = () => _boxOverlay.refresh();
+      if (img.decode) { img.decode().then(_doOverlay).catch(_doOverlay); }
+      else { setTimeout(_doOverlay, 80); }
+      const _oc = document.getElementById('overlayControls');
+      if (_oc) _oc.style.cssText = 'margin-top:.5rem;display:flex!important;gap:.5rem;align-items:center;flex-wrap:wrap;';
     } else {
       const txt = await r.text().catch(() => `HTTP ${r.status}`);
       if (spinner) spinner.style.display = 'none';
@@ -926,6 +938,142 @@ function _schedulePreview(delay = 400) {
   clearTimeout(_previewTimer);
   _previewTimer = setTimeout(_runPreview, delay);
 }
+
+// ── Overlay drag & resize para el cuadro del título ────────────────────────
+const _boxOverlay = (() => {
+  let wrapEl = null, boxEl = null;
+  let hN = null, hS = null, hE = null, hW = null, hSE = null;
+  let _vis = true;
+
+  const _clamp = (v, a, b) => Math.max(a, Math.min(b, Math.round(v)));
+  const _sVal  = id => parseInt(document.getElementById(id)?.value ?? 0);
+  const _ftb   = ()  => !!document.getElementById('textBgFillToBottom')?.checked;
+
+  function _setSlider(sid, did, val, fmt) {
+    const s = document.getElementById(sid), d = document.getElementById(did);
+    if (s) s.value = val;
+    if (d) d.textContent = fmt ? fmt(String(val)) : val;
+  }
+
+  function _syncBoxFromSliders() {
+    if (!wrapEl || !boxEl) return;
+    const W = wrapEl.offsetWidth, H = wrapEl.offsetHeight;
+    if (!W || !H) return;
+    const x = _sVal('textBoxX'), y = _sVal('textBoxY'),
+          w = _sVal('textBoxW'), h = _sVal('textBgHeightPct');
+    const bx = x / 100 * W, by = y / 100 * H, bw = w / 100 * W;
+    const ftb = _ftb();
+    const bh = ftb ? (H - by) : (h > 0 ? h / 100 * H : Math.max(44, H * 0.07));
+    boxEl.style.left = bx + 'px'; boxEl.style.top  = by + 'px';
+    boxEl.style.width = bw + 'px'; boxEl.style.height = bh + 'px';
+    if (hS)  hS.style.display  = ftb ? 'none' : '';
+    if (hSE) hSE.style.display = ftb ? 'none' : '';
+    const lbl = boxEl.querySelector('.ovr-lbl');
+    if (lbl) lbl.textContent = ftb ? '⊞ Cuadro · extiende al borde ↓' : '⊞ Cuadro de título';
+  }
+
+  function _syncSlidersFromBox() {
+    if (!wrapEl || !boxEl) return;
+    const W = wrapEl.offsetWidth, H = wrapEl.offsetHeight;
+    const bx = parseFloat(boxEl.style.left)   || 0;
+    const by = parseFloat(boxEl.style.top)    || 0;
+    const bw = parseFloat(boxEl.style.width)  || W;
+    const bh = parseFloat(boxEl.style.height) || H;
+    _setSlider('textBoxX', 'textBoxXDisplay', _clamp(bx/W*100, 0, 90),  v => v+'%');
+    _setSlider('textBoxY', 'textBoxYDisplay', _clamp(by/H*100, 0, 95),  v => v+'%');
+    _setSlider('textBoxW', 'textBoxWDisplay', _clamp(bw/W*100, 10,100), v => v+'%');
+    if (!_ftb())
+      _setSlider('textBgHeightPct','textBgHeightPctDisplay',
+        _clamp(bh/H*100,0,80), v => v=='0'?'Auto':v+'%');
+  }
+
+  function _setup() {
+    const img = document.getElementById('previewImg');
+    if (!img || img.style.display === 'none') return false;
+
+    if (!wrapEl || !document.getElementById('imgDragWrap')) {
+      const w = document.createElement('div');
+      w.id = 'imgDragWrap';
+      w.style.cssText = 'position:relative;display:inline-block;max-width:100%;line-height:0;';
+      img.parentNode.insertBefore(w, img);
+      w.appendChild(img);
+      wrapEl = w;
+    } else { wrapEl = document.getElementById('imgDragWrap'); }
+
+    if (boxEl && document.getElementById('textPositionBox')) return true;
+
+    boxEl = document.createElement('div');
+    boxEl.id = 'textPositionBox';
+    boxEl.style.cssText = 'position:absolute;box-sizing:border-box;border:2px dashed rgba(0,200,255,.85);background:rgba(0,200,255,.06);cursor:move;touch-action:none;user-select:none;border-radius:4px;transition:opacity .12s;';
+
+    const lbl = document.createElement('span');
+    lbl.className = 'ovr-lbl';
+    lbl.style.cssText = 'position:absolute;top:4px;left:7px;font-size:10px;font-weight:700;color:rgba(0,220,255,.95);text-shadow:0 1px 3px rgba(0,0,0,.85);pointer-events:none;white-space:nowrap;';
+    boxEl.appendChild(lbl);
+
+    function mkH(css, dir, title) {
+      const h = document.createElement('div');
+      h.dataset.dir = dir; h.title = title;
+      h.style.cssText = 'position:absolute;background:rgba(0,210,255,.8);border-radius:3px;' + css;
+      boxEl.appendChild(h); return h;
+    }
+    hN  = mkH('top:-5px;left:calc(50% - 22px);width:44px;height:10px;cursor:ns-resize',   'n',  'Mover arriba/abajo');
+    hS  = mkH('bottom:-5px;left:calc(50% - 22px);width:44px;height:10px;cursor:ns-resize','s',  'Ajustar alto');
+    hE  = mkH('right:-5px;top:calc(50% - 22px);width:10px;height:44px;cursor:ew-resize',  'e',  'Ajustar ancho');
+    hW  = mkH('left:-5px;top:calc(50% - 22px);width:10px;height:44px;cursor:ew-resize',   'w',  'Ajustar posición X');
+    hSE = mkH('bottom:-6px;right:-6px;width:14px;height:14px;cursor:nwse-resize',         'se', 'Ajustar tamaño');
+
+    wrapEl.appendChild(boxEl);
+
+    // ── Drag logic ──
+    let active = false, dir = 'move', ox, oy, ol, ot, ow, oh, W, H;
+
+    boxEl.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      active = true; dir = e.target.dataset.dir || 'move';
+      ox = e.clientX; oy = e.clientY;
+      ol = parseFloat(boxEl.style.left)||0; ot = parseFloat(boxEl.style.top)||0;
+      ow = parseFloat(boxEl.style.width)||200; oh = parseFloat(boxEl.style.height)||80;
+      W = wrapEl.offsetWidth; H = wrapEl.offsetHeight;
+      boxEl.setPointerCapture(e.pointerId);
+      boxEl.style.opacity = '.72';
+    });
+
+    boxEl.addEventListener('pointermove', e => {
+      if (!active) return; e.preventDefault();
+      const dx = e.clientX - ox, dy = e.clientY - oy;
+      let nl = ol, nt = ot, nw = ow, nh = oh;
+      const minW = W * .1;
+      if      (dir==='move'){ nl=Math.max(0,Math.min(W-ow,ol+dx)); nt=Math.max(0,Math.min(H-oh,ot+dy)); }
+      else if (dir==='e')   { nw=Math.max(minW,Math.min(W-ol,ow+dx)); }
+      else if (dir==='s')   { nh=Math.max(20,Math.min(H-ot,oh+dy)); }
+      else if (dir==='se')  { nw=Math.max(minW,Math.min(W-ol,ow+dx)); nh=Math.max(20,Math.min(H-ot,oh+dy)); }
+      else if (dir==='w')   { nl=Math.max(0,Math.min(ol+ow-minW,ol+dx)); nw=ol+ow-nl; }
+      else if (dir==='n')   { nt=Math.max(0,Math.min(ot+oh-20,ot+dy)); nh=ot+oh-nt; }
+      boxEl.style.left=nl+'px'; boxEl.style.top=nt+'px';
+      boxEl.style.width=nw+'px'; boxEl.style.height=nh+'px';
+      _syncSlidersFromBox(); _schedulePreview(350);
+    });
+
+    const _end = () => {
+      if (!active) return; active = false;
+      boxEl.style.opacity = '1'; _syncSlidersFromBox(); _schedulePreview(100);
+    };
+    boxEl.addEventListener('pointerup', _end);
+    boxEl.addEventListener('lostpointercapture', _end);
+    return true;
+  }
+
+  return {
+    refresh() { if (_setup()) _syncBoxFromSliders(); },
+    sync()    { if (wrapEl && boxEl) _syncBoxFromSliders(); },
+    toggle()  {
+      _vis = !_vis;
+      if (boxEl) boxEl.style.display = _vis ? '' : 'none';
+      return _vis;
+    },
+  };
+})();
 
 // Slider genérico: actualiza badge + dispara preview en tiempo real
 function _bindSlider(id, displayId, suffix, formatFn) {
@@ -989,9 +1137,19 @@ document.getElementById('showCategory')?.addEventListener('change', function() {
 // Toggle ancho completo banner
 document.getElementById('bannerFullWidth')?.addEventListener('change', () => _schedulePreview(250));
 // Toggle fondo hasta el borde inferior
-document.getElementById('textBgFillToBottom')?.addEventListener('change', () => _schedulePreview(250));
+document.getElementById('textBgFillToBottom')?.addEventListener('change', () => { _boxOverlay.sync(); _schedulePreview(250); });
 // Toggle sombra del título
 document.getElementById('titleShadow')?.addEventListener('change', () => _schedulePreview(250));
+// Sliders de posición/tamaño → sincronizar overlay en tiempo real
+['textBoxX','textBoxY','textBoxW','textBgHeightPct'].forEach(id =>
+  document.getElementById(id)?.addEventListener('input', () => _boxOverlay.sync())
+);
+// Botón ocultar/mostrar overlay
+document.getElementById('btnToggleOverlay')?.addEventListener('click', () => {
+  const vis = _boxOverlay.toggle();
+  const lbl = document.getElementById('overlayBtnTxt');
+  if (lbl) lbl.textContent = vis ? 'Ocultar guía' : 'Mostrar guía';
+});
 
 // Botón manual
 const btnPreview = document.getElementById('btnPreview');
