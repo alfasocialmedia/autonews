@@ -363,6 +363,8 @@ def process_emails():
                                 log.info(f"  ✅ {msg}")
                                 _log_db(db, "INFO", msg)
 
+                                _broadcast_whatsapp(db, ai_result, wp_post.get("link", ""), wp_site_id=wp_cfg.id)
+
                             except Exception as exc:
                                 msg = f"Error publicando en {wp_cfg.name}: {exc}"
                                 log.error(f"  ❌ {msg}")
