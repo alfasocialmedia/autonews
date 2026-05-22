@@ -144,43 +144,24 @@
       </div>
     </div>
 
-    <!-- Mis voces en ElevenLabs -->
+    <!-- Voces disponibles -->
     {% if cfg %}
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header bg-transparent border-0 pt-3 d-flex align-items-center justify-content-between">
-        <h6 class="mb-0"><i class="bi bi-person-lines-fill me-2"></i>Mis voces en ElevenLabs</h6>
+        <h6 class="mb-0"><i class="bi bi-person-lines-fill me-2"></i>Voces disponibles</h6>
         <button type="button" class="btn btn-outline-primary btn-sm" id="loadVoicesBtn">
-          <i class="bi bi-arrow-clockwise me-1"></i>Cargar
+          <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
         </button>
       </div>
+      <!-- Buscador -->
+      <div class="px-3 pt-2 pb-1 d-none" id="voicesSearch">
+        <input type="text" id="voiceFilter" class="form-control form-control-sm" placeholder="Filtrar por nombre, idioma o género...">
+      </div>
       <div class="card-body p-0" id="voicesContainer">
-        <p class="small text-muted px-3 py-2 mb-0">Hacé clic en "Cargar" para ver las voces disponibles en tu cuenta.</p>
+        <p class="small text-muted px-3 py-2 mb-0"><span class="spinner-border spinner-border-sm me-1"></span>Cargando voces...</p>
       </div>
     </div>
     {% endif %}
-
-    <!-- Voces de referencia -->
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-transparent border-0 pt-3">
-        <h6 class="mb-0"><i class="bi bi-collection-play me-2"></i>Voces premade de referencia</h6>
-      </div>
-      <div class="card-body p-0">
-        <table class="table table-sm table-hover mb-0 small">
-          <thead class="table-light">
-            <tr><th>Nombre</th><th>Voice ID</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Adam <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">ES</span></td><td class="font-monospace voice-id-cell"><button type="button" class="btn btn-link btn-sm p-0 copy-voice" data-id="pNInz6obpgDQGcFmaJgB">pNInz6obpgDQGcFmaJgB</button></td></tr>
-            <tr><td>Daniel <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">ES</span></td><td class="font-monospace voice-id-cell"><button type="button" class="btn btn-link btn-sm p-0 copy-voice" data-id="onwK4e9ZLuTAKqWW03F9">onwK4e9ZLuTAKqWW03F9</button></td></tr>
-            <tr><td>Charlotte <span class="badge bg-success-subtle text-success border border-success-subtle ms-1">ES</span></td><td class="font-monospace voice-id-cell"><button type="button" class="btn btn-link btn-sm p-0 copy-voice" data-id="XB0fDUnXU5powFXDhCwa">XB0fDUnXU5powFXDhCwa</button></td></tr>
-            <tr><td>Rachel</td><td class="font-monospace voice-id-cell"><button type="button" class="btn btn-link btn-sm p-0 copy-voice" data-id="21m00Tcm4TlvDq8ikWAM">21m00Tcm4TlvDq8ikWAM</button></td></tr>
-            <tr><td>Josh</td><td class="font-monospace voice-id-cell"><button type="button" class="btn btn-link btn-sm p-0 copy-voice" data-id="TxGEqnHWrfWFTfGW9XjX">TxGEqnHWrfWFTfGW9XjX</button></td></tr>
-            <tr><td>Arnold</td><td class="font-monospace voice-id-cell"><button type="button" class="btn btn-link btn-sm p-0 copy-voice" data-id="VR6AewLTigWG4xSOukaG">VR6AewLTigWG4xSOukaG</button></td></tr>
-          </tbody>
-        </table>
-        <p class="small text-muted px-3 py-2 mb-0">Clic en el ID para copiarlo al campo Voice ID.</p>
-      </div>
-    </div>
 
     <!-- Cómo funciona -->
     <div class="card border-0 bg-danger-subtle">
@@ -200,18 +181,19 @@
 {% endblock %}
 
 {% block scripts %}
-<style>.voice-id-cell { font-size: .75rem; }</style>
+<style>
+.voice-id-cell { font-size: .72rem; }
+.voice-row.d-none-filter { display: none !important; }
+#voicesContainer { max-height: 520px; overflow-y: auto; }
+.voice-preview-btn { opacity: .6; }
+.voice-preview-btn:hover { opacity: 1; }
+</style>
 <script>
 document.getElementById('toggleKey')?.addEventListener('click', function () {
   const inp = document.getElementById('apiKeyInput');
   const icon = this.querySelector('i');
-  if (inp.type === 'password') {
-    inp.type = 'text';
-    icon.className = 'bi bi-eye-slash';
-  } else {
-    inp.type = 'password';
-    icon.className = 'bi bi-eye';
-  }
+  if (inp.type === 'password') { inp.type = 'text'; icon.className = 'bi bi-eye-slash'; }
+  else { inp.type = 'password'; icon.className = 'bi bi-eye'; }
 });
 
 document.getElementById('testEl')?.addEventListener('click', async function () {
@@ -247,66 +229,116 @@ document.getElementById('testVoiceBtn')?.addEventListener('click', async functio
     }
   } catch (e) {
     showToast('Error de red: ' + e.message, 'danger', 5000);
-  } finally {
-    this.innerHTML = orig;
-    this.disabled = false;
-  }
+  } finally { this.innerHTML = orig; this.disabled = false; }
 });
 
-function bindCopyVoice(root) {
-  root.querySelectorAll('.copy-voice').forEach(btn => {
+// ── Listado de voces ──────────────────────────────────────────────────────────
+let _previewAudio = null;
+
+function _genderIcon(g) {
+  if (!g) return '';
+  if (g.toLowerCase().includes('female') || g.toLowerCase().includes('mujer')) return '♀';
+  if (g.toLowerCase().includes('male') || g.toLowerCase().includes('hombre')) return '♂';
+  return '';
+}
+
+function renderVoices(data) {
+  const container = document.getElementById('voicesContainer');
+  const searchWrap = document.getElementById('voicesSearch');
+  if (!data.success) {
+    container.innerHTML = `<p class="small text-danger px-3 py-2 mb-0"><i class="bi bi-exclamation-triangle me-1"></i>${data.message || 'Error al cargar voces'}</p>`;
+    return;
+  }
+  if (!data.voices.length) {
+    container.innerHTML = '<p class="small text-muted px-3 py-2 mb-0">No se encontraron voces.</p>';
+    return;
+  }
+
+  const rows = data.voices.map(v => {
+    const isActive = v.voice_id === data.current_voice_id;
+    const isFree   = v.category === 'premade';
+    const catBadge = isFree
+      ? '<span class="badge bg-success-subtle text-success border border-success-subtle ms-1">Gratis</span>'
+      : v.category === 'cloned'
+        ? '<span class="badge bg-warning-subtle text-warning border border-warning-subtle ms-1">Clonada</span>'
+        : '';
+    const activeBadge = isActive ? '<span class="badge bg-primary ms-1">Activa</span>' : '';
+    const lang  = v.language ? `<span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1">${v.language}</span>` : '';
+    const gender = _genderIcon(v.gender);
+    const previewBtn = v.preview_url
+      ? `<button type="button" class="btn btn-link btn-sm p-0 ms-2 voice-preview-btn" title="Escuchar muestra" data-preview="${v.preview_url}"><i class="bi bi-play-circle"></i></button>`
+      : '';
+    const filterData = `${v.name} ${v.language} ${v.gender} ${v.category}`.toLowerCase();
+    return `<tr class="voice-row" data-filter="${filterData}">
+      <td>
+        <span class="fw-semibold">${gender ? gender + ' ' : ''}${v.name}</span>${lang}${catBadge}${activeBadge}${previewBtn}
+      </td>
+      <td class="font-monospace voice-id-cell">
+        <button type="button" class="btn btn-link btn-sm p-0 copy-voice" data-id="${v.voice_id}">${v.voice_id.slice(0,16)}…</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `<table class="table table-sm table-hover mb-0 small">
+    <thead class="table-light sticky-top"><tr><th>Voz</th><th>ID</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <p class="small text-muted px-3 py-2 mb-0">${data.voices.length} voces — las <span class="text-success fw-semibold">Gratis</span> están disponibles en todos los planes.</p>`;
+
+  searchWrap.classList.remove('d-none');
+
+  // Clic en ID → copia al campo
+  container.querySelectorAll('.copy-voice').forEach(btn => {
     btn.addEventListener('click', function () {
       const voiceInput = document.querySelector('input[name="voice_id"]');
       if (voiceInput) {
         voiceInput.value = this.dataset.id;
-        showToast('Voice ID seleccionado: ' + this.dataset.id, 'info', 3000);
+        showToast('Voice ID seleccionado', 'info', 2000);
       }
     });
   });
-}
-bindCopyVoice(document);
 
-document.getElementById('loadVoicesBtn')?.addEventListener('click', async function () {
+  // Botón preview → reproduce muestra
+  container.querySelectorAll('.voice-preview-btn').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const url = this.dataset.preview;
+      if (_previewAudio) { _previewAudio.pause(); _previewAudio = null; }
+      _previewAudio = new Audio(url);
+      _previewAudio.play();
+    });
+  });
+}
+
+async function loadVoices() {
   const container = document.getElementById('voicesContainer');
-  const btn = this;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Cargando...';
-  container.innerHTML = '<p class="small text-muted px-3 py-2 mb-0">Consultando ElevenLabs...</p>';
+  const btn = document.getElementById('loadVoicesBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Cargando...'; }
+  container.innerHTML = '<p class="small text-muted px-3 py-2 mb-0"><span class="spinner-border spinner-border-sm me-1"></span>Consultando ElevenLabs...</p>';
   try {
     const resp = await fetch('/settings/elevenlabs/voices', { method: 'POST' });
     const data = await resp.json();
-    if (!data.success) {
-      container.innerHTML = `<p class="small text-danger px-3 py-2 mb-0"><i class="bi bi-exclamation-triangle me-1"></i>${data.message || 'Error al cargar voces'}</p>`;
-      return;
-    }
-    if (!data.voices.length) {
-      container.innerHTML = '<p class="small text-muted px-3 py-2 mb-0">No se encontraron voces en tu cuenta.</p>';
-      return;
-    }
-    const rows = data.voices.map(v => {
-      const isActive = v.voice_id === data.current_voice_id;
-      const lang = v.language ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1">${v.language}</span>` : '';
-      const cat = v.category === 'cloned' ? '<span class="badge bg-warning-subtle text-warning border border-warning-subtle ms-1">clonada</span>' : '';
-      const activeTag = isActive ? '<span class="badge bg-success ms-1">activa</span>' : '';
-      return `<tr>
-        <td>${v.name}${lang}${cat}${activeTag}</td>
-        <td class="font-monospace voice-id-cell">
-          <button type="button" class="btn btn-link btn-sm p-0 copy-voice" data-id="${v.voice_id}">${v.voice_id}</button>
-        </td>
-      </tr>`;
-    }).join('');
-    container.innerHTML = `<table class="table table-sm table-hover mb-0 small">
-      <thead class="table-light"><tr><th>Nombre</th><th>Voice ID</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <p class="small text-muted px-3 py-2 mb-0">${data.voices.length} voces en tu cuenta. Clic en el ID para seleccionar.</p>`;
-    bindCopyVoice(container);
+    renderVoices(data);
   } catch (e) {
     container.innerHTML = `<p class="small text-danger px-3 py-2 mb-0">Error de red: ${e.message}</p>`;
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Cargar';
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Actualizar'; }
   }
+}
+
+document.getElementById('loadVoicesBtn')?.addEventListener('click', loadVoices);
+
+// Filtro de búsqueda
+document.getElementById('voiceFilter')?.addEventListener('input', function () {
+  const q = this.value.toLowerCase().trim();
+  document.querySelectorAll('.voice-row').forEach(tr => {
+    const match = !q || tr.dataset.filter.includes(q);
+    tr.classList.toggle('d-none-filter', !match);
+  });
 });
+
+// Auto-cargar al abrir la página si hay configuración
+{% if cfg %}
+loadVoices();
+{% endif %}
 </script>
 {% endblock %}

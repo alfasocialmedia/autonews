@@ -66,7 +66,7 @@ def test_connection(api_key: str) -> tuple[bool, str]:
 
 
 def list_voices(api_key: str) -> list[dict]:
-    """Devuelve la lista de voces disponibles en la cuenta: [{voice_id, name, category, labels}]."""
+    """Devuelve todas las voces disponibles, ordenadas: premade (gratuitas) primero, luego clonadas."""
     with httpx.Client(timeout=15) as client:
         resp = client.get(
             f"{_API_BASE}/voices",
@@ -74,14 +74,20 @@ def list_voices(api_key: str) -> list[dict]:
         )
         resp.raise_for_status()
     voices = resp.json().get("voices", [])
-    return [
-        {
+    result = []
+    for v in voices:
+        labels = v.get("labels") or {}
+        result.append({
             "voice_id": v["voice_id"],
             "name": v["name"],
             "category": v.get("category", ""),
-            "language": v.get("labels", {}).get("language", ""),
-            "accent": v.get("labels", {}).get("accent", ""),
-            "gender": v.get("labels", {}).get("gender", ""),
-        }
-        for v in voices
-    ]
+            "language": labels.get("language", ""),
+            "accent": labels.get("accent", ""),
+            "gender": labels.get("gender", ""),
+            "use_case": labels.get("use_case", ""),
+            "description": labels.get("description", ""),
+            "preview_url": v.get("preview_url", ""),
+        })
+    # Premade primero, luego el resto alfabético
+    result.sort(key=lambda v: (0 if v["category"] == "premade" else 1, v["name"].lower()))
+    return result
