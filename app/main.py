@@ -237,6 +237,16 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN text_bg_padding_y INTEGER DEFAULT 18"))
             if "text_bg_full_width" not in ig_cols:
                 conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN text_bg_full_width BOOLEAN DEFAULT 1"))
+            if "text_box_x_pct" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN text_box_x_pct INTEGER DEFAULT 0"))
+            if "text_box_y_pct" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN text_box_y_pct INTEGER DEFAULT 70"))
+            if "text_box_w_pct" not in ig_cols:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN text_box_w_pct INTEGER DEFAULT 100"))
+                # Migrar: si text_bg_full_width=0 (texto ajustado) → caja al 80% de ancho
+                conn.execute(text("UPDATE instagram_settings SET text_box_w_pct = 80 WHERE text_bg_full_width = 0"))
+            # Corregir padding_x legacy (era 0 por defecto, ahora 40)
+            conn.execute(text("UPDATE instagram_settings SET text_bg_padding_x = 40 WHERE text_bg_padding_x = 0 AND text_bg_opacity = 0"))
             if "title_max_lines" not in ig_cols:
                 conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN title_max_lines INTEGER DEFAULT 4"))
             if "show_category" not in ig_cols:

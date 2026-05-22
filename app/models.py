@@ -323,10 +323,13 @@ class InstagramSettings(Base):
     banner_font_weight = Column(String(20), default="bold")
     banner_y_offset = Column(Integer, default=0)
     banner_align = Column(String(10), default="center")
-    # Fondo del título
-    text_bg_padding_x = Column(Integer, default=0)
-    text_bg_padding_y = Column(Integer, default=18)
-    text_bg_full_width = Column(Boolean, default=True)
+    # Fondo del título — caja posicionable
+    text_bg_padding_x = Column(Integer, default=40)    # padding horizontal interno
+    text_bg_padding_y = Column(Integer, default=18)    # padding vertical interno
+    text_bg_full_width = Column(Boolean, default=True) # legacy, no usado
+    text_box_x_pct = Column(Integer, default=0)        # posición X del cuadro (% ancho imagen)
+    text_box_y_pct = Column(Integer, default=70)       # posición Y del cuadro (% alto imagen)
+    text_box_w_pct = Column(Integer, default=100)      # ancho del cuadro (% ancho imagen)
     # Límite de líneas
     title_max_lines = Column(Integer, default=4)
     # Badge de categoría
