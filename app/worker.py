@@ -1012,18 +1012,21 @@ def _generate_ig_caption(groq_key: str, groq_model: str, title: str, summary: st
         from app.services.groq_service import _get_client
         client = _get_client(groq_key, provider=groq_provider, api_base_url=groq_base_url)
         prompt = (
-            "Sos community manager de un medio digital. El título de la noticia ya está en la imagen, "
-            "NO lo repitas en el caption. Generá un caption para Instagram con exactamente esta estructura:\n"
-            "1. Una frase gancho atractiva e impactante (máx. 2 líneas, con emojis)\n"
-            "2. Un copy breve y directo con emojis integrados (2-3 líneas)\n"
-            "3. Exactamente 5 hashtags virales y de alto alcance en español\n"
-            "Máximo 220 palabras en total. Solo devolvé el caption listo para publicar, sin comentarios.\n\n"
-            f"Noticia — Título: {title}\nResumen: {summary}"
+            "Sos community manager de un medio digital argentino. El título de la noticia ya está en la imagen, "
+            "NO lo repitas en el caption. Generá un caption para Instagram con exactamente esta estructura:\n\n"
+            "1. 🔥 Frase gancho impactante (1-2 líneas con emojis, que genere curiosidad o emoción)\n\n"
+            "2. Párrafo 1 — Contexto: explicá brevemente qué pasó, dónde y cómo (3-4 líneas con emojis integrados)\n\n"
+            "3. Párrafo 2 — Detalle o impacto: ampliá con un dato clave, consecuencia o reacción (3-4 líneas con emojis)\n\n"
+            "4. Párrafo 3 — Cierre y llamada a la acción: invitá a opinar, seguir leyendo o compartir (2-3 líneas con emojis)\n\n"
+            "5. Exactamente 5 hashtags virales de alto alcance en español\n\n"
+            "Escribí en español rioplatense informal. Máximo 350 palabras. "
+            "Solo devolvé el caption listo para publicar, sin comentarios extra.\n\n"
+            f"Título: {title}\nResumen: {summary}"
         )
         resp = client.chat.completions.create(
             model=groq_model,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=350,
+            max_tokens=600,
         )
         text = resp.choices[0].message.content.strip()
         return text + footer
