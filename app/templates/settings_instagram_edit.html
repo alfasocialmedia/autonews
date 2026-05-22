@@ -752,22 +752,28 @@ function _runPreview() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>'; }
 
   const url = `${BASE}/preview-image?${_collectPreviewParams().toString()}`;
-  const tmp = new Image();
-  tmp.onload = () => {
-    img.src = tmp.src;
+  fetch(url).then(async r => {
+    if (r.ok) {
+      const blob = await r.blob();
+      const objUrl = URL.createObjectURL(blob);
+      img.src = objUrl;
+      if (spinner) spinner.style.display = 'none';
+      img.style.display = 'block';
+      if (dim) dim.style.display = 'block';
+      if (hint) hint.style.display = 'none';
+      _previewLoaded = true;
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>'; }
+    } else {
+      const txt = await r.text().catch(() => `HTTP ${r.status}`);
+      if (spinner) spinner.style.display = 'none';
+      if (hint) { hint.innerHTML = `<i class="bi bi-exclamation-triangle me-1"></i>${txt}`; hint.style.display = 'block'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-eye me-1"></i>Ver previa'; }
+    }
+  }).catch(err => {
     if (spinner) spinner.style.display = 'none';
-    img.style.display = 'block';
-    if (dim) dim.style.display = 'block';
-    if (hint) hint.style.display = 'none';
-    _previewLoaded = true;
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>'; }
-  };
-  tmp.onerror = () => {
-    if (spinner) spinner.style.display = 'none';
-    if (hint) { hint.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Error al generar la vista previa'; hint.style.display = 'block'; }
+    if (hint) { hint.innerHTML = `<i class="bi bi-exclamation-triangle me-1"></i>Error de red: ${err}`; hint.style.display = 'block'; }
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-eye me-1"></i>Ver previa'; }
-  };
-  tmp.src = url;
+  });
 }
 
 function _schedulePreview(delay = 400) {

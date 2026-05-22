@@ -508,7 +508,7 @@ async def preview_image(
         )
     except Exception as exc:
         log.error("Error generando imagen de preview: %s", exc, exc_info=True)
-        return Response(b"Error generando imagen", status_code=500, media_type="text/plain")
+        return Response(f"Error: {type(exc).__name__}: {exc}".encode(), status_code=500, media_type="text/plain")
 
     return Response(content=ig_bytes, media_type="image/jpeg")
 
