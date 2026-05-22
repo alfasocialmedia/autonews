@@ -144,6 +144,8 @@ def _draw_title(
     text_bg_border_width: int = 0,
     text_bg_border_color: str = "#ffffff",
     text_bg_height_pct: int = 0,
+    text_bg_fill_to_bottom: bool = False,
+    title_shadow: bool = True,
 ) -> Image.Image:
     """Dibuja el título dentro de una caja posicionable.
 
@@ -171,14 +173,16 @@ def _draw_title(
     line_height = int(font_size * 1.25)
     total_text_h = len(lines) * line_height
 
-    # Alto de la caja: fijo por porcentaje o automático según contenido
-    if text_bg_height_pct and text_bg_height_pct > 0:
+    # Alto de la caja: fill-to-bottom > fijo por porcentaje > automático según contenido
+    if text_bg_fill_to_bottom:
+        box_h = TARGET_H - box_y
+    elif text_bg_height_pct and text_bg_height_pct > 0:
         box_h = int(TARGET_H * max(1, min(80, text_bg_height_pct)) / 100)
     else:
         box_h = total_text_h + 2 * pad_y
 
-    # Auto-subir si el título taparía la franja inferior
-    if max_bottom_y is not None and box_y + box_h > max_bottom_y:
+    # Auto-subir si el título taparía la franja inferior (solo cuando no es fill-to-bottom)
+    if not text_bg_fill_to_bottom and max_bottom_y is not None and box_y + box_h > max_bottom_y:
         box_y = max(0, max_bottom_y - box_h)
 
     # No desbordar por abajo
@@ -226,8 +230,9 @@ def _draw_title(
         else:
             x = box_x + pad_x
 
-        for dx, dy in [(3, 3), (2, 2), (1, 1)]:
-            draw.text((x + dx, y + dy), line, font=font, fill=(0, 0, 0, 160))
+        if title_shadow:
+            for dx, dy in [(3, 3), (2, 2), (1, 1)]:
+                draw.text((x + dx, y + dy), line, font=font, fill=(0, 0, 0, 160))
         draw.text((x, y), line, font=font, fill=(tr, tg, tb, 255))
         y += line_height
 
@@ -461,6 +466,9 @@ def build_instagram_image(
     banner_border_width: int = 0,
     banner_border_color: str = "#ffffff",
     banner_full_width: bool = False,
+    # Fondo del título — opciones adicionales
+    text_bg_fill_to_bottom: bool = False,
+    title_shadow: bool = True,
 ) -> bytes:
     """
     Pipeline completo: recibe bytes de imagen, devuelve JPEG 1080×1440.
@@ -501,6 +509,8 @@ def build_instagram_image(
         text_bg_border_width=text_bg_border_width,
         text_bg_border_color=text_bg_border_color,
         text_bg_height_pct=text_bg_height_pct,
+        text_bg_fill_to_bottom=text_bg_fill_to_bottom,
+        title_shadow=title_shadow,
     )
 
     if banner_text:

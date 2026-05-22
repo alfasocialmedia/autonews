@@ -347,6 +347,8 @@ class InstagramSettings(Base):
     text_bg_border_width = Column(Integer, default=0)           # grosor del trazo (px)
     text_bg_border_color = Column(String(10), default="#ffffff") # color del trazo
     text_bg_height_pct = Column(Integer, default=0)             # alto fijo (% imagen); 0=auto
+    text_bg_fill_to_bottom = Column(Boolean, default=False)    # fondo llega hasta el borde inferior
+    title_shadow = Column(Boolean, default=True)               # sombra del texto del título
     # Franja inferior — control fino
     banner_border_radius = Column(Integer, nullable=True, default=None)  # None=usar pill/rect lógica
     banner_border_width = Column(Integer, default=0)

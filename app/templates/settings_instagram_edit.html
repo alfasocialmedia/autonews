@@ -187,6 +187,8 @@
     {% set tbbw = cfg.text_bg_border_width if cfg and cfg.text_bg_border_width is not none else 0 %}
     {% set tbbc = cfg.text_bg_border_color if cfg and cfg.text_bg_border_color else '#ffffff' %}
     {% set tbhp = cfg.text_bg_height_pct if cfg and cfg.text_bg_height_pct is not none else 0 %}
+    {% set tbftb = cfg.text_bg_fill_to_bottom if cfg and cfg.text_bg_fill_to_bottom is not none else false %}
+    {% set tsh = cfg.title_shadow if cfg and cfg.title_shadow is not none else true %}
     {% set banbr = cfg.banner_border_radius if cfg and cfg.banner_border_radius is not none else '' %}
     {% set banbw = cfg.banner_border_width if cfg and cfg.banner_border_width is not none else 0 %}
     {% set banbc = cfg.banner_border_color if cfg and cfg.banner_border_color else '#ffffff' %}
@@ -306,13 +308,18 @@
                   <label class="btn btn-sm btn-outline-secondary" for="align_right"><i class="bi bi-text-right"></i> Der.</label>
                 </div>
               </div>
-              <div>
+              <div class="mb-2">
                 <label class="form-label small d-flex justify-content-between mb-1">
                   <span>Máx. líneas</span>
                   <span class="badge bg-secondary fw-normal" id="titleMaxLinesDisplay">{{ tml }}</span>
                 </label>
                 <input type="range" name="title_max_lines" form="igForm" class="form-range" id="titleMaxLines"
                        min="1" max="6" step="1" value="{{ tml }}">
+              </div>
+              <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox" role="switch" name="title_shadow" id="titleShadow" form="igForm"
+                       {% if tsh %}checked{% endif %}>
+                <label class="form-check-label small" for="titleShadow">Sombra del texto</label>
               </div>
             </div>
 
@@ -394,7 +401,7 @@
                 <input type="range" name="text_bg_border_radius" form="igForm" class="form-range" id="textBgBorderRadius"
                        min="0" max="500" step="5" value="{{ tbbr }}">
               </div>
-              <div class="row g-2">
+              <div class="row g-2 mb-2">
                 <div class="col-8">
                   <label class="form-label small d-flex justify-content-between mb-1" for="textBgBorderWidth">
                     <span>Trazo (borde)</span>
@@ -409,6 +416,14 @@
                          value="{{ tbbc }}">
                 </div>
               </div>
+              <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox" role="switch" name="text_bg_fill_to_bottom" id="textBgFillToBottom" form="igForm"
+                       {% if tbftb %}checked{% endif %}>
+                <label class="form-check-label small" for="textBgFillToBottom">
+                  <strong>Fondo hasta el borde inferior</strong>
+                </label>
+              </div>
+              <div class="form-text mb-0">El color de fondo llega hasta el margen inferior de la imagen.</div>
             </div>
 
             <!-- ── FRANJA INFERIOR ── -->
@@ -860,6 +875,8 @@ function _collectPreviewParams() {
   // Checkboxes (no aparecen en FormData si están unchecked)
   params.set('show_category', document.getElementById('showCategory')?.checked ? '1' : '0');
   params.set('banner_full_width', document.getElementById('bannerFullWidth')?.checked ? '1' : '0');
+  params.set('text_bg_fill_to_bottom', document.getElementById('textBgFillToBottom')?.checked ? '1' : '0');
+  params.set('title_shadow', document.getElementById('titleShadow')?.checked ? '1' : '0');
   return params;
 }
 
@@ -971,6 +988,10 @@ document.getElementById('showCategory')?.addEventListener('change', function() {
 });
 // Toggle ancho completo banner
 document.getElementById('bannerFullWidth')?.addEventListener('change', () => _schedulePreview(250));
+// Toggle fondo hasta el borde inferior
+document.getElementById('textBgFillToBottom')?.addEventListener('change', () => _schedulePreview(250));
+// Toggle sombra del título
+document.getElementById('titleShadow')?.addEventListener('change', () => _schedulePreview(250));
 
 // Botón manual
 const btnPreview = document.getElementById('btnPreview');

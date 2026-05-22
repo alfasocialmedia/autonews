@@ -974,6 +974,8 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
             banner_border_width=ig.banner_border_width if ig.banner_border_width is not None else 0,
             banner_border_color=ig.banner_border_color or "#ffffff",
             banner_full_width=bool(ig.banner_full_width),
+            text_bg_fill_to_bottom=bool(ig.text_bg_fill_to_bottom) if ig.text_bg_fill_to_bottom is not None else False,
+            title_shadow=bool(ig.title_shadow) if ig.title_shadow is not None else True,
         )
         except Exception as build_exc:
             log.error("[IG] Error en build_instagram_image: %s", build_exc, exc_info=True)

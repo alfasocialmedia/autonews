@@ -131,6 +131,8 @@ async def instagram_create(
     banner_border_width: int = Form(0),
     banner_border_color: str = Form("#ffffff"),
     banner_full_width: str = Form(""),
+    text_bg_fill_to_bottom: str = Form(""),
+    title_shadow: str = Form("on"),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -157,6 +159,7 @@ async def instagram_create(
                        text_bg_border_radius, text_bg_border_width, text_bg_border_color,
                        text_bg_height_pct, banner_border_radius, banner_border_width,
                        banner_border_color, banner_full_width,
+                       text_bg_fill_to_bottom, title_shadow,
                        logo, db)
     db.commit()
     return RedirectResponse(f"/settings/instagram/{cfg.id}?msg=Cuenta+creada+correctamente", status_code=302)
@@ -230,6 +233,8 @@ async def instagram_save(
     banner_border_width: int = Form(0),
     banner_border_color: str = Form("#ffffff"),
     banner_full_width: str = Form(""),
+    text_bg_fill_to_bottom: str = Form(""),
+    title_shadow: str = Form("on"),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -258,6 +263,7 @@ async def instagram_save(
                            text_bg_border_radius, text_bg_border_width, text_bg_border_color,
                            text_bg_height_pct, banner_border_radius, banner_border_width,
                            banner_border_color, banner_full_width,
+                           text_bg_fill_to_bottom, title_shadow,
                            logo, db)
         db.commit()
         return RedirectResponse(
@@ -299,6 +305,7 @@ def _apply_form_to_cfg(
     text_bg_border_radius: int, text_bg_border_width: int, text_bg_border_color: str,
     text_bg_height_pct: int, banner_border_radius: str, banner_border_width: int,
     banner_border_color: str, banner_full_width: str,
+    text_bg_fill_to_bottom: str, title_shadow: str,
     logo: Optional[UploadFile], db: Session,
 ):
     from app.services.gfonts_service import LEGACY_MAP
@@ -352,6 +359,8 @@ def _apply_form_to_cfg(
     cfg.banner_border_width = max(0, min(20, banner_border_width))
     cfg.banner_border_color = banner_border_color if banner_border_color.startswith("#") else "#ffffff"
     cfg.banner_full_width = banner_full_width.lower() in ("on", "true", "1", "yes")
+    cfg.text_bg_fill_to_bottom = text_bg_fill_to_bottom.lower() in ("on", "true", "1", "yes")
+    cfg.title_shadow = title_shadow.lower() in ("on", "true", "1", "yes")
 
     if app_secret.strip():
         cfg.encrypted_app_secret = encrypt_value(app_secret.strip())
@@ -492,6 +501,8 @@ async def preview_image(
     q_banner_border_width: Optional[int] = Query(None, alias="banner_border_width"),
     q_banner_border_color: Optional[str] = Query(None, alias="banner_border_color"),
     q_banner_full_width: Optional[int] = Query(None, alias="banner_full_width"),
+    q_text_bg_fill_to_bottom: Optional[int] = Query(None, alias="text_bg_fill_to_bottom"),
+    q_title_shadow: Optional[int] = Query(None, alias="title_shadow"),
 ):
     if not _require_admin(request, db):
         from fastapi.responses import Response
@@ -573,6 +584,8 @@ async def preview_image(
             banner_border_width=_eff(q_banner_border_width, cfg.banner_border_width if cfg else None, 0),
             banner_border_color=_eff(q_banner_border_color, cfg.banner_border_color if cfg else None, "#ffffff"),
             banner_full_width=bool(_eff(q_banner_full_width, (1 if cfg and cfg.banner_full_width else 0) if cfg else None, 0)),
+            text_bg_fill_to_bottom=bool(_eff(q_text_bg_fill_to_bottom, (1 if cfg and cfg.text_bg_fill_to_bottom else 0) if cfg else None, 0)),
+            title_shadow=bool(_eff(q_title_shadow, (1 if cfg is None or cfg.title_shadow else 0) if cfg else None, 1)),
         )
     except Exception as exc:
         log.error("Error generando imagen de preview: %s", exc, exc_info=True)
