@@ -207,12 +207,34 @@
           <!-- Columna izquierda: controles -->
           <div class="col-md-6" style="max-height:760px;overflow-y:auto;overflow-x:hidden;padding-right:6px">
 
+            <style>
+.ig-acc-btn{display:flex;align-items:center;gap:7px;width:100%;padding:7px 10px;background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.11);border-radius:7px;cursor:pointer;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#495057;text-align:left;transition:background .12s;}
+.ig-acc-btn:hover{background:rgba(0,0,0,.08);}
+.ig-acc-btn[aria-expanded="true"]{border-radius:7px 7px 0 0;border-bottom-color:transparent;background:rgba(0,0,0,.06);}
+.ig-acc-btn[aria-expanded="true"] .igac-chev{transform:rotate(180deg);}
+.igac-chev{font-size:.6rem;color:#868e96;transition:transform .18s;margin-left:auto;}
+.ig-acc-body{padding:10px 10px 12px 12px;border:1px solid rgba(0,0,0,.11);border-top:none;border-radius:0 0 7px 7px;margin-bottom:6px;}
+            </style>
+
+            <!-- ── TEXTO DE PRUEBA ── -->
+            <div class="mb-3 p-2 rounded-2" style="background:rgba(13,110,253,.06);border:1px solid rgba(13,110,253,.22)">
+              <label class="form-label small fw-semibold mb-1" for="previewTitle">
+                <i class="bi bi-pencil-square me-1 text-primary"></i>Título de prueba
+              </label>
+              <textarea id="previewTitle" class="form-control form-control-sm" rows="2"
+                        placeholder="Escribí el título para ver cómo queda en la imagen…"
+                        maxlength="250">Vista previa — Título de la noticia de ejemplo</textarea>
+              <div class="form-text">El texto que se muestra en el preview. No se guarda.</div>
+            </div>
+
             <!-- ── GRADIENTE ── -->
-            <div style="border-left:3px solid #6c757d;padding-left:10px;margin-bottom:14px">
-              <p style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6c757d;margin-bottom:8px">
-                <i class="bi bi-layers me-1"></i>Gradiente
-              </p>
-              <div class="row g-2 mb-2">
+            <div class="mb-1">
+              <button class="ig-acc-btn" type="button" data-bs-toggle="collapse" data-bs-target="#accGradiente" aria-expanded="false" aria-controls="accGradiente">
+                <i class="bi bi-layers" style="color:#6c757d"></i><span style="color:#6c757d">Gradiente</span><i class="bi bi-chevron-down igac-chev"></i>
+              </button>
+              <div class="collapse" id="accGradiente">
+                <div class="ig-acc-body">
+                  <div class="row g-2 mb-2">
                 <div class="col-4">
                   <label class="form-label small mb-1">Color</label>
                   <input type="color" name="gradient_color" form="igForm" class="form-control form-control-color form-control-sm w-100"
@@ -239,13 +261,17 @@
                   <small class="text-muted">↑ toda la imagen</small>
                 </div>
               </div>
+                </div>
+              </div>
             </div>
 
             <!-- ── TÍTULO ── -->
-            <div style="border-left:3px solid #0d6efd;padding-left:10px;margin-bottom:14px">
-              <p style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#0d6efd;margin-bottom:8px">
-                <i class="bi bi-type me-1"></i>Título
-              </p>
+            <div class="mb-1">
+              <button class="ig-acc-btn" type="button" data-bs-toggle="collapse" data-bs-target="#accTitulo" aria-expanded="true" aria-controls="accTitulo">
+                <i class="bi bi-type" style="color:#0d6efd"></i><span style="color:#0d6efd">Título</span><i class="bi bi-chevron-down igac-chev"></i>
+              </button>
+              <div class="collapse show" id="accTitulo">
+                <div class="ig-acc-body">
               <div class="row g-2 mb-2">
                 <div class="col-4">
                   <label class="form-label small mb-1">Color</label>
@@ -321,13 +347,17 @@
                        {% if tsh %}checked{% endif %}>
                 <label class="form-check-label small" for="titleShadow">Sombra del texto</label>
               </div>
+                </div>
+              </div>
             </div>
 
             <!-- ── FONDO DEL TÍTULO ── -->
-            <div style="border-left:3px solid #0dcaf0;padding-left:10px;margin-bottom:14px">
-              <p style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#0dcaf0;margin-bottom:8px">
-                <i class="bi bi-square-fill me-1"></i>Fondo del título
-              </p>
+            <div class="mb-1">
+              <button class="ig-acc-btn" type="button" data-bs-toggle="collapse" data-bs-target="#accFondoTitulo" aria-expanded="true" aria-controls="accFondoTitulo">
+                <i class="bi bi-square-fill" style="color:#0dcaf0"></i><span style="color:#0dcaf0">Fondo del título</span><i class="bi bi-chevron-down igac-chev"></i>
+              </button>
+              <div class="collapse show" id="accFondoTitulo">
+                <div class="ig-acc-body">
               <div class="row g-2 mb-2">
                 <div class="col-4">
                   <label class="form-label small mb-1">Color</label>
@@ -424,13 +454,17 @@
                 </label>
               </div>
               <div class="form-text mb-0">El color de fondo llega hasta el margen inferior de la imagen.</div>
+                </div>
+              </div>
             </div>
 
             <!-- ── FRANJA INFERIOR ── -->
-            <div style="border-left:3px solid #dc3545;padding-left:10px;margin-bottom:14px">
-              <p style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#dc3545;margin-bottom:8px">
-                <i class="bi bi-bookmark-fill me-1"></i>Franja inferior
-              </p>
+            <div class="mb-1">
+              <button class="ig-acc-btn" type="button" data-bs-toggle="collapse" data-bs-target="#accFranja" aria-expanded="false" aria-controls="accFranja">
+                <i class="bi bi-bookmark-fill" style="color:#dc3545"></i><span style="color:#dc3545">Franja inferior</span><i class="bi bi-chevron-down igac-chev"></i>
+              </button>
+              <div class="collapse" id="accFranja">
+                <div class="ig-acc-body">
               <div class="mb-2">
                 <input type="text" name="banner_text" form="igForm" class="form-control form-control-sm" id="bannerText"
                        value="{{ cfg.banner_text if cfg and cfg.banner_text else '' }}"
@@ -544,13 +578,17 @@
                          value="{{ banbc }}">
                 </div>
               </div>
+                </div>
+              </div>
             </div>
 
             <!-- ── BADGE DE CATEGORÍA ── -->
-            <div style="border-left:3px solid #fd7e14;padding-left:10px;margin-bottom:14px">
-              <p style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#fd7e14;margin-bottom:8px">
-                <i class="bi bi-tag-fill me-1"></i>Badge de categoría
-              </p>
+            <div class="mb-1">
+              <button class="ig-acc-btn" type="button" data-bs-toggle="collapse" data-bs-target="#accBadge" aria-expanded="false" aria-controls="accBadge">
+                <i class="bi bi-tag-fill" style="color:#fd7e14"></i><span style="color:#fd7e14">Badge de categoría</span><i class="bi bi-chevron-down igac-chev"></i>
+              </button>
+              <div class="collapse" id="accBadge">
+                <div class="ig-acc-body">
               <div class="form-check form-switch mb-1">
                 <input class="form-check-input" type="checkbox" role="switch" name="show_category" id="showCategory" form="igForm"
                        {% if sc %}checked{% endif %}>
@@ -610,13 +648,17 @@
                          min="0" max="100" step="5" value="{{ cyp }}">
                 </div>
               </div>
+                </div>
+              </div>
             </div>
 
             <!-- ── LOGO ── -->
-            <div style="border-left:3px solid #198754;padding-left:10px;margin-bottom:14px">
-              <p style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#198754;margin-bottom:8px">
-                <i class="bi bi-image me-1"></i>Logo
-              </p>
+            <div class="mb-1">
+              <button class="ig-acc-btn" type="button" data-bs-toggle="collapse" data-bs-target="#accLogo" aria-expanded="false" aria-controls="accLogo">
+                <i class="bi bi-image" style="color:#198754"></i><span style="color:#198754">Logo</span><i class="bi bi-chevron-down igac-chev"></i>
+              </button>
+              <div class="collapse" id="accLogo">
+                <div class="ig-acc-body">
               <div class="mb-2">
                 <input type="file" name="logo" form="igForm" class="form-control form-control-sm" accept=".png,.jpg,.jpeg,.webp">
               </div>
@@ -643,6 +685,8 @@
                 </label>
                 <input type="range" name="logo_size" form="igForm" class="form-range" id="logoSize"
                        min="60" max="300" step="10" value="{{ ls }}">
+              </div>
+                </div>
               </div>
             </div>
 
@@ -878,6 +922,8 @@ function _collectPreviewParams() {
     'text_bg_border_radius','text_bg_border_width','text_bg_border_color','text_bg_height_pct',
     'banner_border_radius','banner_border_width','banner_border_color',
   ].forEach(f => { const v = fd.get(f); if (v !== null) params.set(f, v); });
+  const pt = document.getElementById('previewTitle')?.value?.trim();
+  if (pt) params.set('preview_title', pt);
   // Checkboxes (no aparecen en FormData si están unchecked)
   params.set('show_category', document.getElementById('showCategory')?.checked ? '1' : '0');
   params.set('banner_full_width', document.getElementById('bannerFullWidth')?.checked ? '1' : '0');
@@ -1126,8 +1172,9 @@ document.querySelectorAll('[name="banner_style"]').forEach(el =>
 document.querySelectorAll('[name="banner_align"]').forEach(el =>
   el.addEventListener('change', () => _schedulePreview(200))
 );
-// Banner text: debounce más largo (el usuario escribe)
+// Banner text y título de prueba: debounce más largo (el usuario escribe)
 document.getElementById('bannerText')?.addEventListener('input', () => _schedulePreview(600));
+document.getElementById('previewTitle')?.addEventListener('input', () => _schedulePreview(600));
 
 // Toggle mostrar categoría → mostrar/ocultar controles
 document.getElementById('showCategory')?.addEventListener('change', function() {
