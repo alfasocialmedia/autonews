@@ -226,7 +226,7 @@
                         maxlength="250"></textarea>
               <div class="d-flex align-items-center justify-content-between mt-1">
                 <span class="form-text mb-0">No se guarda. Solo para probar.</span>
-                <button type="button" class="btn btn-sm btn-primary py-0 px-2" id="btnApplyTitle" style="font-size:.72rem">
+                <button type="button" class="btn btn-sm btn-primary py-0 px-2" id="btnApplyTitle" onclick="_runPreview()" style="font-size:.72rem">
                   <i class="bi bi-play-fill me-1"></i>Aplicar
                 </button>
               </div>
@@ -926,7 +926,7 @@ function _collectPreviewParams() {
     'text_box_x_pct','text_box_y_pct','text_box_w_pct',
     'text_bg_border_radius','text_bg_border_width','text_bg_border_color','text_bg_height_pct',
     'banner_border_radius','banner_border_width','banner_border_color',
-  ].forEach(f => { const v = fd.get(f); if (v !== null) params.set(f, v); });
+  ].forEach(f => { const v = fd.get(f); if (v !== null && v !== 'NaN') params.set(f, v); });
   const pt = document.getElementById('previewTitle')?.value?.trim();
   if (pt) params.set('preview_title', pt);
   // Checkboxes (no aparecen en FormData si están unchecked)
@@ -1026,6 +1026,7 @@ const _boxOverlay = (() => {
   function _syncSlidersFromBox() {
     if (!wrapEl || !boxEl) return;
     const W = wrapEl.offsetWidth, H = wrapEl.offsetHeight;
+    if (!W || !H) return;
     const bx = parseFloat(boxEl.style.left)   || 0;
     const by = parseFloat(boxEl.style.top)    || 0;
     const bw = parseFloat(boxEl.style.width)  || W;
