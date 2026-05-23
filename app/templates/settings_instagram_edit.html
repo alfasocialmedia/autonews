@@ -222,8 +222,8 @@
                 <i class="bi bi-pencil-square me-1 text-primary"></i>Título de prueba
               </label>
               <textarea id="previewTitle" class="form-control form-control-sm" rows="2"
-                        placeholder="Escribí el título para ver cómo queda en la imagen…"
-                        maxlength="250">Vista previa — Título de la noticia de ejemplo</textarea>
+                        placeholder="Escribí un título para probarlo en la imagen…"
+                        maxlength="250"></textarea>
               <div class="form-text">El texto que se muestra en el preview. No se guarda.</div>
             </div>
 
@@ -1172,9 +1172,13 @@ document.querySelectorAll('[name="banner_style"]').forEach(el =>
 document.querySelectorAll('[name="banner_align"]').forEach(el =>
   el.addEventListener('change', () => _schedulePreview(200))
 );
-// Banner text y título de prueba: debounce más largo (el usuario escribe)
+// Banner text: debounce normal
 document.getElementById('bannerText')?.addEventListener('input', () => _schedulePreview(600));
-document.getElementById('previewTitle')?.addEventListener('input', () => _schedulePreview(600));
+// Título de prueba: siempre dispara preview sin importar si ya cargó antes
+document.getElementById('previewTitle')?.addEventListener('input', () => {
+  clearTimeout(_previewTimer);
+  _previewTimer = setTimeout(_runPreview, 500);
+});
 
 // Toggle mostrar categoría → mostrar/ocultar controles
 document.getElementById('showCategory')?.addEventListener('change', function() {
