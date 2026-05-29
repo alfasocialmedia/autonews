@@ -435,10 +435,13 @@ def send_text(url: str, api_key: str, instance_name: str, jid: str, text: str) -
 
 
 def _newsletter_jid_variants(jid: str) -> list[str]:
-    """Devuelve el JID del canal normalizado a @newsletter.
-    NO incluye @g.us porque eso es un grupo de WhatsApp — enviaría al grupo, no al canal."""
+    """
+    Evolution API v2.3.x representa los canales de WhatsApp con JID @g.us (ej: 120363...@g.us),
+    no @newsletter. Devuelve primero @g.us (que funciona) y luego @newsletter como fallback.
+    Los canales siempre tienen base numérica que empieza con 120363.
+    """
     base = jid.split("@")[0]
-    return [f"{base}@newsletter"]
+    return [f"{base}@g.us", f"{base}@newsletter"]
 
 
 def send_to_newsletter(url: str, api_key: str, instance_name: str, newsletter_jid: str, text: str) -> bool:
