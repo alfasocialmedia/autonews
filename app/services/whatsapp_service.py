@@ -435,19 +435,10 @@ def send_text(url: str, api_key: str, instance_name: str, jid: str, text: str) -
 
 
 def _newsletter_jid_variants(jid: str) -> list[str]:
-    """Devuelve variantes del JID: @newsletter y @g.us (Evolution API v2.3.x usa ambos)."""
+    """Devuelve el JID del canal normalizado a @newsletter.
+    NO incluye @g.us porque eso es un grupo de WhatsApp — enviaría al grupo, no al canal."""
     base = jid.split("@")[0]
-    variants = []
-    if "@newsletter" in jid:
-        variants.append(jid)
-        variants.append(f"{base}@g.us")
-    elif "@g.us" in jid:
-        variants.append(jid)
-        variants.append(f"{base}@newsletter")
-    else:
-        variants.append(f"{base}@newsletter")
-        variants.append(f"{base}@g.us")
-    return variants
+    return [f"{base}@newsletter"]
 
 
 def send_to_newsletter(url: str, api_key: str, instance_name: str, newsletter_jid: str, text: str) -> bool:
@@ -455,28 +446,33 @@ def send_to_newsletter(url: str, api_key: str, instance_name: str, newsletter_ji
     hdrs = _headers(api_key)
     jid_variants = _newsletter_jid_variants(newsletter_jid)
 
-    for jid in jid_variants:
-        for path, body in (
-            (f"/newsletter/sendText/{instance_name}", {"newsletterId": jid, "text": text}),
-            (f"/newsletter/send/{instance_name}",     {"newsletterId": jid, "message": {"conversation": text}}),
-            (f"/message/sendText/{instance_name}",    {"number": jid, "text": text}),
-        ):
-            try:
-                r = requests.post(f"{url}{path}", headers=hdrs, json=body,
-                                  timeout=TIMEOUT, verify=VERIFY_SSL)
-                if r.status_code in (404, 405):
-                    log.debug("send_to_newsletter %s %s → 404/405 (endpoint no existe)", path, jid[:30])
-                    continue
-                if not r.ok:
-                    log.warning("send_to_newsletter %s %s → HTTP %d: %s",
-                                path, jid[:40], r.status_code, r.text[:300])
-                    continue
-                log.info("send_to_newsletter → %s via %s: OK", jid[:40], path)
-                return True
-            except Exception as exc:
-                log.warning("send_to_newsletter %s %s: %s", path, jid[:40], exc)
+    jid = jid_variants[0]  # siempre @newsletter
 
-    log.warning("send_to_newsletter FALLÓ para %s — revisá los logs para ver el error de Evolution API",
+    attempts = [
+        (f"/newsletter/sendText/{instance_name}", {"newsletterId": jid, "text": text}),
+        (f"/newsletter/send/{instance_name}",     {"newsletterId": jid, "message": {"conversation": text}}),
+        (f"/newsletter/send/{instance_name}",     {"newsletterId": jid, "text": text}),
+        (f"/message/sendText/{instance_name}",    {"number": jid, "text": text}),
+        (f"/message/sendText/{instance_name}",    {"number": jid, "textMessage": {"text": text}}),
+    )
+
+    for path, body in attempts:
+        try:
+            r = requests.post(f"{url}{path}", headers=hdrs, json=body,
+                              timeout=TIMEOUT, verify=VERIFY_SSL)
+            if r.status_code in (404, 405):
+                log.debug("send_to_newsletter %s → 404/405", path)
+                continue
+            if not r.ok:
+                log.warning("send_to_newsletter %s %s → HTTP %d: %s",
+                            path, jid[:40], r.status_code, r.text[:300])
+                continue
+            log.info("send_to_newsletter → %s via %s: OK", jid[:40], path)
+            return True
+        except Exception as exc:
+            log.warning("send_to_newsletter %s: %s", path, exc)
+
+    log.warning("send_to_newsletter FALLÓ para %s — ningún endpoint de canal funcionó",
                 newsletter_jid[:40])
     return False
 
