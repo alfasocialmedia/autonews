@@ -190,7 +190,7 @@
               <input class="form-check-input" type="checkbox" name="broadcast_enabled" id="broadcast-{{ acc.id }}"
                      {% if acc.broadcast_enabled %}checked{% endif %}>
               <label class="form-check-label small" for="broadcast-{{ acc.id }}">
-                <strong>Difusión activa</strong> — enviar artículos a los grupos
+                <strong>Difusión activa</strong> — enviar artículos a los grupos y canales de esta cuenta
               </label>
             </div>
 
@@ -336,12 +336,20 @@
                   {% if ch.enabled %}Activo{% else %}Inactivo{% endif %}
                 </button>
               </td>
-              <td>
+              <td class="d-flex gap-1">
+                <button type="button" class="btn btn-xs btn-outline-primary ch-test-btn"
+                        data-id="{{ ch.id }}" data-wa="{{ acc.id }}" title="Enviar mensaje de prueba al canal">
+                  <i class="bi bi-send" aria-hidden="true"></i>
+                </button>
                 <button type="button" class="btn btn-xs btn-outline-danger ch-delete-btn"
                         data-id="{{ ch.id }}" title="Eliminar canal">
                   <i class="bi bi-trash" aria-hidden="true"></i>
-                  <span class="visually-hidden">Eliminar</span>
                 </button>
+              </td>
+            </tr>
+            <tr id="chtest-{{ ch.id }}" class="d-none">
+              <td colspan="4">
+                <div class="small p-2 border rounded bg-light ch-test-result-{{ ch.id }}"></div>
               </td>
             </tr>
             {% endfor %}
@@ -905,7 +913,42 @@ document.querySelectorAll('.ch-delete-btn').forEach(btn => {
     const id = this.dataset.id;
     const resp = await fetch(`/settings/whatsapp/channels/${id}/delete`, { method: 'POST' });
     const data = await resp.json();
-    if (data.ok) document.getElementById('chrow-' + id)?.remove();
+    if (data.ok) {
+      document.getElementById('chrow-' + id)?.remove();
+      document.getElementById('chtest-' + id)?.remove();
+    }
+  });
+});
+
+// ── Probar canal ────────────────────────────────────────────────────────────────
+document.querySelectorAll('.ch-test-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const id = this.dataset.id;
+    const orig = this.innerHTML;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    this.disabled = true;
+    const testRow = document.getElementById('chtest-' + id);
+    const resultDiv = document.querySelector('.ch-test-result-' + id);
+    try {
+      const resp = await fetch(`/settings/whatsapp/channels/${id}/test`, { method: 'POST' });
+      const data = await resp.json();
+      if (data.ok) {
+        resultDiv.innerHTML = `<span class="text-success fw-semibold">✓ Enviado OK</span> via <code>${data.endpoint}</code> con JID <code>${data.jid}</code>`;
+      } else {
+        let html = `<span class="text-danger fw-semibold">✗ ${data.error || 'Falló'}</span><br>`;
+        if (data.attempts && data.attempts.length) {
+          html += '<details class="mt-1"><summary class="small text-muted">Ver intentos</summary><pre class="small mt-1 mb-0" style="max-height:200px;overflow-y:auto">' +
+            JSON.stringify(data.attempts, null, 2) + '</pre></details>';
+        }
+        resultDiv.innerHTML = html;
+      }
+      testRow.classList.remove('d-none');
+    } catch(e) {
+      resultDiv.innerHTML = `<span class="text-danger">Error de red: ${e.message}</span>`;
+      testRow.classList.remove('d-none');
+    }
+    this.innerHTML = orig;
+    this.disabled = false;
   });
 });
 

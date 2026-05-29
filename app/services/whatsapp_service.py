@@ -465,14 +465,19 @@ def send_to_newsletter(url: str, api_key: str, instance_name: str, newsletter_ji
                 r = requests.post(f"{url}{path}", headers=hdrs, json=body,
                                   timeout=TIMEOUT, verify=VERIFY_SSL)
                 if r.status_code in (404, 405):
+                    log.debug("send_to_newsletter %s %s → 404/405 (endpoint no existe)", path, jid[:30])
                     continue
-                r.raise_for_status()
+                if not r.ok:
+                    log.warning("send_to_newsletter %s %s → HTTP %d: %s",
+                                path, jid[:40], r.status_code, r.text[:300])
+                    continue
                 log.info("send_to_newsletter → %s via %s: OK", jid[:40], path)
                 return True
             except Exception as exc:
-                log.debug("send_to_newsletter %s %s: %s", path, jid[:30], exc)
+                log.warning("send_to_newsletter %s %s: %s", path, jid[:40], exc)
 
-    log.warning("send_to_newsletter → %s: todos los endpoints fallaron", newsletter_jid[:40])
+    log.warning("send_to_newsletter FALLÓ para %s — revisá los logs para ver el error de Evolution API",
+                newsletter_jid[:40])
     return False
 
 
@@ -501,14 +506,18 @@ def send_image_to_newsletter(
                 r = requests.post(f"{url}{path}", headers=hdrs, json=body,
                                   timeout=TIMEOUT, verify=VERIFY_SSL)
                 if r.status_code in (404, 405):
+                    log.debug("send_image_to_newsletter %s %s → 404/405", path, jid[:30])
                     continue
-                r.raise_for_status()
+                if not r.ok:
+                    log.warning("send_image_to_newsletter %s %s → HTTP %d: %s",
+                                path, jid[:40], r.status_code, r.text[:300])
+                    continue
                 log.info("send_image_to_newsletter → %s via %s: OK", jid[:40], path)
                 return True
             except Exception as exc:
-                log.debug("send_image_to_newsletter %s %s: %s", path, jid[:30], exc)
+                log.warning("send_image_to_newsletter %s %s: %s", path, jid[:40], exc)
 
-    log.warning("send_image_to_newsletter → %s: todos los endpoints fallaron", newsletter_jid[:40])
+    log.warning("send_image_to_newsletter FALLÓ para %s — revisá los logs", newsletter_jid[:40])
     return False
 
 

@@ -589,6 +589,50 @@ async def delete_channel(channel_id: int, request: Request, db: Session = Depend
     return JSONResponse({"ok": True})
 
 
+@router.post("/settings/whatsapp/channels/{channel_id}/test")
+async def test_channel(channel_id: int, request: Request, db: Session = Depends(get_db)):
+    """Envía un mensaje de prueba al canal y devuelve el resultado detallado."""
+    if not _require_admin(request, db):
+        return JSONResponse({"error": "No autorizado"}, status_code=403)
+
+    ch = db.query(WhatsAppChannel).filter(WhatsAppChannel.id == channel_id).first()
+    if not ch:
+        return JSONResponse({"ok": False, "error": "Canal no encontrado"})
+
+    acc = db.query(WhatsAppSettings).filter(WhatsAppSettings.id == ch.whatsapp_settings_id).first()
+    if not acc:
+        return JSONResponse({"ok": False, "error": "Cuenta WhatsApp no encontrada"})
+
+    from app.services.whatsapp_service import _newsletter_jid_variants
+    import requests as _req
+
+    hdrs = {"apikey": acc.evolution_api_key, "Content-Type": "application/json"}
+    text = "🔧 Prueba de conexión — AutoNews"
+    jid_variants = _newsletter_jid_variants(ch.jid)
+    attempts = []
+
+    for jid in jid_variants:
+        for path, body in (
+            (f"/newsletter/sendText/{acc.instance_name}", {"newsletterId": jid, "text": text}),
+            (f"/newsletter/send/{acc.instance_name}", {"newsletterId": jid, "message": {"conversation": text}}),
+            (f"/message/sendText/{acc.instance_name}", {"number": jid, "text": text}),
+        ):
+            endpoint = f"{acc.evolution_api_url}{path}"
+            try:
+                r = _req.post(endpoint, headers=hdrs, json=body, timeout=10, verify=False)
+                result = {"endpoint": path, "jid": jid, "status": r.status_code, "response": r.text[:400]}
+                attempts.append(result)
+                if r.ok:
+                    return JSONResponse({"ok": True, "endpoint": path, "jid": jid,
+                                        "message": "Mensaje enviado correctamente", "attempts": attempts})
+            except Exception as exc:
+                attempts.append({"endpoint": path, "jid": jid, "status": "error", "response": str(exc)[:200]})
+
+    return JSONResponse({"ok": False,
+                         "error": "Ningún endpoint funcionó — revisá los detalles",
+                         "attempts": attempts})
+
+
 # ── Prueba de difusión ─────────────────────────────────────────────────────────
 
 @router.post("/settings/whatsapp/{wa_id}/test-broadcast")
