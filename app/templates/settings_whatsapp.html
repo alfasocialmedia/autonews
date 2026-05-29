@@ -353,21 +353,32 @@
 
           {% if acc._channels|length < max_channels %}
           <div class="border rounded p-2 bg-light">
-            <p class="small fw-semibold mb-2">Agregar canal manualmente</p>
-            <div class="row g-2">
+            <p class="small fw-semibold mb-1">Agregar canal</p>
+            <p class="small text-muted mb-2">
+              Ingresá el JID del canal (ej: <code>120363XXXXXXXXXX@newsletter</code>) y hacé clic en
+              <i class="bi bi-search"></i> para buscar el nombre automáticamente, o completalo a mano.
+            </p>
+            <div class="row g-2 align-items-end">
               <div class="col">
-                <input type="text" class="form-control form-control-sm font-monospace new-channel-jid"
-                       id="newChannelJid-{{ acc.id }}" placeholder="120363XXXXXXXXXX@newsletter">
+                <label class="form-label form-label-sm mb-1">JID del canal</label>
+                <div class="input-group input-group-sm">
+                  <input type="text" class="form-control form-control-sm font-monospace new-channel-jid"
+                         id="newChannelJid-{{ acc.id }}" placeholder="120363XXXXXXXXXX@newsletter">
+                  <button type="button" class="btn btn-outline-secondary lookup-channel-btn"
+                          data-id="{{ acc.id }}" title="Buscar nombre del canal">
+                    <i class="bi bi-search"></i>
+                  </button>
+                </div>
               </div>
               <div class="col">
+                <label class="form-label form-label-sm mb-1">Nombre</label>
                 <input type="text" class="form-control form-control-sm new-channel-name"
-                       id="newChannelName-{{ acc.id }}" placeholder="Nombre">
+                       id="newChannelName-{{ acc.id }}" placeholder="Nombre del canal">
               </div>
               <div class="col-auto">
                 <button type="button" class="btn btn-sm btn-primary add-channel-btn"
                         data-id="{{ acc.id }}" title="Agregar canal">
-                  <i class="bi bi-plus-lg" aria-hidden="true"></i>
-                  <span class="visually-hidden">Agregar</span>
+                  <i class="bi bi-plus-lg"></i>
                 </button>
               </div>
             </div>
@@ -769,12 +780,11 @@ document.querySelectorAll('.fetch-channels-btn').forEach(btn => {
     this.innerHTML = orig;
     this.disabled = false;
     if (data.error) { showToast('Error: ' + data.error, 'danger'); return; }
-    if (data.status === 'not_supported') {
-      showToast('Tu versión de Evolution API no soporta canales. Ingresá el JID manualmente.', 'warning');
+    const channels = data.channels || [];
+    if (!channels.length) {
+      showToast('No se encontraron canales automáticamente. Ingresá el JID manualmente y usá el botón 🔍 para buscar el nombre.', 'warning');
       return;
     }
-    const channels = data.channels || [];
-    if (!channels.length) { showToast('No se encontraron canales', 'warning'); return; }
     const panel = document.getElementById(`fetchedChannelsPanel-${waId}`);
     const list = document.getElementById(`fetchedChannelsList-${waId}`);
     list.innerHTML = '';
@@ -791,6 +801,33 @@ document.querySelectorAll('.fetch-channels-btn').forEach(btn => {
       list.appendChild(item);
     });
     panel.classList.remove('d-none');
+  });
+});
+
+// ── Buscar canal por JID ────────────────────────────────────────────────────────
+document.querySelectorAll('.lookup-channel-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const waId = this.dataset.id;
+    const jid = document.getElementById(`newChannelJid-${waId}`).value.trim();
+    if (!jid) { showToast('Ingresá el JID primero', 'warning'); return; }
+    const orig = this.innerHTML;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    this.disabled = true;
+    try {
+      const resp = await fetch(`/settings/whatsapp/${waId}/find-channel?jid=${encodeURIComponent(jid)}`);
+      const data = await resp.json();
+      if (data.ok && data.channel) {
+        document.getElementById(`newChannelJid-${waId}`).value = data.channel.id;
+        document.getElementById(`newChannelName-${waId}`).value = data.channel.subject;
+        showToast('Canal encontrado: ' + data.channel.subject, 'success');
+      } else {
+        showToast(data.error || 'Canal no encontrado — verificá el JID', 'warning');
+      }
+    } catch(e) {
+      showToast('Error de red', 'danger');
+    }
+    this.innerHTML = orig;
+    this.disabled = false;
   });
 });
 

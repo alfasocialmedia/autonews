@@ -399,6 +399,24 @@ async def fetch_channels_route(wa_id: int, request: Request, db: Session = Depen
     return JSONResponse({"channels": channels, "status": status})
 
 
+@router.get("/settings/whatsapp/{wa_id}/find-channel")
+async def find_channel_by_jid(wa_id: int, request: Request, jid: str = "", db: Session = Depends(get_db)):
+    """Busca un canal específico por JID o nombre parcial. Usado para validar JIDs manuales."""
+    user = _require_admin(request, db)
+    if not user:
+        return JSONResponse({"error": "No autorizado"}, status_code=403)
+    acc = _get_account(db, wa_id)
+    if not acc:
+        return JSONResponse({"error": "Cuenta no encontrada"}, status_code=404)
+    if not jid.strip():
+        return JSONResponse({"error": "JID requerido"}, status_code=400)
+    from app.services.whatsapp_service import find_newsletter_by_jid
+    result = find_newsletter_by_jid(acc.evolution_api_url, acc.evolution_api_key, acc.instance_name, jid.strip())
+    if result:
+        return JSONResponse({"ok": True, "channel": result})
+    return JSONResponse({"ok": False, "error": "Canal no encontrado"})
+
+
 @router.post("/settings/whatsapp/{wa_id}/groups/add")
 async def add_group(
     wa_id: int,

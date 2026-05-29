@@ -173,30 +173,74 @@ def fetch_groups(url: str, api_key: str, instance_name: str) -> list[dict]:
         return []
 
 
+def _extract_newsletter_items(raw) -> list[dict]:
+    """Normaliza una lista o dict de la API a [{id, subject}] filtrando solo @newsletter JIDs."""
+    rows = raw if isinstance(raw, list) else (
+        raw.get("newsletters") or raw.get("channels") or raw.get("data") or []
+    )
+    items = []
+    for n in rows:
+        if not isinstance(n, dict):
+            continue
+        jid = n.get("id") or n.get("jid") or ""
+        if not jid:
+            continue
+        name = (n.get("name") or n.get("subject") or n.get("title") or
+                (n.get("newsletter", {}) or {}).get("name") or jid)
+        items.append({"id": jid, "subject": name})
+    return items
+
+
 def fetch_newsletters(url: str, api_key: str, instance_name: str) -> tuple[list[dict], str]:
-    """Devuelve (lista, status) con los canales/newsletters vinculados.
-    Intenta el endpoint nativo de newsletters y, como fallback,
-    busca JIDs @newsletter en la lista de chats."""
-    # 1. Endpoint nativo de newsletters (Evolution API v2 reciente)
-    try:
-        r = requests.get(
-            f"{url}/newsletter/findAll/{instance_name}",
-            headers=_headers(api_key), timeout=TIMEOUT, verify=VERIFY_SSL,
-        )
-        if r.status_code not in (404, 405):
+    """Intenta varios endpoints para obtener canales (newsletters) de la instancia."""
+    hdrs = _headers(api_key)
+
+    # 1. Endpoint nativo Evolution API v2
+    for path in (
+        f"/newsletter/findAll/{instance_name}",
+        f"/newsletter/find/{instance_name}",
+        f"/channel/findAll/{instance_name}",
+    ):
+        try:
+            r = requests.get(f"{url}{path}", headers=hdrs, timeout=TIMEOUT, verify=VERIFY_SSL)
+            if r.status_code in (404, 405, 403):
+                continue
             r.raise_for_status()
             data = r.json()
-            rows = data if isinstance(data, list) else data.get("newsletters") or data.get("channels") or []
-            items = [{"id": n.get("id", ""), "subject": n.get("name") or n.get("subject", n.get("id", ""))} for n in rows if n.get("id")]
+            items = _extract_newsletter_items(data)
+            if items:
+                log.info("fetch_newsletters via %s: %d canal(es)", path, len(items))
+                return items, "ok"
+        except Exception as exc:
+            log.debug("fetch_newsletters %s error: %s", path, exc)
+
+    # 2. Filtrar @newsletter en la lista de grupos (algunas versiones los incluyen)
+    try:
+        r = requests.get(
+            f"{url}/group/fetchAllGroups/{instance_name}",
+            headers=hdrs,
+            params={"getParticipants": "false"},
+            timeout=TIMEOUT, verify=VERIFY_SSL,
+        )
+        r.raise_for_status()
+        data = r.json()
+        groups = data if isinstance(data, list) else []
+        items = [
+            {"id": g.get("id", ""), "subject": g.get("subject") or g.get("name") or g.get("id", "")}
+            for g in groups
+            if isinstance(g.get("id"), str) and g["id"].endswith("@newsletter")
+        ]
+        if items:
+            log.info("fetch_newsletters via groups: %d canal(es)", len(items))
             return items, "ok"
     except Exception as exc:
-        log.warning("fetch_newsletters (native) error: %s", exc)
+        log.debug("fetch_newsletters groups fallback error: %s", exc)
 
-    # 2. Fallback: filtrar @newsletter de la lista de chats
+    # 3. Filtrar @newsletter en la lista de chats
     try:
         r = requests.get(
             f"{url}/chat/findChats/{instance_name}",
-            headers=_headers(api_key), timeout=TIMEOUT, verify=VERIFY_SSL,
+            headers=hdrs, timeout=TIMEOUT, verify=VERIFY_SSL,
         )
         r.raise_for_status()
         data = r.json()
@@ -206,12 +250,49 @@ def fetch_newsletters(url: str, api_key: str, instance_name: str) -> tuple[list[
             for c in chats
             if isinstance(c.get("id"), str) and c["id"].endswith("@newsletter")
         ]
-        log.info("fetch_newsletters via chats: %d canal(es) encontrado(s)", len(items))
+        log.info("fetch_newsletters via chats: %d canal(es)", len(items))
         return items, "ok"
     except Exception as exc:
-        log.warning("fetch_newsletters (chats fallback) error: %s", exc)
+        log.debug("fetch_newsletters chats fallback error: %s", exc)
 
     return [], "not_supported"
+
+
+def find_newsletter_by_jid(url: str, api_key: str, instance_name: str, jid: str) -> dict | None:
+    """Busca un canal específico por JID. Devuelve {id, subject} o None."""
+    hdrs = _headers(api_key)
+    jid = jid.strip()
+    if not jid.endswith("@newsletter"):
+        jid = jid + "@newsletter"
+
+    # Intentar endpoint de búsqueda por ID
+    for path in (
+        f"/newsletter/find/{instance_name}",
+        f"/newsletter/findOne/{instance_name}",
+    ):
+        try:
+            r = requests.get(
+                f"{url}{path}",
+                headers=hdrs,
+                params={"newsletterId": jid},
+                timeout=TIMEOUT, verify=VERIFY_SSL,
+            )
+            if r.status_code in (404, 405, 403):
+                continue
+            r.raise_for_status()
+            data = r.json()
+            if isinstance(data, dict) and (data.get("id") or data.get("jid")):
+                resolved_jid = data.get("id") or data.get("jid") or jid
+                name = (data.get("name") or data.get("subject") or data.get("title") or
+                        (data.get("newsletter", {}) or {}).get("name") or resolved_jid)
+                return {"id": resolved_jid, "subject": name}
+        except Exception as exc:
+            log.debug("find_newsletter_by_jid %s error: %s", path, exc)
+
+    # Si el JID tiene formato correcto, devolvemos al menos el JID como nombre
+    if "@newsletter" in jid:
+        return {"id": jid, "subject": jid.replace("@newsletter", "")}
+    return None
 
 
 # ── Envío de mensajes ──────────────────────────────────────────────────────────
