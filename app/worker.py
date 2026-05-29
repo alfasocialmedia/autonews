@@ -1062,8 +1062,17 @@ def _broadcast_whatsapp(db, ai_result: dict, wp_url: str, wp_site_id: int | None
         if not wa_accounts:
             return
 
-        title = ai_result.get("title", "")
-        summary = ai_result.get("summary", "")
+        title = re.sub(r'\s+', ' ', ai_result.get("title", "")).strip()
+        raw_summary = ai_result.get("summary", "").strip()
+
+        # Limpiar el summary: si empieza con el título (o variante sin puntuación), quitarlo
+        title_norm = re.sub(r'\W+', ' ', title).strip().lower()
+        summary_norm = re.sub(r'\W+', ' ', raw_summary).strip().lower()
+        if title_norm and summary_norm.startswith(title_norm[:40]):
+            # Quitar la primera oración/frase si coincide con el título
+            summary = re.split(r'(?<=[.!?])\s+', raw_summary, maxsplit=1)[-1].strip()
+        else:
+            summary = raw_summary
 
         for s in wa_accounts:
             if not s.evolution_api_url or not s.evolution_api_key:
@@ -1072,9 +1081,7 @@ def _broadcast_whatsapp(db, ai_result: dict, wp_url: str, wp_site_id: int | None
                 if s.wordpress_settings_id != wp_site_id:
                     continue
 
-            # Texto del mensaje con el nuevo formato
-            title_clean = re.sub(r'\s+', ' ', title).strip()
-            parts = [f"*{title_clean}*"]
+            parts = [f"*{title}*"]
             if summary:
                 parts.append(summary[:350])
             if wp_url:
