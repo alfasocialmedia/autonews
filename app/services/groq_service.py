@@ -435,7 +435,7 @@ def _chat_with_token_fallback(client, model: str, messages: list, max_tokens: in
         raise
 
 
-def _split_long_paragraphs(html: str, max_chars: int = 320) -> str:
+def _split_long_paragraphs(html: str, max_chars: int = 200) -> str:
     """Divide <p> con más de max_chars caracteres en párrafos más cortos, cortando en oraciones."""
     import re as _re
     def split_p(m):
@@ -582,7 +582,7 @@ def process_rss_with_groq(
     else:
         word_count_rule = "Sin mínimo de palabras — el artículo puede ser corto. No rellenes ni inventes para alargar."
 
-    para_size_rule = "Cada <p> con exactamente 2 oraciones cortas. NUNCA 1 sola. NUNCA más de 2. Párrafos cortos, punto y aparte frecuente."
+    para_size_rule = "Cada <p> con 1 o 2 oraciones como máximo. Si la oración es larga, 1 sola alcanza. NUNCA más de 2 oraciones por <p>. Párrafos muy cortos, punto y aparte frecuente."
 
     prompt = f"""{base_prompt}
 
@@ -667,17 +667,16 @@ FORMATO HTML OBLIGATORIO DEL CUERPO:
 Cada párrafo DEBE estar entre <p> y </p>. SIN EXCEPCIÓN.
 ⚠ REGLA DE ORO — PÁRRAFOS:
   • {para_size_rule}
-  • Agrupá oraciones que hablan del MISMO subtema en un solo <p>.
-  • Cuando cambia el subtema, abrís un <p> nuevo.
+  • Cada <p> tiene 1 oración (si es completa e informativa) o 2 como máximo.
   • Ejemplo CORRECTO:
-      <p>Un cuerpo fue hallado este miércoles en el río Paraná, en Puerto Mbya, distrito de Presidente Franco. El hallazgo fue reportado por el teniente Héctor Morán a la Subcomisaría 10ª del barrio Tres Fronteras.</p>
-      <p>La víctima, un hombre aún sin identificar, presentaba un avanzado estado de descomposición y no llevaba documentación. Los investigadores trabajan contra reloj para establecer su identidad.</p>
-      <p>Por disposición del Ministerio Público, el cuerpo fue trasladado al Puerto Tres Fronteras y derivado a una funeraria local para las diligencias correspondientes.</p>
-  • Ejemplo INCORRECTO (RECHAZADO — 1 oración sola por párrafo):
-      <p>Un cuerpo fue hallado en el río Paraná.</p><p>El hecho ocurrió en Puerto Mbya.</p><p>La víctima era un hombre.</p>
+      <p>Un cuerpo fue hallado este miércoles en el río Paraná, en Puerto Mbya, distrito de Presidente Franco.</p>
+      <p>La víctima, un hombre aún sin identificar, presentaba un avanzado estado de descomposición y no llevaba documentación.</p>
+      <p>Por disposición del Ministerio Público, el cuerpo fue derivado a una funeraria local para las diligencias correspondientes.</p>
+  • Ejemplo INCORRECTO (RECHAZADO — demasiadas oraciones en un mismo párrafo):
+      <p>Un cuerpo fue hallado en el río Paraná. La víctima era un hombre sin identificar. El hecho fue reportado por el teniente Morán. Las diligencias continúan.</p>
 {para_range} párrafos en total.
 SUBTÍTULOS: {heading_rule}
-PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>, párrafos de 1 sola oración suelta (pega esa oración con la siguiente del mismo tema).
+PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>, más de 2 oraciones dentro de un mismo <p>.
 
 ORIGINALIDAD:
 Reescribí completamente la noticia con palabras propias.
@@ -807,7 +806,7 @@ def process_email_with_groq(
     else:
         word_count_rule = "Sin mínimo de palabras — el artículo puede ser corto. No rellenes ni inventes para alargar."
 
-    para_size_rule = "Cada <p> con exactamente 2 oraciones cortas. NUNCA 1 sola. NUNCA más de 2. Párrafos cortos, punto y aparte frecuente."
+    para_size_rule = "Cada <p> con 1 o 2 oraciones como máximo. Si la oración es larga, 1 sola alcanza. NUNCA más de 2 oraciones por <p>. Párrafos muy cortos, punto y aparte frecuente."
 
     # Extraer la primera línea significativa del cuerpo como pista de titular
     first_body_line = next(
@@ -898,13 +897,13 @@ FORMATO HTML OBLIGATORIO DEL CUERPO:
 Cada párrafo DEBE estar entre <p> y </p>. SIN EXCEPCIÓN.
 ⚠ REGLA DE ORO — PÁRRAFOS CORTOS:
   • {para_size_rule}
-  • Cada punto seguido es un párrafo nuevo. NO acumules oraciones en el mismo <p>.
+  • Cada <p> tiene 1 oración (si es completa e informativa) o 2 como máximo.
   • Ejemplo CORRECTO:
-      <p>Un cuerpo fue hallado este miércoles en el río Paraná.</p>
-      <p>El hecho ocurrió en Puerto Mbya, distrito de Presidente Franco.</p>
-      <p>La noticia fue reportada por el teniente Héctor Morán a la Subcomisaría 10ª.</p>
-  • Ejemplo INCORRECTO (RECHAZADO):
-      <p>Un cuerpo fue hallado este miércoles en el río Paraná, en Puerto Mbya, distrito de Presidente Franco. La noticia fue reportada por el teniente Héctor Morán a la Subcomisaría 10ª, quien alertó sobre el hallazgo.</p>
+      <p>Un cuerpo fue hallado este miércoles en el río Paraná, en Puerto Mbya, distrito de Presidente Franco.</p>
+      <p>La víctima, un hombre aún sin identificar, presentaba un avanzado estado de descomposición y no llevaba documentación.</p>
+      <p>Por disposición del Ministerio Público, el cuerpo fue derivado a una funeraria local para las diligencias correspondientes.</p>
+  • Ejemplo INCORRECTO (RECHAZADO — demasiadas oraciones en un mismo párrafo):
+      <p>Un cuerpo fue hallado en el río Paraná. La víctima era un hombre sin identificar. El hecho fue reportado por el teniente Morán. Las diligencias continúan.</p>
 {para_range} párrafos en total.
 Si el contenido tiene secciones claramente diferenciadas, podés usar <h2> para separar. Máximo 2.
 PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>, más de 2 oraciones dentro de un mismo <p>.
