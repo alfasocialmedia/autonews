@@ -1093,14 +1093,22 @@ def _broadcast_whatsapp(db, ai_result: dict, wp_url: str, wp_site_id: int | None
                 if s.wordpress_settings_id != wp_site_id:
                     continue
 
-            parts = [f"*{title}*"]
-            if summary:
-                parts.append(summary[:350])
-            if wp_url:
-                parts.append(f"📰 Ingresá y mirá la noticia completa:\n{wp_url}")
+            # Usar la plantilla configurada en el panel; fallback al formato por defecto
+            template = (s.broadcast_template or "").strip()
+            if template:
+                text = (template
+                        .replace("{title}", title)
+                        .replace("{summary}", summary)
+                        .replace("{url}", wp_url or ""))
             else:
-                parts.append("📰 Ingresá y mirá la noticia completa en el link de nuestro perfil.")
-            text = "\n\n".join(parts)
+                parts = [f"*{title}*"]
+                if summary:
+                    parts.append(summary[:350])
+                if wp_url:
+                    parts.append(f"📰 Ingresá y mirá la noticia completa:\n{wp_url}")
+                else:
+                    parts.append("📰 Ingresá y mirá la noticia completa en el link de nuestro perfil.")
+                text = "\n\n".join(parts)
 
             # Grupos — saltar los que ya recibieron el mensaje en esta sesión
             all_groups = db.query(WhatsAppGroup).filter(

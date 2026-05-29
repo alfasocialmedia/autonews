@@ -1180,7 +1180,14 @@ def _broadcast_whatsapp(
     title = ai_result.get("title", "")
     summary = ai_result.get("summary", "")
     content_html = ai_result.get("content", "")
-    msg_text = _build_broadcast_text(title, summary, content_html, post_url)
+    template = (settings.broadcast_template or "").strip()
+    if template:
+        msg_text = (template
+                    .replace("{title}", title)
+                    .replace("{summary}", summary)
+                    .replace("{url}", post_url or ""))
+    else:
+        msg_text = _build_broadcast_text(title, summary, content_html, post_url)
 
     # Descargar imagen de fallback si no hay payload directo
     scraped_img_bytes: bytes | None = None
