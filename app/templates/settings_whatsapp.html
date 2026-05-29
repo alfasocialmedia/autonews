@@ -315,7 +315,13 @@
             <button type="button" class="btn btn-xs btn-outline-success ms-2 fetch-channels-btn" data-id="{{ acc.id }}">
               <i class="bi bi-arrow-clockwise me-1"></i>Cargar de WA
             </button>
+            <button type="button" class="btn btn-xs btn-outline-secondary ms-1 debug-channels-btn" data-id="{{ acc.id }}" title="Ver respuesta cruda de Evolution API">
+              <i class="bi bi-bug me-1"></i>Debug
+            </button>
           </h6>
+          <div id="debugChannelsPanel-{{ acc.id }}" class="mb-2 d-none">
+            <pre id="debugChannelsResult-{{ acc.id }}" class="small bg-dark text-light p-2 rounded" style="max-height:300px;overflow-y:auto;font-size:11px"></pre>
+          </div>
 
           <div id="fetchedChannelsPanel-{{ acc.id }}" class="mb-2 d-none">
             <p class="small fw-semibold mb-1">Canales encontrados — clic para seleccionar:</p>
@@ -917,6 +923,29 @@ document.querySelectorAll('.ch-delete-btn').forEach(btn => {
       document.getElementById('chrow-' + id)?.remove();
       document.getElementById('chtest-' + id)?.remove();
     }
+  });
+});
+
+// ── Debug canales ───────────────────────────────────────────────────────────────
+document.querySelectorAll('.debug-channels-btn').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const waId = this.dataset.id;
+    const orig = this.innerHTML;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    this.disabled = true;
+    const panel = document.getElementById('debugChannelsPanel-' + waId);
+    const pre = document.getElementById('debugChannelsResult-' + waId);
+    try {
+      const resp = await fetch(`/settings/whatsapp/${waId}/debug-channels`);
+      const data = await resp.json();
+      pre.textContent = JSON.stringify(data, null, 2);
+      panel.classList.remove('d-none');
+    } catch(e) {
+      pre.textContent = 'Error: ' + e.message;
+      panel.classList.remove('d-none');
+    }
+    this.innerHTML = orig;
+    this.disabled = false;
   });
 });
 

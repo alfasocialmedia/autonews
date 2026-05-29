@@ -399,6 +399,40 @@ async def fetch_channels_route(wa_id: int, request: Request, db: Session = Depen
     return JSONResponse({"channels": channels, "status": status})
 
 
+@router.get("/settings/whatsapp/{wa_id}/debug-channels")
+async def debug_channels(wa_id: int, request: Request, db: Session = Depends(get_db)):
+    """Muestra la respuesta cruda de Evolution API para todos los endpoints de newsletter."""
+    if not _require_admin(request, db):
+        return JSONResponse({"error": "No autorizado"}, status_code=403)
+    acc = _get_account(db, wa_id)
+    if not acc:
+        return JSONResponse({"error": "Cuenta no encontrada"}, status_code=404)
+
+    import requests as _req
+    hdrs = {"apikey": acc.evolution_api_key, "Content-Type": "application/json"}
+    base = acc.evolution_api_url
+    inst = acc.instance_name
+    results = []
+
+    for path in (
+        f"/newsletter/findAll/{inst}",
+        f"/newsletter/find/{inst}",
+        f"/channel/findAll/{inst}",
+        f"/group/fetchAllGroups/{inst}",
+        f"/chat/findChats/{inst}",
+    ):
+        try:
+            r = _req.get(f"{base}{path}", headers=hdrs,
+                         params={"getParticipants": "false"} if "group" in path else {},
+                         timeout=10, verify=False)
+            raw = r.text[:2000]
+            results.append({"path": path, "status": r.status_code, "response": raw})
+        except Exception as e:
+            results.append({"path": path, "status": "error", "response": str(e)})
+
+    return JSONResponse({"instance": inst, "url": base, "endpoints": results})
+
+
 @router.get("/settings/whatsapp/{wa_id}/find-channel")
 async def find_channel_by_jid(wa_id: int, request: Request, jid: str = "", db: Session = Depends(get_db)):
     """Resuelve un canal por URL de WhatsApp, código de invitación o JID directo."""
