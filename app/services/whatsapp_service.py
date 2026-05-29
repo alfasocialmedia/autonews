@@ -258,40 +258,129 @@ def fetch_newsletters(url: str, api_key: str, instance_name: str) -> tuple[list[
     return [], "not_supported"
 
 
-def find_newsletter_by_jid(url: str, api_key: str, instance_name: str, jid: str) -> dict | None:
-    """Busca un canal específico por JID. Devuelve {id, subject} o None."""
-    hdrs = _headers(api_key)
-    jid = jid.strip()
-    if not jid.endswith("@newsletter"):
-        jid = jid + "@newsletter"
+import re as _re_wa
 
-    # Intentar endpoint de búsqueda por ID
-    for path in (
-        f"/newsletter/find/{instance_name}",
-        f"/newsletter/findOne/{instance_name}",
+_WA_CHANNEL_URL_RE = _re_wa.compile(
+    r'(?:https?://)?(?:www\.)?whatsapp\.com/channel/([A-Za-z0-9_-]+)', _re_wa.IGNORECASE
+)
+
+
+def _parse_channel_input(raw: str) -> tuple[str, str]:
+    """
+    Acepta cualquiera de estos formatos y devuelve (tipo, valor_limpio):
+      - JID:        '120363XXXXXXXXXX@newsletter'  → ('jid', '120363...@newsletter')
+      - URL:        'https://whatsapp.com/channel/0029Vb3g6PO...' → ('invite', '0029Vb3g6PO...')
+      - Invite code: '0029Vb3g6PO...'                             → ('invite', '0029Vb3g6PO...')
+    """
+    raw = raw.strip()
+    m = _WA_CHANNEL_URL_RE.search(raw)
+    if m:
+        return "invite", m.group(1)
+    if "@newsletter" in raw:
+        return "jid", raw
+    # Código de invitación sin URL
+    return "invite", raw
+
+
+def _parse_newsletter_response(data: dict, fallback_id: str = "") -> dict | None:
+    """Extrae {id, subject} de una respuesta de newsletter de Evolution API."""
+    if not isinstance(data, dict):
+        return None
+    jid = (data.get("id") or data.get("jid") or data.get("newsletterId") or
+           (data.get("newsletter", {}) or {}).get("id") or fallback_id)
+    if not jid:
+        return None
+    name = (data.get("name") or data.get("subject") or data.get("title") or
+            (data.get("newsletter", {}) or {}).get("name") or
+            data.get("description") or jid)
+    return {"id": jid, "subject": name}
+
+
+def find_newsletter_by_jid(url: str, api_key: str, instance_name: str, raw_input: str) -> dict | None:
+    """
+    Resuelve un canal de WhatsApp a partir de:
+    - URL pública: https://whatsapp.com/channel/0029Vb3g6PO...
+    - Código de invitación: 0029Vb3g6PO...
+    - JID directo: 120363XXXXXXXXXX@newsletter
+
+    Devuelve {id, subject} o None.
+    """
+    hdrs = _headers(api_key)
+    kind, value = _parse_channel_input(raw_input)
+
+    if kind == "jid":
+        # Ya es un JID — intentar obtener metadatos del canal
+        for path, params in (
+            (f"/newsletter/find/{instance_name}", {"newsletterId": value}),
+            (f"/newsletter/findOne/{instance_name}", {"newsletterId": value}),
+            (f"/newsletter/findByJid/{instance_name}", {"jid": value}),
+        ):
+            try:
+                r = requests.get(f"{url}{path}", headers=hdrs, params=params,
+                                 timeout=TIMEOUT, verify=VERIFY_SSL)
+                if r.status_code in (404, 405, 403):
+                    continue
+                r.raise_for_status()
+                result = _parse_newsletter_response(r.json(), fallback_id=value)
+                if result:
+                    return result
+            except Exception as exc:
+                log.debug("find_newsletter jid lookup %s: %s", path, exc)
+        # Fallback: JID válido sin nombre
+        return {"id": value, "subject": value.replace("@newsletter", "")}
+
+    # kind == "invite" — código de invitación o URL de WhatsApp
+    invite_code = value
+
+    # 1. Endpoints específicos de invite code
+    for path, params in (
+        (f"/newsletter/findByInviteCode/{instance_name}", {"inviteCode": invite_code}),
+        (f"/newsletter/findByCode/{instance_name}", {"code": invite_code}),
+        (f"/newsletter/find/{instance_name}", {"inviteCode": invite_code}),
+        (f"/newsletter/find/{instance_name}", {"link": f"https://whatsapp.com/channel/{invite_code}"}),
+        (f"/newsletter/findByLink/{instance_name}", {"link": f"https://whatsapp.com/channel/{invite_code}"}),
     ):
         try:
-            r = requests.get(
-                f"{url}{path}",
-                headers=hdrs,
-                params={"newsletterId": jid},
+            r = requests.get(f"{url}{path}", headers=hdrs, params=params,
+                             timeout=TIMEOUT, verify=VERIFY_SSL)
+            if r.status_code in (404, 405, 403):
+                continue
+            r.raise_for_status()
+            data = r.json()
+            # Puede devolver lista o dict
+            if isinstance(data, list) and data:
+                data = data[0]
+            result = _parse_newsletter_response(data)
+            if result:
+                log.info("find_newsletter resuelto via invite code: %s → %s", invite_code, result["id"])
+                return result
+        except Exception as exc:
+            log.debug("find_newsletter invite %s: %s", path, exc)
+
+    # 2. Intentar follow/preview que algunos endpoints de Evolution API soportan
+    for path in (
+        f"/newsletter/preview/{instance_name}",
+        f"/newsletter/info/{instance_name}",
+    ):
+        try:
+            r = requests.post(
+                f"{url}{path}", headers=hdrs,
+                json={"code": invite_code, "link": f"https://whatsapp.com/channel/{invite_code}"},
                 timeout=TIMEOUT, verify=VERIFY_SSL,
             )
             if r.status_code in (404, 405, 403):
                 continue
             r.raise_for_status()
             data = r.json()
-            if isinstance(data, dict) and (data.get("id") or data.get("jid")):
-                resolved_jid = data.get("id") or data.get("jid") or jid
-                name = (data.get("name") or data.get("subject") or data.get("title") or
-                        (data.get("newsletter", {}) or {}).get("name") or resolved_jid)
-                return {"id": resolved_jid, "subject": name}
+            if isinstance(data, list) and data:
+                data = data[0]
+            result = _parse_newsletter_response(data)
+            if result:
+                log.info("find_newsletter resuelto via POST %s: %s → %s", path, invite_code, result["id"])
+                return result
         except Exception as exc:
-            log.debug("find_newsletter_by_jid %s error: %s", path, exc)
+            log.debug("find_newsletter POST %s: %s", path, exc)
 
-    # Si el JID tiene formato correcto, devolvemos al menos el JID como nombre
-    if "@newsletter" in jid:
-        return {"id": jid, "subject": jid.replace("@newsletter", "")}
     return None
 
 

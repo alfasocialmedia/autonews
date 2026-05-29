@@ -355,33 +355,36 @@
           <div class="border rounded p-2 bg-light">
             <p class="small fw-semibold mb-1">Agregar canal</p>
             <p class="small text-muted mb-2">
-              Ingresá el JID del canal (ej: <code>120363XXXXXXXXXX@newsletter</code>) y hacé clic en
-              <i class="bi bi-search"></i> para buscar el nombre automáticamente, o completalo a mano.
+              Pegá el link del canal de WhatsApp (<code>https://whatsapp.com/channel/…</code>)
+              o el JID directo (<code>120363…@newsletter</code>) y hacé clic en
+              <i class="bi bi-search"></i> para resolver automáticamente.
             </p>
             <div class="row g-2 align-items-end">
-              <div class="col">
-                <label class="form-label form-label-sm mb-1">JID del canal</label>
+              <div class="col-12 col-md">
+                <label class="form-label form-label-sm mb-1">Link o JID del canal</label>
                 <div class="input-group input-group-sm">
-                  <input type="text" class="form-control form-control-sm font-monospace new-channel-jid"
-                         id="newChannelJid-{{ acc.id }}" placeholder="120363XXXXXXXXXX@newsletter">
+                  <input type="text" class="form-control form-control-sm new-channel-jid"
+                         id="newChannelJid-{{ acc.id }}"
+                         placeholder="https://whatsapp.com/channel/0029Va…">
                   <button type="button" class="btn btn-outline-secondary lookup-channel-btn"
-                          data-id="{{ acc.id }}" title="Buscar nombre del canal">
+                          data-id="{{ acc.id }}" title="Resolver canal">
                     <i class="bi bi-search"></i>
                   </button>
                 </div>
               </div>
-              <div class="col">
+              <div class="col-12 col-md">
                 <label class="form-label form-label-sm mb-1">Nombre</label>
                 <input type="text" class="form-control form-control-sm new-channel-name"
                        id="newChannelName-{{ acc.id }}" placeholder="Nombre del canal">
               </div>
-              <div class="col-auto">
+              <div class="col-auto align-self-end">
                 <button type="button" class="btn btn-sm btn-primary add-channel-btn"
                         data-id="{{ acc.id }}" title="Agregar canal">
                   <i class="bi bi-plus-lg"></i>
                 </button>
               </div>
             </div>
+            <div id="channelLookupMsg-{{ acc.id }}" class="mt-2" style="display:none"></div>
           </div>
           {% endif %}
 
@@ -461,7 +464,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="bi bi-whatsapp me-2 text-success"></i>Agregar cuenta WhatsApp</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <form method="post" action="/settings/whatsapp/add">
         <div class="modal-body">
@@ -804,24 +807,35 @@ document.querySelectorAll('.fetch-channels-btn').forEach(btn => {
   });
 });
 
-// ── Buscar canal por JID ────────────────────────────────────────────────────────
+// ── Buscar canal por link/JID ───────────────────────────────────────────────────
 document.querySelectorAll('.lookup-channel-btn').forEach(btn => {
   btn.addEventListener('click', async function () {
     const waId = this.dataset.id;
-    const jid = document.getElementById(`newChannelJid-${waId}`).value.trim();
-    if (!jid) { showToast('Ingresá el JID primero', 'warning'); return; }
+    const input = document.getElementById(`newChannelJid-${waId}`).value.trim();
+    const msgDiv = document.getElementById(`channelLookupMsg-${waId}`);
+    if (!input) { showToast('Ingresá el link o JID primero', 'warning'); return; }
     const orig = this.innerHTML;
     this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     this.disabled = true;
+    msgDiv.style.display = 'none';
+    msgDiv.innerHTML = '';
     try {
-      const resp = await fetch(`/settings/whatsapp/${waId}/find-channel?jid=${encodeURIComponent(jid)}`);
+      const resp = await fetch(`/settings/whatsapp/${waId}/find-channel?jid=${encodeURIComponent(input)}`);
       const data = await resp.json();
       if (data.ok && data.channel) {
         document.getElementById(`newChannelJid-${waId}`).value = data.channel.id;
         document.getElementById(`newChannelName-${waId}`).value = data.channel.subject;
-        showToast('Canal encontrado: ' + data.channel.subject, 'success');
+        msgDiv.innerHTML = `<div class="alert alert-success py-1 px-2 mb-0 small">
+          <i class="bi bi-check-circle me-1"></i>Canal resuelto: <strong>${data.channel.subject}</strong>
+          <br><code class="small">${data.channel.id}</code>
+        </div>`;
+        msgDiv.style.display = 'block';
       } else {
-        showToast(data.error || 'Canal no encontrado — verificá el JID', 'warning');
+        msgDiv.innerHTML = `<div class="alert alert-warning py-1 px-2 mb-0 small">
+          <i class="bi bi-exclamation-triangle me-1"></i>${data.error || 'No se pudo resolver el canal.'}
+          ${data.invite_code ? `<br>Código: <code>${data.invite_code}</code>` : ''}
+        </div>`;
+        msgDiv.style.display = 'block';
       }
     } catch(e) {
       showToast('Error de red', 'danger');
