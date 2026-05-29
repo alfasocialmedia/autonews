@@ -137,6 +137,15 @@ def _extract_og_image(soup: BeautifulSoup) -> str | None:
 _IMG_SKIP = ("logo", "icon", "avatar", "pixel", "tracking", "spinner", "btn", "arrow", "spacer", "badge", "placeholder")
 _LAZY_ATTRS = ("data-src", "data-lazy-src", "data-original", "data-lazy", "data-lazyload", "data-full-url")
 
+# Filtros para imágenes promocionales (banners sociales, newsletters, etc.)
+_PROMO_ALT_RE = re.compile(
+    r"sumate|canal\s+de\s+whatsapp|canal\s+de\s+telegram|seguinos|nuestro\s+canal|"
+    r"grupo\s+de\s+whatsapp|grupo\s+de\s+telegram|compartir|publicidad|propaganda",
+    re.I,
+)
+_PROMO_HREF_RE = re.compile(r"whatsapp\.com|t\.me/|telegram\.me|bit\.ly|linktr\.ee", re.I)
+_PROMO_CONTAINER_RE = re.compile(r"whatsapp|telegram|promo|banner|publicidad|social[-_]?link|compartir|newsletter|suscri", re.I)
+
 
 def _extract_inline_images(container, og_image: str | None) -> list[str]:
     """Extrae URLs de imágenes editoriales dentro del artículo (hasta 2, excluye la og:image).
@@ -162,6 +171,26 @@ def _extract_inline_images(container, og_image: str | None) -> list[str]:
             continue
         if any(x in src.lower() for x in _IMG_SKIP):
             continue
+
+        # Saltar imágenes promocionales por alt/title
+        alt = (img.get("alt") or img.get("title") or "").strip()
+        if _PROMO_ALT_RE.search(alt):
+            continue
+        # Saltar si la imagen está dentro de un enlace a red social/promo
+        parent_a = img.find_parent("a")
+        if parent_a and _PROMO_HREF_RE.search(parent_a.get("href", "")):
+            continue
+        # Saltar si algún contenedor padre tiene clases promocionales
+        promo_parent = False
+        for p in img.parents:
+            if not hasattr(p, "get") or p.name in (None, "[document]", "html", "body"):
+                break
+            if _PROMO_CONTAINER_RE.search(" ".join(p.get("class", []))):
+                promo_parent = True
+                break
+        if promo_parent:
+            continue
+
         try:
             w = int(img.get("width") or 0)
             h = int(img.get("height") or 0)
@@ -289,8 +318,35 @@ def _find_article_body(soup: BeautifulSoup):
     )
 
 
+def _extract_first_figure_image(container) -> str | None:
+    """Primera imagen editorial dentro de un <figure> en el artículo.
+    Se prefiere sobre og:image porque la og:image suele tener marca de agua del sitio fuente."""
+    if not container:
+        return None
+    for fig in container.find_all("figure"):
+        img = fig.find("img")
+        if not img:
+            continue
+        src = img.get("src", "").strip()
+        if not src or src.startswith("data:") or not src.startswith("http"):
+            for attr in _LAZY_ATTRS:
+                val = img.get(attr, "").strip()
+                if val and val.startswith("http"):
+                    src = val
+                    break
+        if not src or not src.startswith("http"):
+            continue
+        if any(x in src.lower() for x in _IMG_SKIP):
+            continue
+        alt = (img.get("alt") or "").strip()
+        if _PROMO_ALT_RE.search(alt):
+            continue
+        return _upgrade_wp_thumbnail(src)
+    return None
+
+
 def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]]:
-    """Extrae texto, og:image, imágenes inline y embeds de un artículo.
+    """Extrae texto, imagen principal, imágenes inline y embeds de un artículo.
     Extrae SIEMPRE por JSON-LD y por HTML, y usa el resultado más largo.
     Usa cloudscraper para sitios con Cloudflare, httpx como fallback.
     """
@@ -305,7 +361,12 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
     # Extraer multimedia ANTES de eliminar ruido (iframes y figures se pierden después)
     pre_article = _find_article_body(soup)
     pre_container = pre_article if pre_article else soup
-    inline_images = _extract_inline_images(pre_container, og_image)
+
+    # Preferir imagen editorial del cuerpo sobre og:image (og:image suele tener marca de agua)
+    figure_img = _extract_first_figure_image(pre_container)
+    primary_image = figure_img or og_image
+
+    inline_images = _extract_inline_images(pre_container, primary_image)
     embeds = _extract_social_embeds(pre_container)
 
     # ── Candidato 1: JSON-LD ─────────────────────────────────────────────────
@@ -372,12 +433,12 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
         log.info("scrape: solo HTML (%d chars)", len(html_candidate))
     else:
         log.warning("scrape: sin contenido legible: %s", url)
-        return "", og_image, inline_images, embeds
+        return "", primary_image, inline_images, embeds
 
-    log.info("scrape ok: %d chars total, og_image=%s, images=%d, embeds=%d",
-             len(result), bool(og_image), len(inline_images), len(embeds))
+    log.info("scrape ok: %d chars total, primary_image=%s (figure=%s), images=%d, embeds=%d",
+             len(result), bool(primary_image), bool(figure_img), len(inline_images), len(embeds))
     log.debug("scrape preview: %s", result[:300])
-    return result, og_image, inline_images, embeds
+    return result, primary_image, inline_images, embeds
 
 
 def _parse_feed_bytes(content: bytes, text: str):
