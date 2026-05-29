@@ -133,6 +133,7 @@ async def instagram_create(
     banner_full_width: str = Form(""),
     text_bg_fill_to_bottom: str = Form(""),
     title_shadow: str = Form("on"),
+    ig_caption_prompt: str = Form(""),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -159,7 +160,7 @@ async def instagram_create(
                        text_bg_border_radius, text_bg_border_width, text_bg_border_color,
                        text_bg_height_pct, banner_border_radius, banner_border_width,
                        banner_border_color, banner_full_width,
-                       text_bg_fill_to_bottom, title_shadow,
+                       text_bg_fill_to_bottom, title_shadow, ig_caption_prompt,
                        logo, db)
     db.commit()
     return RedirectResponse(f"/settings/instagram/{cfg.id}?msg=Cuenta+creada+correctamente", status_code=302)
@@ -235,6 +236,7 @@ async def instagram_save(
     banner_full_width: str = Form(""),
     text_bg_fill_to_bottom: str = Form(""),
     title_shadow: str = Form("on"),
+    ig_caption_prompt: str = Form(""),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
@@ -263,7 +265,7 @@ async def instagram_save(
                            text_bg_border_radius, text_bg_border_width, text_bg_border_color,
                            text_bg_height_pct, banner_border_radius, banner_border_width,
                            banner_border_color, banner_full_width,
-                           text_bg_fill_to_bottom, title_shadow,
+                           text_bg_fill_to_bottom, title_shadow, ig_caption_prompt,
                            logo, db)
         db.commit()
         return RedirectResponse(
@@ -305,7 +307,7 @@ def _apply_form_to_cfg(
     text_bg_border_radius: int, text_bg_border_width: int, text_bg_border_color: str,
     text_bg_height_pct: int, banner_border_radius: str, banner_border_width: int,
     banner_border_color: str, banner_full_width: str,
-    text_bg_fill_to_bottom: str, title_shadow: str,
+    text_bg_fill_to_bottom: str, title_shadow: str, ig_caption_prompt: str,
     logo: Optional[UploadFile], db: Session,
 ):
     from app.services.gfonts_service import LEGACY_MAP
@@ -361,6 +363,7 @@ def _apply_form_to_cfg(
     cfg.banner_full_width = banner_full_width.lower() in ("on", "true", "1", "yes")
     cfg.text_bg_fill_to_bottom = text_bg_fill_to_bottom.lower() in ("on", "true", "1", "yes")
     cfg.title_shadow = title_shadow.lower() in ("on", "true", "1", "yes")
+    cfg.ig_caption_prompt = ig_caption_prompt.strip() or None
 
     if app_secret.strip():
         cfg.encrypted_app_secret = encrypt_value(app_secret.strip())
@@ -503,6 +506,7 @@ async def preview_image(
     q_banner_full_width: Optional[int] = Query(None, alias="banner_full_width"),
     q_text_bg_fill_to_bottom: Optional[int] = Query(None, alias="text_bg_fill_to_bottom"),
     q_title_shadow: Optional[int] = Query(None, alias="title_shadow"),
+    q_preview_title: Optional[str] = Query(None, alias="preview_title"),
 ):
     if not _require_admin(request, db):
         from fastapi.responses import Response
@@ -537,9 +541,11 @@ async def preview_image(
         return q_val if q_val is not None else (db_val if db_val is not None else default)
 
     try:
+        _preview_title = (q_preview_title.strip() if q_preview_title and q_preview_title.strip()
+                         else "Vista previa — Título de la noticia de ejemplo")
         ig_bytes = build_instagram_image(
             img_bytes,
-            "Vista previa — Título de la noticia de ejemplo",
+            _preview_title,
             logo_path=cfg.logo_path if cfg else None,
             logo_position=((cfg.logo_position or "bottom-right") if cfg else "bottom-right"),
             logo_size=_eff(q_logo_size, cfg.logo_size if cfg else None, 180),

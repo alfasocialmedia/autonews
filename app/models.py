@@ -242,10 +242,15 @@ class WhatsAppSettings(Base):
     wordpress_settings_id = Column(
         Integer, ForeignKey("wordpress_settings.id", ondelete="SET NULL"), nullable=True
     )
+    # Instagram destino: NULL = usar la primera cuenta activa (fallback)
+    instagram_settings_id = Column(
+        Integer, ForeignKey("instagram_settings.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     wordpress_settings = relationship("WordPressSettings", foreign_keys=[wordpress_settings_id])
+    instagram_settings = relationship("InstagramSettings", foreign_keys=[instagram_settings_id])
     groups = relationship("WhatsAppGroup", back_populates="whatsapp_settings", cascade="all, delete-orphan")
     channels = relationship("WhatsAppChannel", back_populates="whatsapp_settings", cascade="all, delete-orphan")
 
@@ -354,6 +359,8 @@ class InstagramSettings(Base):
     banner_border_width = Column(Integer, default=0)
     banner_border_color = Column(String(10), default="#ffffff")
     banner_full_width = Column(Boolean, default=False)
+    # Prompt personalizado para generar el caption de Instagram (None = usar el default del sistema)
+    ig_caption_prompt = Column(Text, nullable=True)
     # Control
     is_active = Column(Boolean, default=False)
     max_posts_per_day = Column(Integer, default=10)

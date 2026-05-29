@@ -88,6 +88,21 @@
               </select>
             </div>
             <div class="mb-3">
+              <label class="form-label fw-semibold small">
+                <i class="bi bi-instagram me-1"></i>Instagram destino
+              </label>
+              <select name="instagram_settings_id" class="form-select form-select-sm"
+                      title="Cuenta de Instagram donde se publican las noticias de este número">
+                <option value="">Sin Instagram (no publica)</option>
+                {% for ig in ig_accounts %}
+                <option value="{{ ig.id }}" {% if acc.instagram_settings_id == ig.id %}selected{% endif %}>
+                  {{ ig.name }}{% if not ig.is_active %} (inactiva){% endif %}
+                </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Cuenta de Instagram específica para este número de WhatsApp.</div>
+            </div>
+            <div class="mb-3">
               <label class="form-label fw-semibold small">Destino al recibir mensajes</label>
               {% set pm = acc.publish_mode or 'both' %}
               <div class="btn-group w-100" role="group" aria-label="Destino de publicación">
@@ -451,6 +466,18 @@
               <option value="{{ wp.id }}">{{ wp.name }}</option>
               {% endfor %}
             </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-instagram me-1"></i>Instagram destino
+            </label>
+            <select name="instagram_settings_id" class="form-select" title="Cuenta de Instagram para esta cuenta de WhatsApp">
+              <option value="">Sin Instagram (no publica)</option>
+              {% for ig in ig_accounts %}
+              <option value="{{ ig.id }}">{{ ig.name }}{% if not ig.is_active %} (inactiva){% endif %}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Cuenta de Instagram específica para este número de WhatsApp.</div>
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">URL de Evolution API</label>

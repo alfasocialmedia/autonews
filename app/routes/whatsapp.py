@@ -156,12 +156,15 @@ async def whatsapp_settings(request: Request, db: Session = Depends(get_db)):
         ).order_by(WhatsAppChannel.id).all()
 
     wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.id).all()
+    from app.models import InstagramSettings
+    ig_accounts = db.query(InstagramSettings).order_by(InstagramSettings.id).all()
     return templates.TemplateResponse(
         "settings_whatsapp.html",
         {
             "request": request, "user": user,
             "accounts": accounts,
             "wp_sites": wp_sites,
+            "ig_accounts": ig_accounts,
             "max_groups": MAX_GROUPS,
             "max_channels": MAX_CHANNELS,
         },
@@ -183,6 +186,7 @@ async def add_whatsapp_account(
     broadcast_enabled: str = Form("off"),
     broadcast_template: str = Form(""),
     wordpress_settings_id: str = Form(""),
+    instagram_settings_id: str = Form(""),
     publish_mode: str = Form("both"),
     rewrite_mode: str = Form("rewrite"),
 ):
@@ -200,6 +204,7 @@ async def add_whatsapp_account(
         broadcast_enabled=broadcast_enabled == "on",
         broadcast_template=broadcast_template.strip() or "*{title}*\n\n{summary}\n\n{url}",
         wordpress_settings_id=int(wordpress_settings_id) if wordpress_settings_id.strip().isdigit() else None,
+        instagram_settings_id=int(instagram_settings_id) if instagram_settings_id.strip().isdigit() else None,
         publish_mode=publish_mode if publish_mode in ("both", "wordpress_only", "whatsapp_only") else "both",
         rewrite_mode=rewrite_mode if rewrite_mode in ("rewrite", "title_only") else "rewrite",
     )
@@ -222,6 +227,7 @@ async def edit_whatsapp_account(
     broadcast_enabled: str = Form("off"),
     broadcast_template: str = Form(""),
     wordpress_settings_id: str = Form(""),
+    instagram_settings_id: str = Form(""),
     publish_mode: str = Form("both"),
     rewrite_mode: str = Form("rewrite"),
 ):
@@ -243,6 +249,7 @@ async def edit_whatsapp_account(
     if broadcast_template.strip():
         acc.broadcast_template = broadcast_template.strip()
     acc.wordpress_settings_id = int(wordpress_settings_id) if wordpress_settings_id.strip().isdigit() else None
+    acc.instagram_settings_id = int(instagram_settings_id) if instagram_settings_id.strip().isdigit() else None
     acc.publish_mode = publish_mode if publish_mode in ("both", "wordpress_only", "whatsapp_only") else "both"
     acc.rewrite_mode = rewrite_mode if rewrite_mode in ("rewrite", "title_only") else "rewrite"
     db.commit()
@@ -962,7 +969,8 @@ def _publish_whatsapp_news(db, settings, text: str, media_list: list, source_url
                 count = _publish_ai_result(db, ai_result, wp_sites,
                                            image_url=scraped_image_url, source_name="WhatsApp",
                                            image_bytes_payload=featured_media,
-                                           extra_image_payloads=extra_media)
+                                           extra_image_payloads=extra_media,
+                                           instagram_settings_id=settings.instagram_settings_id)
                 log.info("WA → WordPress: publicado en %d sitio(s)", count)
                 if count > 0:
                     _log_db(db, "INFO", f"[WA] Publicado en WordPress: {titulo}")

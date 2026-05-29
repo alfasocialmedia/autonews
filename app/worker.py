@@ -991,7 +991,7 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
 
         # Generar caption con Groq (después de tener wp.site_url disponible)
         website_footer = ig.banner_text or wp.site_url or ""
-        caption = _generate_ig_caption(groq_key, groq_model, title, ai_result.get("summary", ""), website_footer, groq_provider=groq_provider, groq_base_url=groq_base_url)
+        caption = _generate_ig_caption(groq_key, groq_model, title, ai_result.get("summary", ""), website_footer, groq_provider=groq_provider, groq_base_url=groq_base_url, custom_prompt=ig.ig_caption_prompt)
 
         wp_pwd = decrypt_value(wp.encrypted_app_password)
         media_result = upload_media(
@@ -1017,24 +1017,28 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
         log.error("[IG] Excepción en _publish_instagram: %s", exc)
 
 
-def _generate_ig_caption(groq_key: str, groq_model: str, title: str, summary: str, website_footer: str = "", groq_provider: str = "groq", groq_base_url: str | None = None) -> str:
-    """Genera caption Instagram: frase gancho + copy con emojis + 5 hashtags virales + footer web."""
+_DEFAULT_IG_CAPTION_PROMPT = (
+    "Sos community manager de un medio digital argentino. El título de la noticia ya está en la imagen, "
+    "NO lo repitas en el caption. Generá un caption para Instagram con exactamente esta estructura:\n\n"
+    "1. 🔥 Frase gancho impactante (1-2 líneas con emojis, que genere curiosidad o emoción)\n\n"
+    "2. Párrafo 1 — Contexto: explicá brevemente qué pasó, dónde y cómo (3-4 líneas con emojis integrados)\n\n"
+    "3. Párrafo 2 — Detalle o impacto: ampliá con un dato clave, consecuencia o reacción (3-4 líneas con emojis)\n\n"
+    "4. Párrafo 3 — Cierre y llamada a la acción: invitá a opinar, seguir leyendo o compartir (2-3 líneas con emojis)\n\n"
+    "5. Exactamente 5 hashtags virales de alto alcance en español\n\n"
+    "Escribí en español rioplatense informal. Máximo 350 palabras. "
+    "Solo devolvé el caption listo para publicar, sin comentarios extra."
+)
+
+
+def _generate_ig_caption(groq_key: str, groq_model: str, title: str, summary: str, website_footer: str = "", groq_provider: str = "groq", groq_base_url: str | None = None, custom_prompt: str | None = None) -> str:
+    """Genera caption Instagram usando el prompt personalizado de la cuenta o el prompt por defecto."""
     footer = f"\n\n📰 {website_footer}" if website_footer else ""
     try:
         from app.services.groq_service import _get_client
         client = _get_client(groq_key, provider=groq_provider, api_base_url=groq_base_url)
-        prompt = (
-            "Sos community manager de un medio digital argentino. El título de la noticia ya está en la imagen, "
-            "NO lo repitas en el caption. Generá un caption para Instagram con exactamente esta estructura:\n\n"
-            "1. 🔥 Frase gancho impactante (1-2 líneas con emojis, que genere curiosidad o emoción)\n\n"
-            "2. Párrafo 1 — Contexto: explicá brevemente qué pasó, dónde y cómo (3-4 líneas con emojis integrados)\n\n"
-            "3. Párrafo 2 — Detalle o impacto: ampliá con un dato clave, consecuencia o reacción (3-4 líneas con emojis)\n\n"
-            "4. Párrafo 3 — Cierre y llamada a la acción: invitá a opinar, seguir leyendo o compartir (2-3 líneas con emojis)\n\n"
-            "5. Exactamente 5 hashtags virales de alto alcance en español\n\n"
-            "Escribí en español rioplatense informal. Máximo 350 palabras. "
-            "Solo devolvé el caption listo para publicar, sin comentarios extra.\n\n"
-            f"Título: {title}\nResumen: {summary}"
-        )
+        base_prompt = (custom_prompt.strip() if custom_prompt and custom_prompt.strip()
+                       else _DEFAULT_IG_CAPTION_PROMPT)
+        prompt = f"{base_prompt}\n\nTítulo: {title}\nResumen: {summary}"
         resp = client.chat.completions.create(
             model=groq_model,
             messages=[{"role": "user", "content": prompt}],

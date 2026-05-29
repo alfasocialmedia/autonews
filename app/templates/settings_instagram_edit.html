@@ -116,6 +116,18 @@
                    style="max-width:120px">
             <div class="form-text">Límite de Meta: 25 posts/día.</div>
           </div>
+
+          <div class="mb-1 mt-3">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-chat-left-text me-1"></i>Prompt para caption de Instagram
+            </label>
+            <textarea name="ig_caption_prompt" class="form-control font-monospace"
+                      rows="8" placeholder="Dejá vacío para usar el prompt por defecto del sistema.&#10;&#10;Usá las variables: {title} y {summary} al final del prompt (se agregan automáticamente).&#10;&#10;Ejemplo:&#10;Sos el community manager de un diario regional. Escribí un caption breve y directo para Instagram, sin bardeados ni clickbait. Usá 1 emoji por párrafo máximo. 3 párrafos cortos y 4 hashtags locales.">{{ cfg.ig_caption_prompt if cfg and cfg.ig_caption_prompt else '' }}</textarea>
+            <div class="form-text">
+              Si se deja vacío, se usa el prompt por defecto (con frase gancho, emojis y hashtags virales).
+              El título y el resumen de la noticia siempre se agregan al final del prompt.
+            </div>
+          </div>
         </div>
       </div>
 
