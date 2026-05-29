@@ -435,6 +435,28 @@ def _chat_with_token_fallback(client, model: str, messages: list, max_tokens: in
         raise
 
 
+def _split_long_paragraphs(html: str, max_chars: int = 320) -> str:
+    """Divide <p> con más de max_chars caracteres en párrafos más cortos, cortando en oraciones."""
+    import re as _re
+    def split_p(m):
+        inner = m.group(1).strip()
+        if len(inner) <= max_chars:
+            return f"<p>{inner}</p>"
+        # Partir en oraciones: ". ", "! ", "? " seguido de mayúscula
+        sentences = _re.split(r'(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"])', inner)
+        if len(sentences) <= 1:
+            return f"<p>{inner}</p>"
+        # Agrupar de a 2 oraciones por párrafo
+        groups = []
+        for i in range(0, len(sentences), 2):
+            group = " ".join(sentences[i:i+2]).strip()
+            if group:
+                groups.append(f"<p>{group}</p>")
+        return "\n".join(groups) if groups else f"<p>{inner}</p>"
+
+    return re.sub(r'<p>(.*?)</p>', split_p, html, flags=re.DOTALL | re.IGNORECASE)
+
+
 def _text_to_html_paragraphs(text: str) -> str:
     """Convierte texto plano a párrafos HTML. Si ya tiene <p>, lo devuelve tal cual."""
     if "<p>" in text.lower():
@@ -560,7 +582,7 @@ def process_rss_with_groq(
     else:
         word_count_rule = "Sin mínimo de palabras — el artículo puede ser corto. No rellenes ni inventes para alargar."
 
-    para_size_rule = "Cada <p> con 2 a 3 oraciones relacionadas. NUNCA 1 sola oración suelta. NUNCA más de 3."
+    para_size_rule = "Cada <p> con exactamente 2 oraciones cortas. NUNCA 1 sola. NUNCA más de 2. Párrafos cortos, punto y aparte frecuente."
 
     prompt = f"""{base_prompt}
 
@@ -730,6 +752,7 @@ Las comillas dentro del HTML van con barra invertida \" o como &quot;. Atributos
             if not result["content"]:
                 log.warning("Content RSS vacío tras limpieza")
                 result["content"] = f"<p>{article_text[:1000]}</p>"
+            result["content"] = _split_long_paragraphs(result["content"])
         if "summary" in result:
             result["summary"] = _normalize_summary(result["summary"], result.get("title", title))
         return result
@@ -784,7 +807,7 @@ def process_email_with_groq(
     else:
         word_count_rule = "Sin mínimo de palabras — el artículo puede ser corto. No rellenes ni inventes para alargar."
 
-    para_size_rule = "Cada <p> con 2 a 3 oraciones relacionadas. NUNCA 1 sola oración suelta. NUNCA más de 3."
+    para_size_rule = "Cada <p> con exactamente 2 oraciones cortas. NUNCA 1 sola. NUNCA más de 2. Párrafos cortos, punto y aparte frecuente."
 
     # Extraer la primera línea significativa del cuerpo como pista de titular
     first_body_line = next(
@@ -959,6 +982,7 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
             if not result["content"]:
                 log.warning("Content vacío tras limpieza, usando cuerpo original")
                 result["content"] = f"<p>{body[:1000]}</p>"
+            result["content"] = _split_long_paragraphs(result["content"])
         if "summary" in result:
             result["summary"] = _normalize_summary(result["summary"], result.get("title", clean_subject))
         return result
