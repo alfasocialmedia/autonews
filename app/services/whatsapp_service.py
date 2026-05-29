@@ -195,6 +195,8 @@ def fetch_newsletters(url: str, api_key: str, instance_name: str) -> tuple[list[
     """Intenta varios endpoints para obtener canales (newsletters) de la instancia."""
     hdrs = _headers(api_key)
 
+    NL_TIMEOUT = 6  # timeout corto para endpoints que pueden no existir
+
     # 1. Endpoint nativo Evolution API v2
     for path in (
         f"/newsletter/findAll/{instance_name}",
@@ -202,7 +204,7 @@ def fetch_newsletters(url: str, api_key: str, instance_name: str) -> tuple[list[
         f"/channel/findAll/{instance_name}",
     ):
         try:
-            r = requests.get(f"{url}{path}", headers=hdrs, timeout=TIMEOUT, verify=VERIFY_SSL)
+            r = requests.get(f"{url}{path}", headers=hdrs, timeout=NL_TIMEOUT, verify=VERIFY_SSL)
             if r.status_code in (404, 405, 403):
                 continue
             r.raise_for_status()
@@ -220,7 +222,7 @@ def fetch_newsletters(url: str, api_key: str, instance_name: str) -> tuple[list[
             f"{url}/group/fetchAllGroups/{instance_name}",
             headers=hdrs,
             params={"getParticipants": "false"},
-            timeout=TIMEOUT, verify=VERIFY_SSL,
+            timeout=NL_TIMEOUT, verify=VERIFY_SSL,
         )
         r.raise_for_status()
         data = r.json()
@@ -240,7 +242,7 @@ def fetch_newsletters(url: str, api_key: str, instance_name: str) -> tuple[list[
     try:
         r = requests.get(
             f"{url}/chat/findChats/{instance_name}",
-            headers=hdrs, timeout=TIMEOUT, verify=VERIFY_SSL,
+            headers=hdrs, timeout=NL_TIMEOUT, verify=VERIFY_SSL,
         )
         r.raise_for_status()
         data = r.json()
