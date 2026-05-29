@@ -1051,10 +1051,10 @@ def _generate_ig_caption(groq_key: str, groq_model: str, title: str, summary: st
 
 
 def _broadcast_whatsapp(db, ai_result: dict, wp_url: str, wp_site_id: int | None = None):
-    """Envía el artículo recién publicado a los grupos de WhatsApp de cada cuenta activa."""
+    """Envía el artículo recién publicado a los grupos y canales de WhatsApp activos."""
     try:
-        from app.models import WhatsAppSettings, WhatsAppGroup
-        from app.services.whatsapp_service import send_text
+        from app.models import WhatsAppSettings, WhatsAppGroup, WhatsAppChannel
+        from app.services.whatsapp_service import send_text, send_to_newsletter
 
         wa_accounts = db.query(WhatsAppSettings).filter(
             WhatsAppSettings.broadcast_enabled == True,
@@ -1068,33 +1068,44 @@ def _broadcast_whatsapp(db, ai_result: dict, wp_url: str, wp_site_id: int | None
         for s in wa_accounts:
             if not s.evolution_api_url or not s.evolution_api_key:
                 continue
-            # Filtrar por WP site: cuenta asignada a un WP específico que no es el que publicó
             if s.wordpress_settings_id is not None and wp_site_id is not None:
                 if s.wordpress_settings_id != wp_site_id:
                     continue
 
+            # Texto del mensaje con el nuevo formato
+            title_clean = re.sub(r'\s+', ' ', title).strip()
+            parts = [f"*{title_clean}*"]
+            if summary:
+                parts.append(summary[:350])
+            if wp_url:
+                parts.append(f"📰 Ingresá y mirá la noticia completa:\n{wp_url}")
+            else:
+                parts.append("📰 Ingresá y mirá la noticia completa en el link de nuestro perfil.")
+            text = "\n\n".join(parts)
+
+            # Grupos
             all_groups = db.query(WhatsAppGroup).filter(
                 WhatsAppGroup.enabled == True,
                 WhatsAppGroup.whatsapp_settings_id == s.id,
             ).all()
-            if not all_groups:
-                continue
-
             if wp_site_id is not None:
                 groups = [g for g in all_groups
                           if g.wordpress_settings_id is None or g.wordpress_settings_id == wp_site_id]
             else:
                 groups = all_groups
-
-            if not groups:
-                continue
-
-            template = s.broadcast_template or "*{title}*\n\n{summary}\n\n{url}"
-            text = template.replace("{title}", title).replace("{summary}", summary).replace("{url}", wp_url)
-
             for g in groups:
                 send_text(s.evolution_api_url, s.evolution_api_key, s.instance_name, g.jid, text)
-                log.info("WA difusión → %s (%s) vía %s", g.name, g.jid, s.name)
+                log.info("WA difusión → grupo %s vía %s", g.name, s.name)
+
+            # Canales
+            channels = db.query(WhatsAppChannel).filter(
+                WhatsAppChannel.enabled == True,
+                WhatsAppChannel.whatsapp_settings_id == s.id,
+            ).all()
+            for ch in channels:
+                send_to_newsletter(s.evolution_api_url, s.evolution_api_key, s.instance_name, ch.jid, text)
+                log.info("WA difusión → canal %s vía %s", ch.name, s.name)
+
     except Exception as exc:
         log.warning("_broadcast_whatsapp error: %s", exc)
 

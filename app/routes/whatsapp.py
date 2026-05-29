@@ -1033,10 +1033,47 @@ def _publish_whatsapp_news(db, settings, text: str, media_list: list, source_url
         log.info("WA broadcast: omitido (publish_mode=%s)", publish_mode)
 
 
+def _build_broadcast_text(title: str, summary: str, content_html: str, post_url: str = "") -> str:
+    """Construye el texto de difusión: título + resumen + CTA. Sin repetir el título."""
+    title = _sanitize_text(re.sub(r'\s+', ' ', title).strip())
+    summary = _sanitize_text(summary.strip()) if summary else ""
+
+    # Extraer un extracto del cuerpo que NO sea el título ni el resumen
+    excerpt = ""
+    if content_html:
+        plain = _html_to_plain(content_html, max_chars=800)
+        title_lower = re.sub(r'\W+', ' ', title).strip().lower()
+        summary_lower = re.sub(r'\W+', ' ', summary).strip().lower()[:60]
+        paragraphs = [p.strip() for p in re.split(r'\n{2,}', plain) if len(p.strip()) > 40]
+        for p in paragraphs:
+            p_lower = re.sub(r'\W+', ' ', p).strip().lower()
+            # Saltar párrafos que son básicamente el título o el resumen
+            if title_lower and p_lower.startswith(title_lower[:30]):
+                continue
+            if summary_lower and p_lower.startswith(summary_lower[:30]):
+                continue
+            excerpt = p[:350].strip()
+            break
+
+    parts = [f"*{title}*"]
+    if summary:
+        parts.append(summary[:350])
+    if excerpt and excerpt != summary[:len(excerpt)]:
+        parts.append(excerpt)
+
+    if post_url:
+        parts.append(f"📰 Ingresá y mirá la noticia completa:\n{post_url}")
+    else:
+        parts.append("📰 Ingresá y mirá la noticia completa presionando en la imagen o en el link de nuestro perfil.")
+
+    return "\n\n".join(parts)
+
+
 def _broadcast_whatsapp(
     db, settings, ai_result: dict,
     img_payload=None,
     fallback_image_url: str | None = None,
+    post_url: str = "",
 ):
     if not settings.broadcast_enabled:
         log.info("WA broadcast: difusión deshabilitada")
@@ -1047,41 +1084,30 @@ def _broadcast_whatsapp(
         WhatsAppGroup.enabled == True,
         WhatsAppGroup.whatsapp_settings_id == settings.id,
     ).all()
-    if not groups:
-        log.info("WA broadcast: no hay grupos activos para esta cuenta")
-        _log_db(db, "WARNING", "[WA] No hay grupos activos — agregá grupos en Configuración → WhatsApp")
+    channels = db.query(WhatsAppChannel).filter(
+        WhatsAppChannel.enabled == True,
+        WhatsAppChannel.whatsapp_settings_id == settings.id,
+    ).all()
+
+    if not groups and not channels:
+        log.info("WA broadcast: sin grupos ni canales activos para esta cuenta")
+        _log_db(db, "WARNING", "[WA] Sin grupos ni canales activos — configuralos en WhatsApp")
         return
 
-    from app.services.whatsapp_service import send_text, send_image_base64, send_image
+    from app.services.whatsapp_service import (
+        send_text, send_image_base64, send_image,
+        send_to_newsletter, send_image_to_newsletter,
+    )
 
-    title = re.sub(r'\s+', ' ', ai_result.get("title", "")).strip()
-    content_html = ai_result.get("content", "")
+    title = ai_result.get("title", "")
     summary = ai_result.get("summary", "")
-    body = _html_to_plain(content_html, max_chars=3000) if content_html else summary
+    content_html = ai_result.get("content", "")
+    msg_text = _build_broadcast_text(title, summary, content_html, post_url)
 
-    site_url = ""
-    try:
-        from app.models import WordPressSettings
-        if settings.wordpress_settings_id:
-            wp_cfg = db.query(WordPressSettings).filter(WordPressSettings.id == settings.wordpress_settings_id).first()
-        else:
-            wp_cfg = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).first()
-        if wp_cfg:
-            site_url = wp_cfg.site_url.rstrip("/")
-    except Exception:
-        pass
-
-    title = _sanitize_text(title)
-    body = _sanitize_text(body)
-
-    domain = site_url.replace("https://", "").replace("http://", "").rstrip("/") if site_url else ""
-    msg_text = f"*{title}*\n\n{body}"
-    if domain:
-        msg_text += f"\n\nTodas las noticias en {domain}"
-
+    # Descargar imagen de fallback si no hay payload directo
     scraped_img_bytes: bytes | None = None
     scraped_img_mime: str = "image/jpeg"
-    if fallback_image_url:
+    if fallback_image_url and not img_payload:
         try:
             import httpx as _httpx
             ir = _httpx.get(
@@ -1092,45 +1118,47 @@ def _broadcast_whatsapp(
             scraped_img_bytes = ir.content
             scraped_img_mime = ir.headers.get("content-type", "image/jpeg").split(";")[0]
         except Exception as _exc:
-            log.warning("WA: no se pudo descargar og:image %s: %s", fallback_image_url, _exc)
+            log.warning("WA: no se pudo descargar imagen %s: %s", fallback_image_url, _exc)
 
-    def _send_to_jid(jid: str, label: str):
-        sent = False
-        if img_payload:
-            img_bytes, _img_name, img_mime = img_payload
-            sent = send_image_base64(
-                settings.evolution_api_url, settings.evolution_api_key,
-                settings.instance_name, jid, img_bytes, img_mime, msg_text,
-            )
-        if not sent and scraped_img_bytes:
-            sent = send_image_base64(
-                settings.evolution_api_url, settings.evolution_api_key,
-                settings.instance_name, jid, scraped_img_bytes, scraped_img_mime, msg_text,
-            )
-        if not sent and fallback_image_url:
-            sent = send_image(
-                settings.evolution_api_url, settings.evolution_api_key,
-                settings.instance_name, jid, fallback_image_url, msg_text,
-            )
-        if not sent:
-            sent = send_text(
-                settings.evolution_api_url, settings.evolution_api_key,
-                settings.instance_name, jid, msg_text,
-            )
-        log.info("WA broadcast → %s (%s): %s", label, jid, "ok" if sent else "ERROR")
-        if not sent:
-            _log_db(db, "ERROR", f"[WA] Falló el envío a {label} ({jid})")
+    # ── Envío a grupos ────────────────────────────────────────────────────────
+    if groups:
+        log.info("WA broadcast: enviando a %d grupo(s) — %s", len(groups), title[:60])
+        _log_db(db, "INFO", f"[WA] Difundiendo a {len(groups)} grupo(s): {title[:60]}")
+        for g in groups:
+            sent = False
+            if img_payload:
+                img_bytes, _, img_mime = img_payload
+                sent = send_image_base64(settings.evolution_api_url, settings.evolution_api_key,
+                                         settings.instance_name, g.jid, img_bytes, img_mime, msg_text)
+            if not sent and scraped_img_bytes:
+                sent = send_image_base64(settings.evolution_api_url, settings.evolution_api_key,
+                                         settings.instance_name, g.jid, scraped_img_bytes, scraped_img_mime, msg_text)
+            if not sent and fallback_image_url:
+                sent = send_image(settings.evolution_api_url, settings.evolution_api_key,
+                                  settings.instance_name, g.jid, fallback_image_url, msg_text)
+            if not sent:
+                sent = send_text(settings.evolution_api_url, settings.evolution_api_key,
+                                 settings.instance_name, g.jid, msg_text)
+            log.info("WA broadcast → grupo %s: %s", g.name, "OK" if sent else "ERROR")
+            if not sent:
+                _log_db(db, "ERROR", f"[WA] Falló envío al grupo {g.name}")
 
-    log.info("WA broadcast: enviando a %d grupo(s) — %s", len(groups), title[:60])
-    _log_db(db, "INFO", f"[WA] Difundiendo a {len(groups)} grupo(s): {title[:60]}")
-    for g in groups:
-        _send_to_jid(g.jid, g.name)
-
-    channels = db.query(WhatsAppChannel).filter(
-        WhatsAppChannel.enabled == True,
-        WhatsAppChannel.whatsapp_settings_id == settings.id,
-    ).all()
+    # ── Envío a canales (newsletter) ──────────────────────────────────────────
     if channels:
         log.info("WA broadcast: enviando a %d canal(es)", len(channels))
+        _log_db(db, "INFO", f"[WA] Difundiendo a {len(channels)} canal(es): {title[:60]}")
         for ch in channels:
-            _send_to_jid(ch.jid, ch.name)
+            sent = False
+            if img_payload:
+                img_bytes, _, img_mime = img_payload
+                sent = send_image_to_newsletter(settings.evolution_api_url, settings.evolution_api_key,
+                                                settings.instance_name, ch.jid, img_bytes, img_mime, msg_text)
+            if not sent and scraped_img_bytes:
+                sent = send_image_to_newsletter(settings.evolution_api_url, settings.evolution_api_key,
+                                                settings.instance_name, ch.jid, scraped_img_bytes, scraped_img_mime, msg_text)
+            if not sent:
+                sent = send_to_newsletter(settings.evolution_api_url, settings.evolution_api_key,
+                                          settings.instance_name, ch.jid, msg_text)
+            log.info("WA broadcast → canal %s: %s", ch.name, "OK" if sent else "ERROR")
+            if not sent:
+                _log_db(db, "ERROR", f"[WA] Falló envío al canal {ch.name}")

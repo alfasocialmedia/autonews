@@ -434,6 +434,61 @@ def send_text(url: str, api_key: str, instance_name: str, jid: str, text: str) -
         return False
 
 
+def send_to_newsletter(url: str, api_key: str, instance_name: str, newsletter_jid: str, text: str) -> bool:
+    """Envía un mensaje de texto a un canal/newsletter de WhatsApp (Evolution API v2)."""
+    hdrs = _headers(api_key)
+    # 1. Endpoint nativo de newsletter (Evolution API v2)
+    for path, body in (
+        (f"/newsletter/sendText/{instance_name}", {"newsletterId": newsletter_jid, "text": text}),
+        (f"/newsletter/send/{instance_name}",     {"newsletterId": newsletter_jid, "message": {"conversation": text}}),
+        (f"/message/sendText/{instance_name}",    {"number": newsletter_jid, "text": text}),
+    ):
+        try:
+            r = requests.post(f"{url}{path}", headers=hdrs, json=body,
+                              timeout=TIMEOUT, verify=VERIFY_SSL)
+            if r.status_code in (404, 405):
+                continue
+            r.raise_for_status()
+            log.info("send_to_newsletter → %s via %s: OK", newsletter_jid[:30], path)
+            return True
+        except Exception as exc:
+            log.debug("send_to_newsletter %s error: %s", path, exc)
+    log.warning("send_to_newsletter → %s: todos los endpoints fallaron", newsletter_jid[:30])
+    return False
+
+
+def send_image_to_newsletter(
+    url: str, api_key: str, instance_name: str,
+    newsletter_jid: str, image_bytes: bytes, mimetype: str, caption: str = "",
+) -> bool:
+    """Envía una imagen a un canal/newsletter de WhatsApp."""
+    import base64 as b64lib
+    hdrs = _headers(api_key)
+    b64 = b64lib.b64encode(image_bytes).decode()
+    for path, body in (
+        (f"/newsletter/sendMedia/{instance_name}", {
+            "newsletterId": newsletter_jid, "mediatype": "image",
+            "mimetype": mimetype.split(";")[0].strip(), "caption": caption, "media": b64,
+        }),
+        (f"/message/sendMedia/{instance_name}", {
+            "number": newsletter_jid, "mediatype": "image",
+            "mimetype": mimetype.split(";")[0].strip(), "caption": caption, "media": b64,
+        }),
+    ):
+        try:
+            r = requests.post(f"{url}{path}", headers=hdrs, json=body,
+                              timeout=TIMEOUT, verify=VERIFY_SSL)
+            if r.status_code in (404, 405):
+                continue
+            r.raise_for_status()
+            log.info("send_image_to_newsletter → %s via %s: OK", newsletter_jid[:30], path)
+            return True
+        except Exception as exc:
+            log.debug("send_image_to_newsletter %s error: %s", path, exc)
+    log.warning("send_image_to_newsletter → %s: todos los endpoints fallaron", newsletter_jid[:30])
+    return False
+
+
 def send_image_base64(
     url: str, api_key: str, instance_name: str,
     jid: str, image_bytes: bytes, mimetype: str, caption: str = "",
