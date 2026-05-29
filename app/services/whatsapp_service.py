@@ -459,7 +459,7 @@ def send_to_newsletter(url: str, api_key: str, instance_name: str, newsletter_ji
         (f"/newsletter/send/{instance_name}",     {"newsletterId": jid, "text": text}),
         (f"/message/sendText/{instance_name}",    {"number": jid, "text": text}),
         (f"/message/sendText/{instance_name}",    {"number": jid, "textMessage": {"text": text}}),
-    )
+    ]
 
     for path, body in attempts:
         try:
