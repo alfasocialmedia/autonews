@@ -826,14 +826,38 @@ document.querySelectorAll('.lookup-channel-btn').forEach(btn => {
         document.getElementById(`newChannelJid-${waId}`).value = data.channel.id;
         document.getElementById(`newChannelName-${waId}`).value = data.channel.subject;
         msgDiv.innerHTML = `<div class="alert alert-success py-1 px-2 mb-0 small">
-          <i class="bi bi-check-circle me-1"></i>Canal resuelto: <strong>${data.channel.subject}</strong>
-          <br><code class="small">${data.channel.id}</code>
+          <i class="bi bi-check-circle me-1"></i>Canal resuelto: <strong>${data.channel.subject}</strong><br>
+          <code>${data.channel.id}</code>
+        </div>`;
+        msgDiv.style.display = 'block';
+      } else if (data.partial) {
+        // Obtuvimos el nombre pero no el JID — mostrar instrucciones
+        if (data.channel_name) document.getElementById(`newChannelName-${waId}`).value = data.channel_name;
+        msgDiv.innerHTML = `<div class="alert alert-warning py-2 px-2 mb-0 small">
+          <p class="mb-1"><i class="bi bi-exclamation-triangle me-1"></i><strong>${data.error}</strong></p>
+          <p class="mb-1 fw-semibold">¿Cómo obtener el JID?</p>
+          <ol class="mb-1 ps-3">
+            <li>Abrí Evolution API Manager en tu servidor</li>
+            <li>Andá a <strong>Instancias → ${input.split('/').pop() || '(tu instancia)'} → Logs</strong></li>
+            <li>Enviá un mensaje de prueba desde el canal en WhatsApp</li>
+            <li>Buscá en los logs un texto como <code>@newsletter</code> — ese es el JID</li>
+          </ol>
+          <p class="mb-0">También podés pegarlo directamente en el campo JID si lo tenés.</p>
         </div>`;
         msgDiv.style.display = 'block';
       } else {
-        msgDiv.innerHTML = `<div class="alert alert-warning py-1 px-2 mb-0 small">
-          <i class="bi bi-exclamation-triangle me-1"></i>${data.error || 'No se pudo resolver el canal.'}
-          ${data.invite_code ? `<br>Código: <code>${data.invite_code}</code>` : ''}
+        const code = data.invite_code || '';
+        msgDiv.innerHTML = `<div class="alert alert-warning py-2 px-2 mb-0 small">
+          <p class="mb-1"><i class="bi bi-exclamation-triangle me-1"></i>${data.error || 'No se pudo resolver el canal.'}</p>
+          <p class="mb-1 fw-semibold">¿Cómo obtener el JID del canal?</p>
+          <ol class="mb-1 ps-3">
+            <li>En WhatsApp, abrí el canal que <strong>administrás</strong></li>
+            <li>Enviá cualquier mensaje desde ese canal</li>
+            <li>En tu servidor, revisá los logs de Evolution API (o los logs del sistema AutoNews)</li>
+            <li>Buscá una línea que contenga <code>@newsletter</code> — ese número es el JID</li>
+            <li>Pegalo acá en el campo y hacé clic en <i class="bi bi-plus-lg"></i> para agregar</li>
+          </ol>
+          ${code ? `<p class="mb-0 text-muted">Código de invitación: <code>${code}</code></p>` : ''}
         </div>`;
         msgDiv.style.display = 'block';
       }

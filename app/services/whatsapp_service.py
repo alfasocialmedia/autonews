@@ -357,17 +357,18 @@ def find_newsletter_by_jid(url: str, api_key: str, instance_name: str, raw_input
         except Exception as exc:
             log.debug("find_newsletter invite %s: %s", path, exc)
 
-    # 2. Intentar follow/preview que algunos endpoints de Evolution API soportan
-    for path in (
-        f"/newsletter/preview/{instance_name}",
-        f"/newsletter/info/{instance_name}",
+    # 2. Intentar follow/preview (Evolution API devuelve el JID al seguir un canal)
+    wa_link = f"https://whatsapp.com/channel/{invite_code}"
+    for path, body in (
+        (f"/newsletter/follow/{instance_name}",   {"code": invite_code}),
+        (f"/newsletter/follow/{instance_name}",   {"link": wa_link}),
+        (f"/newsletter/preview/{instance_name}",  {"code": invite_code, "link": wa_link}),
+        (f"/newsletter/info/{instance_name}",     {"code": invite_code}),
+        (f"/newsletter/metadata/{instance_name}", {"type": "invite", "key": invite_code}),
     ):
         try:
-            r = requests.post(
-                f"{url}{path}", headers=hdrs,
-                json={"code": invite_code, "link": f"https://whatsapp.com/channel/{invite_code}"},
-                timeout=TIMEOUT, verify=VERIFY_SSL,
-            )
+            r = requests.post(f"{url}{path}", headers=hdrs, json=body,
+                              timeout=TIMEOUT, verify=VERIFY_SSL)
             if r.status_code in (404, 405, 403):
                 continue
             r.raise_for_status()
@@ -375,11 +376,43 @@ def find_newsletter_by_jid(url: str, api_key: str, instance_name: str, raw_input
             if isinstance(data, list) and data:
                 data = data[0]
             result = _parse_newsletter_response(data)
-            if result:
-                log.info("find_newsletter resuelto via POST %s: %s → %s", path, invite_code, result["id"])
+            if result and result.get("id") and "@newsletter" in result["id"]:
+                log.info("find_newsletter resuelto via %s: %s → %s", path, invite_code, result["id"])
                 return result
         except Exception as exc:
             log.debug("find_newsletter POST %s: %s", path, exc)
+
+    # 3. Último fallback: scrapear la página pública de WhatsApp para obtener al menos el nombre
+    try:
+        page = requests.get(
+            wa_link,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; AutoNews/1.0)"},
+            timeout=10, allow_redirects=True,
+        )
+        if page.status_code == 200:
+            import html as _html
+            text = page.text
+            # Open Graph title
+            m = _re_wa.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']', text)
+            if not m:
+                m = _re_wa.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:title["\']', text)
+            og_title = _html.unescape(m.group(1).strip()) if m else ""
+            # Título de la página
+            if not og_title:
+                m = _re_wa.search(r'<title>([^<]+)</title>', text)
+                og_title = _html.unescape(m.group(1).strip()) if m else ""
+            # Buscar JID en el HTML (algunos clientes o SSR lo emiten)
+            m_jid = _re_wa.search(r'\b(120363\d+@newsletter)\b', text)
+            if m_jid:
+                jid_found = m_jid.group(1)
+                log.info("find_newsletter: JID encontrado en HTML: %s", jid_found)
+                return {"id": jid_found, "subject": og_title or jid_found}
+            if og_title:
+                log.info("find_newsletter: sin JID pero nombre obtenido desde web: %s", og_title)
+                # Devolvemos None como id para que la ruta sepa que no tenemos JID
+                return {"id": "", "subject": og_title, "invite_code": invite_code}
+    except Exception as exc:
+        log.debug("find_newsletter web scrape error: %s", exc)
 
     return None
 

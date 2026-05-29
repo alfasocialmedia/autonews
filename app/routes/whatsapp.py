@@ -414,17 +414,28 @@ async def find_channel_by_jid(wa_id: int, request: Request, jid: str = "", db: S
     from app.services.whatsapp_service import find_newsletter_by_jid, _parse_channel_input
     kind, value = _parse_channel_input(raw)
     result = find_newsletter_by_jid(acc.evolution_api_url, acc.evolution_api_key, acc.instance_name, raw)
-    if result:
+    if result and result.get("id"):
         return JSONResponse({"ok": True, "channel": result})
-    # No pudo resolver por API — si era un invite code, dar instrucción clara
+    # Obtuvimos el nombre desde la web pero no el JID
+    if result and result.get("subject") and not result.get("id"):
+        return JSONResponse({
+            "ok": False,
+            "partial": True,
+            "channel_name": result["subject"],
+            "invite_code": result.get("invite_code", value),
+            "error": (
+                f"Se encontró el canal «{result['subject']}» pero tu versión de Evolution API "
+                "no permite obtener el JID interno automáticamente. "
+                "Mirá las instrucciones debajo para obtenerlo."
+            ),
+        })
     if kind == "invite":
         return JSONResponse({
             "ok": False,
             "invite_code": value,
             "error": (
-                "No se pudo resolver el código de invitación automáticamente. "
-                "Tu versión de Evolution API puede no soportar este endpoint. "
-                "Buscá el JID del canal en los logs de Evolution API o contactá al soporte."
+                "No se pudo resolver el canal automáticamente. "
+                "Mirá las instrucciones debajo para obtener el JID."
             ),
         })
     return JSONResponse({"ok": False, "error": "Canal no encontrado"})
