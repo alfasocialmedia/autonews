@@ -299,6 +299,14 @@ def _migrate_columns():
             email_cols = [c["name"] for c in inspector.get_columns("email_accounts")]
             if "instagram_settings_id" not in email_cols:
                 conn.execute(text("ALTER TABLE email_accounts ADD COLUMN instagram_settings_id INTEGER REFERENCES instagram_settings(id) ON DELETE SET NULL"))
+        if "instagram_settings" in tables:
+            ig_cols2 = [c["name"] for c in inspector.get_columns("instagram_settings")]
+            if "ig_caption_prompt" not in ig_cols2:
+                conn.execute(text("ALTER TABLE instagram_settings ADD COLUMN ig_caption_prompt TEXT"))
+        if "whatsapp_settings" in tables:
+            wa_cols2 = [c["name"] for c in inspector.get_columns("whatsapp_settings")]
+            if "instagram_settings_id" not in wa_cols2:
+                conn.execute(text("ALTER TABLE whatsapp_settings ADD COLUMN instagram_settings_id INTEGER REFERENCES instagram_settings(id) ON DELETE SET NULL"))
         import pathlib
         pathlib.Path("app/static/uploads/logos").mkdir(parents=True, exist_ok=True)
 
