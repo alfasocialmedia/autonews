@@ -748,6 +748,7 @@ def _prepend_audio(
 def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = None, source_name: str | None = None, inline_images: list | None = None, embeds: list | None = None, image_bytes_payload: tuple | None = None, extra_image_payloads: list | None = None, instagram_settings_id: int | None = None):
     """Publica un resultado de Groq en todos los sitios WP activos. Devuelve cantidad publicada."""
     published_count = 0
+    published_site_urls: list[tuple[int, str]] = []  # (wp_site_id, post_url)
 
     # Descargar imagen una sola vez para todos los sitios
     # image_bytes_payload = (bytes, filename, mimetype) usado cuando ya tenemos la imagen en memoria (ej: WhatsApp)
@@ -850,12 +851,16 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
             )
             db.commit()
             published_count += 1
-
-            # Difusión WhatsApp para este sitio WP (grupos asignados a él o globales)
-            _broadcast_whatsapp(db, ai_result, wp_post.get("link", ""), wp_site_id=wp_cfg.id)
+            published_site_urls.append((wp_cfg.id, wp_post.get("link", "")))
 
         except Exception as exc:
             log.error("Error publicando RSS en %s: %s", wp_cfg.name, exc)
+
+    # Difusión WhatsApp una sola vez por destino — evita duplicados cuando hay varios sitios WP
+    if published_site_urls:
+        seen_jids: set[str] = set()
+        for site_id, post_url in published_site_urls:
+            _broadcast_whatsapp(db, ai_result, post_url, wp_site_id=site_id, seen_jids=seen_jids)
 
     # Publicar en Instagram una sola vez (independiente de cuántos sitios WP haya)
     if published_count > 0:
@@ -1050,11 +1055,14 @@ def _generate_ig_caption(groq_key: str, groq_model: str, title: str, summary: st
         return f"🔥 ¡No te pierdas esta noticia! 👇\n\n#noticias #argentina #informacion #actualidad #hoy{footer}"
 
 
-def _broadcast_whatsapp(db, ai_result: dict, wp_url: str, wp_site_id: int | None = None):
-    """Envía el artículo recién publicado a los grupos y canales de WhatsApp activos."""
+def _broadcast_whatsapp(db, ai_result: dict, wp_url: str, wp_site_id: int | None = None, seen_jids: set | None = None):
+    """Envía el artículo a grupos y canales WhatsApp. seen_jids evita envíos duplicados."""
     try:
         from app.models import WhatsAppSettings, WhatsAppGroup, WhatsAppChannel
         from app.services.whatsapp_service import send_text, send_to_newsletter
+
+        if seen_jids is None:
+            seen_jids = set()
 
         wa_accounts = db.query(WhatsAppSettings).filter(
             WhatsAppSettings.broadcast_enabled == True,
@@ -1065,11 +1073,10 @@ def _broadcast_whatsapp(db, ai_result: dict, wp_url: str, wp_site_id: int | None
         title = re.sub(r'\s+', ' ', ai_result.get("title", "")).strip()
         raw_summary = ai_result.get("summary", "").strip()
 
-        # Limpiar el summary: si empieza con el título (o variante sin puntuación), quitarlo
+        # Limpiar el summary si empieza con el título
         title_norm = re.sub(r'\W+', ' ', title).strip().lower()
         summary_norm = re.sub(r'\W+', ' ', raw_summary).strip().lower()
         if title_norm and summary_norm.startswith(title_norm[:40]):
-            # Quitar la primera oración/frase si coincide con el título
             summary = re.split(r'(?<=[.!?])\s+', raw_summary, maxsplit=1)[-1].strip()
         else:
             summary = raw_summary
@@ -1090,7 +1097,7 @@ def _broadcast_whatsapp(db, ai_result: dict, wp_url: str, wp_site_id: int | None
                 parts.append("📰 Ingresá y mirá la noticia completa en el link de nuestro perfil.")
             text = "\n\n".join(parts)
 
-            # Grupos
+            # Grupos — saltar los que ya recibieron el mensaje en esta sesión
             all_groups = db.query(WhatsAppGroup).filter(
                 WhatsAppGroup.enabled == True,
                 WhatsAppGroup.whatsapp_settings_id == s.id,
@@ -1101,16 +1108,22 @@ def _broadcast_whatsapp(db, ai_result: dict, wp_url: str, wp_site_id: int | None
             else:
                 groups = all_groups
             for g in groups:
+                if g.jid in seen_jids:
+                    continue
                 send_text(s.evolution_api_url, s.evolution_api_key, s.instance_name, g.jid, text)
+                seen_jids.add(g.jid)
                 log.info("WA difusión → grupo %s vía %s", g.name, s.name)
 
-            # Canales
+            # Canales — igual deduplicación
             channels = db.query(WhatsAppChannel).filter(
                 WhatsAppChannel.enabled == True,
                 WhatsAppChannel.whatsapp_settings_id == s.id,
             ).all()
             for ch in channels:
+                if ch.jid in seen_jids:
+                    continue
                 send_to_newsletter(s.evolution_api_url, s.evolution_api_key, s.instance_name, ch.jid, text)
+                seen_jids.add(ch.jid)
                 log.info("WA difusión → canal %s vía %s", ch.name, s.name)
 
     except Exception as exc:
