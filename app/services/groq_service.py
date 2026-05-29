@@ -435,7 +435,7 @@ def _chat_with_token_fallback(client, model: str, messages: list, max_tokens: in
         raise
 
 
-def _split_long_paragraphs(html: str, max_chars: int = 200) -> str:
+def _split_long_paragraphs(html: str, max_chars: int = 183) -> str:
     """Divide <p> con más de max_chars caracteres en párrafos más cortos, cortando en oraciones."""
     import re as _re
     def split_p(m):
