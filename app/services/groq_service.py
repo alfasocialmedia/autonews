@@ -407,17 +407,17 @@ def _article_scale(char_count: int) -> tuple[str, int | None, int]:
     Párrafos de 175-185 chars con 2 oraciones cada uno — min_words se eliminó porque
     contradice el límite de chars. La completitud se exige por prompt."""
     if char_count < 600:
-        return "3 a 5", None, 3000
+        return "5 a 7", None, 3000
     elif char_count < 1500:
-        return "5 a 8", None, 5000
+        return "8 a 12", None, 5000
     elif char_count < 3000:
-        return "8 a 12", None, 6000
+        return "13 a 18", None, 7000
     elif char_count < 5000:
-        return "12 a 16", None, 8000
+        return "18 a 24", None, 9000
     elif char_count < 8000:
-        return "16 a 22", None, 10000
+        return "22 a 30", None, 11000
     else:
-        return "20 a 28", None, 12000
+        return "28 a 38", None, 13000
 
 
 def _chat_with_token_fallback(client, model: str, messages: list, max_tokens: int, **kwargs):
@@ -747,8 +747,8 @@ Mantené los datos reales, pero evitá que el texto parezca copiado del medio or
 
 EXTENSIÓN:
 - {word_count_rule}
-- Si el contenido es breve, desarrollá lo máximo posible sin inventar.
-- No rellenes con frases vacías.
+- Desarrollá cada punto con profundidad periodística: explicá el contexto, el impacto, el porqué importa, las consecuencias o los antecedentes que ayuden al lector a entender mejor la noticia.
+- Podés agregar oraciones que contextualicen o amplíen cada hecho, siempre que sean coherentes con la información recibida. No inventés datos específicos (nombres, cifras, fechas) que no estén en el contenido.
 - No termines la nota de forma abrupta.
 
 LEGIBILIDAD:
@@ -979,8 +979,8 @@ Mantené los datos reales, pero evitá que el texto parezca copiado del medio or
 
 EXTENSIÓN:
 - {word_count_rule}
-- Si el contenido es breve, desarrollá lo máximo posible sin inventar.
-- No rellenes con frases vacías.
+- Desarrollá cada punto con profundidad periodística: explicá el contexto, el impacto, el porqué importa, las consecuencias o los antecedentes que ayuden al lector a entender mejor la noticia.
+- Podés agregar oraciones que contextualicen o amplíen cada hecho, siempre que sean coherentes con la información recibida. No inventés datos específicos (nombres, cifras, fechas) que no estén en el contenido.
 - No termines la nota de forma abrupta.
 
 LEGIBILIDAD:
