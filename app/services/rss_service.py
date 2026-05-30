@@ -668,9 +668,19 @@ def _try_wp_rest_api(base_url: str, category_url: str, max_items: int = 10) -> l
         log.debug("_try_wp_rest_api: no se encontró cat_id para %s", category_url)
         return []
 
+    # Incluir categorías hijas: si los posts se publican en subcategorías, la API
+    # no los devuelve al filtrar solo por la categoría padre.
+    all_cat_ids = [cat_id]
+    children = _api_get(f"{api_base}/categories", {"parent": cat_id, "per_page": 100, "_fields": "id"})
+    if children and isinstance(children, list):
+        all_cat_ids += [c["id"] for c in children if c.get("id")]
+        if len(all_cat_ids) > 1:
+            log.info("WP REST API: cat %s + %d subcategorías", cat_id, len(all_cat_ids) - 1)
+
     posts = _api_get(
         f"{api_base}/posts",
-        {"per_page": max_items, "_embed": 1, "orderby": "date", "order": "desc", "categories": cat_id},
+        {"per_page": max_items, "_embed": 1, "orderby": "date", "order": "desc",
+         "categories": ",".join(str(i) for i in all_cat_ids)},
     )
     if not isinstance(posts, list):
         return []
