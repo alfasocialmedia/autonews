@@ -392,7 +392,7 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
     jsonld_text = _extract_jsonld_text(soup)
     if jsonld_text:
         lines = [l.strip() for l in jsonld_text.splitlines() if l.strip()]
-        cand = "\n".join(lines)[:12000]
+        cand = "\n".join(lines)[:20000]
         if not _is_garbled(cand):
             jsonld_candidate = cand
             log.info("JSON-LD candidate: %d chars", len(jsonld_candidate))
@@ -423,42 +423,68 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
             results.append(t)
         return results
 
+    _MULTI_BODY_RE = re.compile(
+        r"article[-_]body|entry[-_]content|post[-_]content|article[-_]content|"
+        r"story[-_]body|article__body|td-post[-_]content|tdb-single-content|"
+        r"tdb_single_content|tdb-block-inner|tagdiv[-_]type|"
+        r"note[-_]content|content[-_]article|\bentry\b|"
+        r"td-ss-main-content|td-crumb-container",
+        re.I,
+    )
+    _NOISE_PARENT_TAGS = {"nav", "header", "footer", "aside"}
+    _NOISE_PARENT_CLASSES = ("menu", "nav", "breadcrumb", "widget", "sidebar",
+                             "footer", "related", "comment", "share", "social",
+                             "ad-", "-ad", "banner", "popup")
+
     def _build_html_candidate(src_soup) -> str:
-        """Extrae texto del artículo de una soup. Devuelve string vacío si falla."""
+        """Extrae texto del artículo con 3 estrategias; devuelve la más larga."""
+        candidates: list[str] = []
+
+        # ── Estrategia 1: contenedor único más específico ────────────────────
         article = _find_article_body(src_soup)
         container = article if article else src_soup
-
-        paras = _extract_paras(container)
-        if paras:
-            cand = "\n\n".join(paras)[:12000]
+        paras1 = _extract_paras(container)
+        if paras1:
+            candidates.append("\n\n".join(paras1)[:20000])
         else:
-            text = container.get_text(separator="\n", strip=True)
-            lines2 = [l.strip() for l in text.splitlines() if l.strip()]
-            cand = "\n".join(lines2)[:12000]
+            lines2 = [l.strip() for l in container.get_text(separator="\n", strip=True).splitlines() if l.strip()]
+            candidates.append("\n".join(lines2)[:20000])
 
-        # Si sigue corto, intentar combinar múltiples contenedores article-body
-        # (sitios como C5N parten el artículo en varios elementos)
-        if len(cand) < 3000:
-            _MULTI_BODY = re.compile(
-                r"article[-_]body|entry[-_]content|post[-_]content|article[-_]content|"
-                r"story[-_]body|article__body|td-post[-_]content|tdb-single-content|"
-                r"note[-_]content|content[-_]article|\bentry\b",
-                re.I,
-            )
-            all_bodies = src_soup.find_all(class_=_MULTI_BODY)
-            if len(all_bodies) > 1:
-                combined: list[str] = []
-                seen_p: set[str] = set()
-                for body_el in all_bodies:
-                    for p_text in _extract_paras(body_el):
-                        if p_text not in seen_p:
-                            seen_p.add(p_text)
-                            combined.append(p_text)
-                combined_text = "\n\n".join(combined)[:12000]
-                if len(combined_text) > len(cand):
-                    cand = combined_text
-                    log.info("HTML multi-body: %d contenedores → %d chars", len(all_bodies), len(cand))
-        return cand
+        # ── Estrategia 2: multi-body (SIEMPRE, sin importar el largo) ────────
+        all_bodies = src_soup.find_all(class_=_MULTI_BODY_RE)
+        if all_bodies:
+            combined: list[str] = []
+            seen_p: set[str] = set()
+            for body_el in all_bodies:
+                for p_text in _extract_paras(body_el):
+                    if p_text not in seen_p:
+                        seen_p.add(p_text)
+                        combined.append(p_text)
+            if combined:
+                c2 = "\n\n".join(combined)[:20000]
+                candidates.append(c2)
+                log.info("HTML multi-body: %d contenedores → %d chars", len(all_bodies), len(c2))
+
+        # ── Estrategia 3: todos los <p> de la página (último recurso) ────────
+        # Útil para sitios con estructura inusual. Solo si las otras son cortas.
+        if max((len(c) for c in candidates), default=0) < 2000:
+            brute: list[str] = []
+            seen_b: set[str] = set()
+            for p in src_soup.find_all("p"):
+                if any(p.find_parent(tag) for tag in _NOISE_PARENT_TAGS):
+                    continue
+                parent_cls = " ".join((p.parent.get("class") or []) if p.parent else []).lower()
+                if any(x in parent_cls for x in _NOISE_PARENT_CLASSES):
+                    continue
+                t = p.get_text(strip=True)
+                if t and len(t) >= 20 and t not in seen_b:
+                    seen_b.add(t)
+                    brute.append(t)
+            if brute:
+                candidates.append("\n\n".join(brute)[:20000])
+
+        best = max(candidates, key=len, default="")
+        return best
 
     # Intentar extraer el artículo ANTES del noise removal.
     # Algunos temas (ej: tmnf de Canal 12 Misiones) tienen clases como
@@ -467,8 +493,8 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
     html_candidate = _build_html_candidate(soup)
     log.info("HTML pre-noise: %d chars", len(html_candidate))
 
-    # Aplicar noise removal y re-intentar solo si el primer intento fue pobre
-    if len(html_candidate) < 1000:
+    # Aplicar noise removal y re-intentar si el primer intento fue pobre
+    if len(html_candidate) < 3000:
         noise_soup = BeautifulSoup(content, "html.parser")
         for tag in noise_soup(_NOISE_TAGS):
             tag.decompose()

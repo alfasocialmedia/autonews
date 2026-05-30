@@ -650,7 +650,7 @@ def process_rss_with_groq(
     prompt = f"""{base_prompt}
 
 ══════════════ ARTÍCULO FUENTE — REESCRIBÍ SOLO ESTO ══════════════
-{article_text[:15000]}
+{article_text[:20000]}
 ═══════════════════════════════════════════════════════════════════
 
 OBJETIVO PRINCIPAL:
@@ -882,7 +882,7 @@ def process_email_with_groq(
     prompt = f"""{base_prompt}
 
 ══════════════ CONTENIDO FUENTE — REESCRIBÍ SOLO ESTO ══════════════
-{body[:15000]}
+{body[:20000]}
 ════════════════════════════════════════════════════════════════════
 
 OBJETIVO PRINCIPAL:
