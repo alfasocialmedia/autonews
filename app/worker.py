@@ -1317,12 +1317,15 @@ def process_rss_feeds():
                             if scraped_img:
                                 image_url = scraped_img
                         elif item["link"]:
-                            # Aunque el contenido sea completo, la og:image del artículo
-                            # siempre es de mayor resolución que el thumbnail del feed RSS
-                            _, scraped_img, inline_images, embeds = scrape_full_article(item["link"])
+                            # Scrapear siempre: la og:image es mejor que la del RSS,
+                            # y si el texto scrapeado es más largo que el excerpt del RSS, usarlo.
+                            scraped_text_fallback, scraped_img, inline_images, embeds = scrape_full_article(item["link"])
                             if scraped_img:
                                 image_url = scraped_img
                                 log.info("  🖼 og:image scrapeada: %s", scraped_img[:80])
+                            if scraped_text_fallback and len(scraped_text_fallback) > len(body) * 1.3:
+                                log.info("  📰 Texto scrapeado más completo (%d > %d chars), reemplazando excerpt RSS", len(scraped_text_fallback), len(body))
+                                body = scraped_text_fallback
 
                         # Última línea de defensa: si el body sigue siendo binario/ilegible, omitir
                         if _is_garbled(body):
@@ -1431,9 +1434,12 @@ def generate_rss_preview(db, feed: RssFeed, item: dict) -> dict:
         if scraped_img:
             image_url = scraped_img
     elif item["link"]:
-        _, scraped_img, inline_images, embeds = scrape_full_article(item["link"])
+        scraped_text_fallback, scraped_img, inline_images, embeds = scrape_full_article(item["link"])
         if scraped_img:
             image_url = scraped_img
+        if scraped_text_fallback and len(scraped_text_fallback) > len(body) * 1.3:
+            log.info("  📰 [preview] Texto scrapeado más completo (%d > %d chars)", len(scraped_text_fallback), len(body))
+            body = scraped_text_fallback
 
     ai_result = process_rss_with_groq(
         groq_key, groq_cfg.model, groq_cfg.base_prompt,
@@ -1546,9 +1552,12 @@ def publish_rss_item_now(db, feed: RssFeed, item: dict) -> dict:
         if scraped_img:
             image_url = scraped_img
     elif item["link"]:
-        _, scraped_img, inline_images, embeds = scrape_full_article(item["link"])
+        scraped_text_fallback, scraped_img, inline_images, embeds = scrape_full_article(item["link"])
         if scraped_img:
             image_url = scraped_img
+        if scraped_text_fallback and len(scraped_text_fallback) > len(body) * 1.3:
+            log.info("  📰 [manual] Texto scrapeado más completo (%d > %d chars)", len(scraped_text_fallback), len(body))
+            body = scraped_text_fallback
 
     ai_result = process_rss_with_groq(
         groq_key, groq_cfg.model, groq_cfg.base_prompt,

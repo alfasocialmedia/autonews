@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 log = logging.getLogger("rss_service")
 
 _SCRAPE_TIMEOUT = 15
-_MIN_BODY_LENGTH = 350
+_MIN_BODY_LENGTH = 1500
 
 # Selectores de elementos a eliminar (publicidad, nav, social, etc.)
 _NOISE_TAGS = [
