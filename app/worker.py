@@ -262,6 +262,7 @@ def process_emails():
                             else wp_sites
                         )
                         published_count = 0
+                        _email_published_urls: list[tuple[int, str]] = []
                         for wp_cfg in account_wp_sites:
                             try:
                                 wp_pwd = decrypt_value(wp_cfg.encrypted_app_password)
@@ -363,12 +364,18 @@ def process_emails():
                                 log.info(f"  ✅ {msg}")
                                 _log_db(db, "INFO", msg)
 
-                                _broadcast_whatsapp(db, ai_result, wp_post.get("link", ""), wp_site_id=wp_cfg.id)
+                                _email_published_urls.append((wp_cfg.id, wp_post.get("link", "")))
 
                             except Exception as exc:
                                 msg = f"Error publicando en {wp_cfg.name}: {exc}"
                                 log.error(f"  ❌ {msg}")
                                 _log_db(db, "ERROR", msg)
+
+                        # Difusión WA una sola vez con seen_jids compartido — evita duplicados
+                        if _email_published_urls:
+                            _seen_jids_email: set[str] = set()
+                            for _site_id_e, _post_url_e in _email_published_urls:
+                                _broadcast_whatsapp(db, ai_result, _post_url_e, wp_site_id=_site_id_e, seen_jids=_seen_jids_email)
 
                         processed.status = "published" if published_count > 0 else "error"
                         db.commit()
@@ -1105,6 +1112,7 @@ def _broadcast_whatsapp(db, ai_result: dict, wp_url: str, wp_site_id: int | None
 
         title = re.sub(r'\s+', ' ', ai_result.get("title", "")).strip()
         raw_summary = ai_result.get("summary", "").strip()
+        wa_data = (ai_result.get("wa_data") or "").strip()
 
         # Limpiar el summary si empieza con el título
         title_norm = re.sub(r'\W+', ' ', title).strip().lower()
@@ -1128,10 +1136,14 @@ def _broadcast_whatsapp(db, ai_result: dict, wp_url: str, wp_site_id: int | None
                         .replace("{title}", title)
                         .replace("{summary}", summary)
                         .replace("{url}", wp_url or ""))
+                if wa_data:
+                    text = text + "\n\n" + wa_data
             else:
                 parts = [f"*{title}*"]
                 if summary:
                     parts.append(summary[:350])
+                if wa_data:
+                    parts.append(wa_data)
                 if wp_url:
                     parts.append(f"📰 Ingresá y mirá la noticia completa:\n{wp_url}")
                 else:

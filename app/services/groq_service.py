@@ -777,6 +777,26 @@ ANTES DE ENTREGAR — Verificá internamente que:
 - El texto esté listo para publicar en un medio digital argentino.
 - La ubicación geográfica (ciudad, provincia) esté nombrada explícitamente.
 
+WA_DATA — SOLO para contenido con datos estructurados (ANSES, previsión social, calendarios, listas de montos):
+- Si el contenido tiene un calendario de fechas de pago tipo "DNI terminado en X cobra el día Y" o similares:
+  generá en `wa_data` una tabla de texto plano con emoji 📅, encabezado descriptivo y separadores ───────────.
+  Ejemplo:
+  📅 CALENDARIO DE PAGOS - [MES AÑO]
+  ───────────────────────────────
+  DNI final 0 y 1  →  lunes X
+  DNI final 2 y 3  →  martes X
+  ...
+  ───────────────────────────────
+- Si el contenido tiene una lista de montos, haberes o beneficios específicos tipo "AUH: $X / Jubilación mínima: $Y":
+  generá en `wa_data` una lista con bullets • y emoji 💰, con encabezado descriptivo.
+  Ejemplo:
+  💰 NUEVOS MONTOS - [MES AÑO]
+  ───────────────────────────────
+  • Jubilación mínima: $X.XXX
+  • AUH: $X.XXX
+  ───────────────────────────────
+- En CUALQUIER OTRO CASO (noticias sin datos tabulares), dejá `wa_data` como cadena vacía "".
+
 IMPORTANTE: Respondé ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
 Las comillas dentro del HTML van con barra invertida \" o como &quot;. Atributos HTML con comillas simples.
 {{
@@ -785,7 +805,8 @@ Las comillas dentro del HTML van con barra invertida \" o como &quot;. Atributos
   "category": "Exactamente una de estas: {cat_list}",
   "summary": "UNA sola oración completa que termina en punto. Máximo 25 palabras. El hecho principal: quién, qué y dónde. Sin segunda oración.",
   "keyphrase": "frase clave 2-4 palabras",
-  "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
+  "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"],
+  "wa_data": "Tabla o lista de texto plano para WhatsApp si es calendario/lista ANSES; cadena vacía si no aplica."
 }}"""
 
     if provider == "anthropic":
@@ -1009,6 +1030,26 @@ ANTES DE ENTREGAR — Verificá internamente que:
 - El texto esté listo para publicar en un medio digital argentino.
 - La ubicación geográfica (ciudad, provincia) esté nombrada explícitamente.
 
+WA_DATA — SOLO para contenido con datos estructurados (ANSES, previsión social, calendarios, listas de montos):
+- Si el contenido tiene un calendario de fechas de pago tipo "DNI terminado en X cobra el día Y" o similares:
+  generá en `wa_data` una tabla de texto plano con emoji 📅, encabezado descriptivo y separadores ───────────.
+  Ejemplo:
+  📅 CALENDARIO DE PAGOS - [MES AÑO]
+  ───────────────────────────────
+  DNI final 0 y 1  →  lunes X
+  DNI final 2 y 3  →  martes X
+  ...
+  ───────────────────────────────
+- Si el contenido tiene una lista de montos, haberes o beneficios específicos tipo "AUH: $X / Jubilación mínima: $Y":
+  generá en `wa_data` una lista con bullets • y emoji 💰, con encabezado descriptivo.
+  Ejemplo:
+  💰 NUEVOS MONTOS - [MES AÑO]
+  ───────────────────────────────
+  • Jubilación mínima: $X.XXX
+  • AUH: $X.XXX
+  ───────────────────────────────
+- En CUALQUIER OTRO CASO (noticias sin datos tabulares), dejá `wa_data` como cadena vacía "".
+
 IMPORTANTE: Respondé ÚNICAMENTE con JSON válido. Sin markdown, sin texto extra.
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
@@ -1017,7 +1058,8 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
   "summary": "UNA sola oración completa que termina en punto. Máximo 25 palabras. El hecho principal: quién, qué y dónde. Sin segunda oración.",
   "keyphrase": "frase clave de 2 a 4 palabras",
-  "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"]
+  "tags": ["etiqueta1", "etiqueta2", "etiqueta3", "etiqueta4", "etiqueta5"],
+  "wa_data": "Tabla o lista de texto plano para WhatsApp si es calendario/lista ANSES; cadena vacía si no aplica."
 }}"""
 
     if provider == "anthropic":
