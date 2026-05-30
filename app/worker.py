@@ -1041,6 +1041,26 @@ _DEFAULT_IG_CAPTION_PROMPT = (
 )
 
 
+def _strip_caption_labels(text: str) -> str:
+    """Elimina etiquetas de estructura del prompt (ej. 'TÍTULO GANCHO:', 'PÁRRAFO 1 — QUÉ PASÓ:') del caption generado."""
+    # Patrón: línea que empieza con texto en MAYÚSCULAS seguido de ':' o '—...:'
+    # Ejemplos: "TÍTULO GANCHO:", "PÁRRAFO 1 — QUÉ PASÓ:", "CIERRE:"
+    lines = text.splitlines()
+    cleaned = []
+    for line in lines:
+        stripped = line.strip()
+        # Detecta etiquetas: texto en mayúsculas (con espacios, números, guiones, tildes) seguido de ':'
+        if re.match(r'^[A-ZÁÉÍÓÚÑÜ0-9][A-ZÁÉÍÓÚÑÜ0-9 \-–—/]*\s*(?:—\s*[A-ZÁÉÍÓÚÑÜ0-9 \-–—/]+)?\s*:', stripped):
+            # Quita solo la etiqueta y deja el contenido que sigue (si lo hay en la misma línea)
+            remainder = re.sub(r'^[A-ZÁÉÍÓÚÑÜ0-9][A-ZÁÉÍÓÚÑÜ0-9 \-–—/]*\s*(?:—\s*[A-ZÁÉÍÓÚÑÜ0-9 \-–—/]+)?\s*:\s*', '', stripped)
+            if remainder:
+                cleaned.append(remainder)
+            # Si la etiqueta estaba sola en la línea, se omite (queda línea vacía de separación)
+        else:
+            cleaned.append(line)
+    return '\n'.join(cleaned).strip()
+
+
 def _generate_ig_caption(groq_key: str, groq_model: str, title: str, summary: str, website_footer: str = "", groq_provider: str = "groq", groq_base_url: str | None = None, custom_prompt: str | None = None) -> str:
     """Genera caption Instagram usando el prompt personalizado de la cuenta o el prompt por defecto."""
     footer = f"\n\n📰 {website_footer}" if website_footer else ""
@@ -1056,6 +1076,7 @@ def _generate_ig_caption(groq_key: str, groq_model: str, title: str, summary: st
             max_tokens=600,
         )
         text = resp.choices[0].message.content.strip()
+        text = _strip_caption_labels(text)
         return text + footer
     except Exception:
         return f"🔥 ¡No te pierdas esta noticia! 👇\n\n#noticias #argentina #informacion #actualidad #hoy{footer}"
