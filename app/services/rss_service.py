@@ -135,7 +135,7 @@ def _extract_og_image(soup: BeautifulSoup) -> str | None:
 
 
 _IMG_SKIP = ("logo", "icon", "avatar", "pixel", "tracking", "spinner", "btn", "arrow", "spacer", "badge", "placeholder")
-_LAZY_ATTRS = ("data-src", "data-lazy-src", "data-original", "data-lazy", "data-lazyload", "data-full-url")
+_LAZY_ATTRS = ("data-src", "data-lazy-src", "data-original", "data-lazy", "data-lazyload", "data-full-url", "data-td-src-property")
 
 # Filtros para imágenes promocionales (banners sociales, newsletters, etc.)
 _PROMO_ALT_RE = re.compile(
@@ -730,16 +730,32 @@ def _scrape_category_html(url: str, max_items: int = 10) -> list[dict]:
 
     candidates: list[dict] = []
 
+    def _resolve_img(container) -> str | None:
+        """Busca la mejor imagen en un contenedor: lazy attrs primero, luego src."""
+        img = container.find("img")
+        if not img:
+            return None
+        for attr in _LAZY_ATTRS:
+            val = img.get(attr, "").strip()
+            if val and val.startswith("http") and not any(x in val.lower() for x in _IMG_SKIP):
+                return _upgrade_wp_thumbnail(val)
+        src = img.get("src", "").strip()
+        if src and src.startswith("http") and not any(x in src.lower() for x in _IMG_SKIP):
+            return _upgrade_wp_thumbnail(src)
+        return None
+
     # Estrategia 1: <article> tags
     for art in soup.find_all("article"):
         a = art.find("a", href=True)
+        # Patrón C5N: el <a> envuelve al <article> (es el contenedor padre)
+        if not a and art.parent and art.parent.name == "a" and art.parent.get("href"):
+            a = art.parent
         heading = art.find(re.compile(r"^h[1-4]$"))
         if not a:
             continue
         href = urljoin(base, a["href"])
         title = (heading.get_text(strip=True) if heading else a.get_text(strip=True))[:200]
-        img = art.find("img")
-        img_url = _upgrade_wp_thumbnail(img["src"]) if img and img.get("src") else None
+        img_url = _resolve_img(art.parent if a is art.parent else art)
         if title and href and href.startswith("http"):
             candidates.append({"title": title, "link": href, "image_url": img_url})
 
@@ -747,13 +763,14 @@ def _scrape_category_html(url: str, max_items: int = 10) -> list[dict]:
     if not candidates:
         for div in soup.find_all(class_=_ARTICLE_CONTAINERS):
             a = div.find("a", href=True)
+            if not a and div.parent and div.parent.name == "a" and div.parent.get("href"):
+                a = div.parent
             heading = div.find(re.compile(r"^h[1-5]$"))
             if not a:
                 continue
             href = urljoin(base, a["href"])
             title = (heading.get_text(strip=True) if heading else a.get_text(strip=True))[:200]
-            img = div.find("img")
-            img_url = _upgrade_wp_thumbnail(img["src"]) if img and img.get("src") else None
+            img_url = _resolve_img(div.parent if a is getattr(div, "parent", None) else div)
             if title and href and href.startswith("http"):
                 candidates.append({"title": title, "link": href, "image_url": img_url})
 
