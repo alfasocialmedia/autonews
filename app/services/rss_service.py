@@ -320,10 +320,14 @@ def _find_article_body(soup: BeautifulSoup):
 
 def _extract_first_figure_image(container) -> str | None:
     """Primera imagen editorial dentro de un <figure> en el artículo.
-    Se prefiere sobre og:image porque la og:image suele tener marca de agua del sitio fuente."""
+    Se prefiere sobre og:image porque la og:image suele tener marca de agua del sitio fuente.
+    Saltea figures que contienen video/iframe (thumbnail del reproductor, no imagen editorial)."""
     if not container:
         return None
     for fig in container.find_all("figure"):
+        # Ignorar figures de reproductores de video/audio/embed
+        if fig.find(["video", "iframe", "audio", "embed"]):
+            continue
         img = fig.find("img")
         if not img:
             continue
@@ -341,7 +345,11 @@ def _extract_first_figure_image(container) -> str | None:
         alt = (img.get("alt") or "").strip()
         if _PROMO_ALT_RE.search(alt):
             continue
-        return _upgrade_wp_thumbnail(src)
+        upgraded = _upgrade_wp_thumbnail(src)
+        # Si la URL aún contiene indicador de tamaño pequeño (ej: ?w=120, /120x90/), continuar
+        if re.search(r'[?&/](?:w|width)=\d{1,3}(?:[^0-9]|$)', upgraded, re.I):
+            continue
+        return upgraded
     return None
 
 

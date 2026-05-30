@@ -231,19 +231,29 @@
                 <i class="bi bi-globe me-1 text-info"></i>Publicar en WordPress
               </label>
               {% if wp_sites %}
-              <div class="border rounded p-2 wp-site-picker">
+              <div class="border rounded p-2 wp-site-picker" id="picker_{{ feed.id }}">
+                <div class="form-check border-bottom pb-1 mb-1">
+                  <input class="form-check-input wp-all-toggle" type="checkbox"
+                         id="edit_wp_all_{{ feed.id }}"
+                         {% if not feed._wp_site_ids %}checked{% endif %}
+                         onchange="toggleWpAll('{{ feed.id }}', this)">
+                  <label class="form-check-label small fw-semibold" for="edit_wp_all_{{ feed.id }}">
+                    Todos los sitios activos
+                  </label>
+                </div>
                 {% for wp in wp_sites %}
                 <div class="form-check">
-                  <input class="form-check-input" type="checkbox" name="wp_site_ids"
+                  <input class="form-check-input wp-site-cb-{{ feed.id }}" type="checkbox" name="wp_site_ids"
                          value="{{ wp.id }}" id="edit_wp_{{ feed.id }}_{{ wp.id }}"
-                         {% if wp.id in feed._wp_site_ids %}checked{% endif %}>
+                         {% if wp.id in feed._wp_site_ids %}checked{% endif %}
+                         {% if not feed._wp_site_ids %}disabled{% endif %}
+                         onchange="syncWpAll('{{ feed.id }}')">
                   <label class="form-check-label small" for="edit_wp_{{ feed.id }}_{{ wp.id }}">
                     {{ wp.name }} <span class="text-muted">({{ wp.site_url }})</span>
                   </label>
                 </div>
                 {% endfor %}
               </div>
-              <div class="form-text">Sin selección = publica en todos los sitios activos.</div>
               {% else %}
               <div class="text-muted small">No hay sitios WordPress activos configurados.</div>
               {% endif %}
@@ -435,18 +445,26 @@
               <i class="bi bi-globe me-1 text-info"></i>Publicar en WordPress
             </label>
             {% if wp_sites %}
-            <div class="border rounded p-2" style="max-height:130px;overflow-y:auto">
+            <div class="border rounded p-2" style="max-height:160px;overflow-y:auto">
+              <div class="form-check border-bottom pb-1 mb-1">
+                <input class="form-check-input wp-all-toggle" type="checkbox"
+                       id="add_wp_all" checked
+                       onchange="toggleWpAll('add', this)">
+                <label class="form-check-label small fw-semibold" for="add_wp_all">
+                  Todos los sitios activos
+                </label>
+              </div>
               {% for wp in wp_sites %}
               <div class="form-check">
-                <input class="form-check-input" type="checkbox" name="wp_site_ids"
-                       value="{{ wp.id }}" id="add_wp_{{ wp.id }}">
+                <input class="form-check-input wp-site-cb-add" type="checkbox" name="wp_site_ids"
+                       value="{{ wp.id }}" id="add_wp_{{ wp.id }}" disabled
+                       onchange="syncWpAll('add')">
                 <label class="form-check-label small" for="add_wp_{{ wp.id }}">
                   {{ wp.name }} <span class="text-muted">({{ wp.site_url }})</span>
                 </label>
               </div>
               {% endfor %}
             </div>
-            <div class="form-text">Sin selección = publica en todos los sitios activos.</div>
             {% else %}
             <div class="text-muted small">No hay sitios WordPress activos configurados.</div>
             {% endif %}
@@ -485,6 +503,27 @@
 .preview-cover { border-radius: 0; }
 </style>
 <script>
+// ── Selector sitios WordPress ────────────────────────────────────────────────
+function toggleWpAll(feedId, allCb) {
+  const cbs = document.querySelectorAll('.wp-site-cb-' + feedId);
+  if (allCb.checked) {
+    cbs.forEach(cb => { cb.checked = false; cb.disabled = true; });
+  } else {
+    cbs.forEach(cb => { cb.disabled = false; });
+  }
+}
+function syncWpAll(feedId) {
+  const cbs = document.querySelectorAll('.wp-site-cb-' + feedId);
+  const allCb = document.getElementById('edit_wp_all_' + feedId) ||
+                document.getElementById('add_wp_all');
+  if (!allCb) return;
+  const anyChecked = Array.from(cbs).some(cb => cb.checked);
+  if (!anyChecked) {
+    allCb.checked = true;
+    cbs.forEach(cb => { cb.disabled = true; });
+  }
+}
+
 // ── Estado preview modal ────────────────────────────────────────────────────
 let _previewToken = null;
 let _previewGuid = null;
