@@ -1,4 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+_TZ_AR = timezone(timedelta(hours=-3))
 
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
@@ -21,7 +23,7 @@ def authenticate_user(db: Session, username: str, password: str):
     user = db.query(User).filter(User.username == username, User.is_active == True).first()
     if not user or not verify_password(password, user.hashed_password):
         return None
-    user.last_login = datetime.utcnow()
+    user.last_login = datetime.now(_TZ_AR)
     db.commit()
     return user
 

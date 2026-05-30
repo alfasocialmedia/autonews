@@ -3,7 +3,9 @@ from __future__ import annotations
 import email
 import imaplib
 import re
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+_TZ_AR = timezone(timedelta(hours=-3))
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
 
@@ -226,7 +228,7 @@ def fetch_unread_emails(server: str, port: int, username: str, password: str) ->
             try:
                 received_at = parsedate_to_datetime(date_str)
             except Exception:
-                received_at = datetime.utcnow()
+                received_at = datetime.now(_TZ_AR)
 
             body = _get_body(msg)
             image_data, image_filename, image_mime = _get_image_attachment(msg)

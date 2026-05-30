@@ -901,7 +901,8 @@ def _publish_instagram(db, ai_result: dict, img_payload: tuple | None, wp_image_
 
         # Verificar límite diario usando logs de Instagram
         from datetime import date, datetime, timezone as tz
-        today_start = datetime.now(tz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        _TZ_AR = tz(timedelta(hours=-3))
+        today_start = datetime.now(_TZ_AR).replace(hour=0, minute=0, second=0, microsecond=0)
         today_count = db.query(Log).filter(
             Log.source == "instagram",
             Log.level == "INFO",
