@@ -465,25 +465,28 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
                 candidates.append(c2)
                 log.info("HTML multi-body: %d contenedores → %d chars", len(all_bodies), len(c2))
 
-        # ── Estrategia 3: todos los <p> de la página (último recurso) ────────
-        # Útil para sitios con estructura inusual. Solo si las otras son cortas.
-        if max((len(c) for c in candidates), default=0) < 2000:
-            brute: list[str] = []
-            seen_b: set[str] = set()
-            for p in src_soup.find_all("p"):
-                if any(p.find_parent(tag) for tag in _NOISE_PARENT_TAGS):
-                    continue
-                parent_cls = " ".join((p.parent.get("class") or []) if p.parent else []).lower()
-                if any(x in parent_cls for x in _NOISE_PARENT_CLASSES):
-                    continue
-                t = p.get_text(strip=True)
-                if t and len(t) >= 20 and t not in seen_b:
-                    seen_b.add(t)
-                    brute.append(t)
-            if brute:
-                candidates.append("\n\n".join(brute)[:20000])
+        # ── Estrategia 3: todos los <p> de la página (SIEMPRE) ──────────────
+        # Captura contenido disperso en cualquier estructura HTML.
+        # El AI descarta el ruido; es mejor tener de más que de menos.
+        brute: list[str] = []
+        seen_b: set[str] = set()
+        for p in src_soup.find_all("p"):
+            if any(p.find_parent(tag) for tag in _NOISE_PARENT_TAGS):
+                continue
+            parent_cls = " ".join((p.parent.get("class") or []) if p.parent else []).lower()
+            if any(x in parent_cls for x in _NOISE_PARENT_CLASSES):
+                continue
+            t = p.get_text(strip=True)
+            if t and len(t) >= 20 and t not in seen_b:
+                seen_b.add(t)
+                brute.append(t)
+        if brute:
+            candidates.append("\n\n".join(brute)[:20000])
 
         best = max(candidates, key=len, default="")
+        if candidates:
+            sizes = [len(c) for c in candidates]
+            log.info("HTML candidatos: %s → mejor=%d chars", sizes, len(best))
         return best
 
     # Intentar extraer el artículo ANTES del noise removal.
