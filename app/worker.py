@@ -1069,7 +1069,13 @@ def _generate_ig_caption(groq_key: str, groq_model: str, title: str, summary: st
         client = _get_client(groq_key, provider=groq_provider, api_base_url=groq_base_url)
         base_prompt = (custom_prompt.strip() if custom_prompt and custom_prompt.strip()
                        else _DEFAULT_IG_CAPTION_PROMPT)
-        prompt = f"{base_prompt}\n\nTítulo: {title}\nResumen: {summary}"
+        no_labels_rule = (
+            "\n\nREGLA CRÍTICA: NO incluyas etiquetas ni rótulos de sección en el texto "
+            "(ejemplos de lo que NO debés escribir: 'TÍTULO GANCHO:', 'PÁRRAFO 1 — QUÉ PASÓ:', "
+            "'PÁRRAFO 2 — EL DETALLE:', 'CIERRE:', etc.). "
+            "Devolvé únicamente el texto del caption listo para publicar, sin ningún tipo de encabezado ni rótulo."
+        )
+        prompt = f"{base_prompt}{no_labels_rule}\n\nTítulo: {title}\nResumen: {summary}"
         resp = client.chat.completions.create(
             model=groq_model,
             messages=[{"role": "user", "content": prompt}],
