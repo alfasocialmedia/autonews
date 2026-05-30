@@ -404,17 +404,20 @@ def _detect_headings(text: str) -> bool:
 
 def _article_scale(char_count: int) -> tuple[str, int | None, int]:
     """Devuelve (rango_párrafos, palabras_mínimas_o_None, max_tokens) según largo de la fuente.
-    None en palabras_mínimas = fuente corta, párrafos breves sin mínimo impuesto."""
+    Párrafos de 175-185 chars con 2 oraciones cada uno — min_words se eliminó porque
+    contradice el límite de chars. La completitud se exige por prompt."""
     if char_count < 600:
-        return "3 a 4", None, 3000
+        return "3 a 5", None, 3000
     elif char_count < 1500:
-        return "4 a 6", 400, 5000
+        return "5 a 8", None, 5000
     elif char_count < 3000:
-        return "5 a 7", 550, 6000
+        return "8 a 12", None, 6000
     elif char_count < 5000:
-        return "7 a 9", 700, 7000
+        return "12 a 16", None, 8000
+    elif char_count < 8000:
+        return "16 a 22", None, 10000
     else:
-        return "9 a 12", 900, 8000
+        return "20 a 28", None, 12000
 
 
 def _chat_with_token_fallback(client, model: str, messages: list, max_tokens: int, **kwargs):
@@ -435,7 +438,7 @@ def _chat_with_token_fallback(client, model: str, messages: list, max_tokens: in
         raise
 
 
-def _merge_short_paragraphs(html: str, min_chars: int = 160, max_chars: int = 183) -> str:
+def _merge_short_paragraphs(html: str, min_chars: int = 160, max_chars: int = 250) -> str:
     """Fusiona <p> consecutivos cortos hasta que cada párrafo tenga entre min_chars y max_chars caracteres."""
     import re as _re
     # Separar el HTML en tokens: <p>...</p> vs resto
@@ -624,7 +627,7 @@ def process_rss_with_groq(
     cat_list = ", ".join(available_categories) if available_categories else _DEFAULT_CATEGORIES
 
     source_len = len(article_text)
-    para_range, min_words, max_tokens = _article_scale(source_len)
+    para_range, _min_words, max_tokens = _article_scale(source_len)
     source_has_headings = _detect_headings(article_text)
 
     if source_has_headings:
@@ -634,12 +637,15 @@ def process_rss_with_groq(
         heading_rule = "NO uses <h2> ni ningún subtítulo. El artículo fuente no tiene subtítulos."
         content_hint = "<p> bien separados, sin subtítulos"
 
-    if min_words:
-        word_count_rule = f"Mínimo {min_words} palabras."
-    else:
-        word_count_rule = "Sin mínimo de palabras — el artículo puede ser corto. No rellenes ni inventes para alargar."
+    word_count_rule = "Cubrí TODA la información útil del contenido fuente. No omitas datos, protagonistas ni detalles relevantes. Usá los párrafos que sean necesarios para no dejar nada afuera."
 
-    para_size_rule = "Cada <p> DEBE tener entre 160 y 183 caracteres (contando espacios). Acumulá oraciones consecutivas dentro del mismo <p> hasta alcanzar ese rango. Solo abrís un nuevo <p> cuando agregar otra oración superaría los 183 chars. NUNCA dejes un <p> con menos de 160 chars si hay oraciones siguientes disponibles."
+    para_size_rule = (
+        "Cada <p> DEBE tener SIEMPRE 2 oraciones (excepcionalmente 3 si son muy breves). "
+        "NUNCA 1 sola oración por <p>. "
+        "Cada oración debe ser corta: entre 70 y 100 caracteres. "
+        "El <p> completo debe totalizar entre 175 y 185 caracteres con espacios. "
+        "Si una oración sola supera los 175 caracteres, ese <p> se acepta como excepción, pero es el único caso."
+    )
 
     prompt = f"""{base_prompt}
 
@@ -724,16 +730,15 @@ FORMATO HTML OBLIGATORIO DEL CUERPO:
 Cada párrafo DEBE estar entre <p> y </p>. SIN EXCEPCIÓN.
 ⚠ REGLA DE ORO — PÁRRAFOS:
   • {para_size_rule}
-  • Cada <p> tiene 1 oración (si es completa e informativa) o 2 como máximo.
-  • Ejemplo CORRECTO:
-      <p>Un cuerpo fue hallado este miércoles en el río Paraná, en Puerto Mbya, distrito de Presidente Franco.</p>
-      <p>La víctima, un hombre aún sin identificar, presentaba un avanzado estado de descomposición y no llevaba documentación.</p>
-      <p>Por disposición del Ministerio Público, el cuerpo fue derivado a una funeraria local para las diligencias correspondientes.</p>
-  • Ejemplo INCORRECTO (RECHAZADO — demasiadas oraciones en un mismo párrafo):
-      <p>Un cuerpo fue hallado en el río Paraná. La víctima era un hombre sin identificar. El hecho fue reportado por el teniente Morán. Las diligencias continúan.</p>
+  • Ejemplo CORRECTO (2 oraciones cortas, total ~180 chars):
+      <p>Un cuerpo fue hallado el miércoles en el río Paraná, en el distrito de Presidente Franco. La víctima, un hombre sin identificar, presentaba un avanzado estado de descomposición.</p>
+      <p>El Ministerio Público ordenó derivar los restos a una funeraria local para las pericias correspondientes. No se encontró documentación junto al cuerpo.</p>
+  • Ejemplo INCORRECTO (1 sola oración = RECHAZADO por ser menor a 160 chars):
+      <p>Un cuerpo fue hallado en el río Paraná, en el distrito de Presidente Franco.</p>
+      <p>La víctima era un hombre sin identificar.</p>
 {para_range} párrafos en total.
 SUBTÍTULOS: {heading_rule}
-PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>, más de 2 oraciones dentro de un mismo <p>.
+PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>.
 
 ORIGINALIDAD:
 Reescribí completamente la noticia con palabras propias.
@@ -767,7 +772,7 @@ ANTES DE ENTREGAR — Verificá internamente que:
 - No haya plagio.
 - Se haya usado toda la información relevante.
 - El título tenga gancho real y entre 80 y 110 caracteres.
-- Cada <p> tenga entre 160 y 183 caracteres. Si alguno es más largo, divídilo; si es más corto, fusionalo con el siguiente antes de responder.
+- Cada <p> tenga entre 175 y 185 caracteres (2 oraciones cortas). Si alguno tiene 1 sola oración y menos de 160 chars, fusionalo con el siguiente. Si supera 185, divídilo.
 - La nota no sea un resumen.
 - El texto esté listo para publicar en un medio digital argentino.
 - La ubicación geográfica (ciudad, provincia) esté nombrada explícitamente.
@@ -776,7 +781,7 @@ IMPORTANTE: Respondé ÚNICAMENTE con JSON válido. Sin markdown, sin texto extr
 Las comillas dentro del HTML van con barra invertida \" o como &quot;. Atributos HTML con comillas simples.
 {{
   "title": "Título periodístico atractivo entre 80 y 110 caracteres. Con gancho. Sin punto al final.",
-  "content": "<p>Primer párrafo 160-183 chars.</p><p>Segundo párrafo 160-183 chars.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule} CADA <p> ENTRE 160 Y 183 CARACTERES.",
+  "content": "<p>Oración 1 corta (70-100 chars). Oración 2 corta (70-100 chars). Total ~175-185 chars.</p><p>Oración 1. Oración 2.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule} CADA <p> SIEMPRE 2 ORACIONES, TOTAL 175-185 CHARS.",
   "category": "Exactamente una de estas: {cat_list}",
   "summary": "UNA sola oración completa que termina en punto. Máximo 25 palabras. El hecho principal: quién, qué y dónde. Sin segunda oración.",
   "keyphrase": "frase clave 2-4 palabras",
@@ -856,14 +861,17 @@ def process_email_with_groq(
     cat_list = ", ".join(available_categories) if available_categories else _DEFAULT_CATEGORIES
 
     body_len = len(body)
-    para_range, min_words, max_tokens = _article_scale(body_len)
+    para_range, _min_words, max_tokens = _article_scale(body_len)
 
-    if min_words:
-        word_count_rule = f"Mínimo {min_words} palabras."
-    else:
-        word_count_rule = "Sin mínimo de palabras — el artículo puede ser corto. No rellenes ni inventes para alargar."
+    word_count_rule = "Cubrí TODA la información útil del contenido fuente. No omitas datos, protagonistas ni detalles relevantes. Usá los párrafos que sean necesarios para no dejar nada afuera."
 
-    para_size_rule = "Cada <p> con 1 o 2 oraciones como máximo. Si la oración es larga, 1 sola alcanza. NUNCA más de 2 oraciones por <p>. Párrafos muy cortos, punto y aparte frecuente."
+    para_size_rule = (
+        "Cada <p> DEBE tener SIEMPRE 2 oraciones (excepcionalmente 3 si son muy breves). "
+        "NUNCA 1 sola oración por <p>. "
+        "Cada oración debe ser corta: entre 70 y 100 caracteres. "
+        "El <p> completo debe totalizar entre 175 y 185 caracteres con espacios. "
+        "Si una oración sola supera los 175 caracteres, ese <p> se acepta como excepción, pero es el único caso."
+    )
 
     # Extraer la primera línea significativa del cuerpo como pista de titular
     first_body_line = next(
@@ -954,16 +962,15 @@ FORMATO HTML OBLIGATORIO DEL CUERPO:
 Cada párrafo DEBE estar entre <p> y </p>. SIN EXCEPCIÓN.
 ⚠ REGLA DE ORO — PÁRRAFOS CORTOS:
   • {para_size_rule}
-  • Cada <p> tiene 1 oración (si es completa e informativa) o 2 como máximo.
-  • Ejemplo CORRECTO:
-      <p>Un cuerpo fue hallado este miércoles en el río Paraná, en Puerto Mbya, distrito de Presidente Franco.</p>
-      <p>La víctima, un hombre aún sin identificar, presentaba un avanzado estado de descomposición y no llevaba documentación.</p>
-      <p>Por disposición del Ministerio Público, el cuerpo fue derivado a una funeraria local para las diligencias correspondientes.</p>
-  • Ejemplo INCORRECTO (RECHAZADO — demasiadas oraciones en un mismo párrafo):
-      <p>Un cuerpo fue hallado en el río Paraná. La víctima era un hombre sin identificar. El hecho fue reportado por el teniente Morán. Las diligencias continúan.</p>
+  • Ejemplo CORRECTO (2 oraciones cortas, total ~180 chars):
+      <p>Un cuerpo fue hallado el miércoles en el río Paraná, en el distrito de Presidente Franco. La víctima, un hombre sin identificar, presentaba un avanzado estado de descomposición.</p>
+      <p>El Ministerio Público ordenó derivar los restos a una funeraria local para las pericias correspondientes. No se encontró documentación junto al cuerpo.</p>
+  • Ejemplo INCORRECTO (1 sola oración = RECHAZADO por ser menor a 160 chars):
+      <p>Un cuerpo fue hallado en el río Paraná, en el distrito de Presidente Franco.</p>
+      <p>La víctima era un hombre sin identificar.</p>
 {para_range} párrafos en total.
 Si el contenido tiene secciones claramente diferenciadas, podés usar <h2> para separar. Máximo 2.
-PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>, más de 2 oraciones dentro de un mismo <p>.
+PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>.
 
 ORIGINALIDAD:
 Reescribí completamente la noticia con palabras propias.
@@ -997,7 +1004,7 @@ ANTES DE ENTREGAR — Verificá internamente que:
 - No haya plagio.
 - Se haya usado toda la información relevante.
 - El título tenga gancho real y entre 80 y 110 caracteres.
-- Cada <p> tenga entre 160 y 183 caracteres. Si alguno es más largo, divídilo; si es más corto, fusionalo con el siguiente antes de responder.
+- Cada <p> tenga entre 175 y 185 caracteres (2 oraciones cortas). Si alguno tiene 1 sola oración y menos de 160 chars, fusionalo con el siguiente. Si supera 185, divídilo.
 - La nota no sea un resumen.
 - El texto esté listo para publicar en un medio digital argentino.
 - La ubicación geográfica (ciudad, provincia) esté nombrada explícitamente.
@@ -1006,7 +1013,7 @@ IMPORTANTE: Respondé ÚNICAMENTE con JSON válido. Sin markdown, sin texto extr
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título periodístico atractivo entre 80 y 110 caracteres. Con gancho. Sin punto al final.",
-  "content": "<p>Primer párrafo 160-183 chars.</p><p>Segundo párrafo 160-183 chars.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule} CADA <p> ENTRE 160 Y 183 CARACTERES.",
+  "content": "<p>Oración 1 corta (70-100 chars). Oración 2 corta (70-100 chars). Total ~175-185 chars.</p><p>Oración 1. Oración 2.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule} CADA <p> SIEMPRE 2 ORACIONES, TOTAL 175-185 CHARS.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
   "summary": "UNA sola oración completa que termina en punto. Máximo 25 palabras. El hecho principal: quién, qué y dónde. Sin segunda oración.",
   "keyphrase": "frase clave de 2 a 4 palabras",
