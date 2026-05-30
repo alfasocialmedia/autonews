@@ -713,12 +713,18 @@ def _try_wp_rest_api(base_url: str, category_url: str, max_items: int = 10) -> l
         if media and isinstance(media, list) and media[0].get("source_url"):
             image_url = _upgrade_wp_thumbnail(media[0]["source_url"])
 
-        # Fecha
+        # Fecha: usar 'date' (hora local del sitio WP, ej: Argentina) en lugar de
+        # 'date_gmt' (UTC) para que la fecha se muestre en la zona horaria real.
         published_at = None
-        date_str = post.get("date_gmt") or post.get("date")
+        date_str = post.get("date") or post.get("date_gmt")
         if date_str:
             try:
-                published_at = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                # 'date' no incluye offset → asumir UTC-3 (Argentina)
+                dt = datetime.fromisoformat(date_str.replace("Z", ""))
+                if dt.tzinfo is None:
+                    from datetime import timezone as _tz, timedelta as _td
+                    dt = dt.replace(tzinfo=_tz(_td(hours=-3)))
+                published_at = dt
             except Exception:
                 pass
 
