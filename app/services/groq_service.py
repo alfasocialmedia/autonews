@@ -436,23 +436,37 @@ def _chat_with_token_fallback(client, model: str, messages: list, max_tokens: in
 
 
 def _split_long_paragraphs(html: str, max_chars: int = 183) -> str:
-    """Divide <p> con más de max_chars caracteres en párrafos más cortos, cortando en oraciones."""
+    """Divide <p> con más de max_chars caracteres en párrafos más cortos, cortando en oraciones.
+    Cada <p> resultante tiene como máximo max_chars caracteres."""
     import re as _re
     def split_p(m):
         inner = m.group(1).strip()
         if len(inner) <= max_chars:
             return f"<p>{inner}</p>"
-        # Partir en oraciones: ". ", "! ", "? " seguido de mayúscula
-        sentences = _re.split(r'(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"])', inner)
+        # Partir en oraciones: ". ", "! ", "? " seguido de mayúscula o comilla
+        sentences = _re.split(r'(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÑ¿¡"“])', inner)
         if len(sentences) <= 1:
             return f"<p>{inner}</p>"
-        # Agrupar de a 2 oraciones por párrafo
-        groups = []
-        for i in range(0, len(sentences), 2):
-            group = " ".join(sentences[i:i+2]).strip()
-            if group:
-                groups.append(f"<p>{group}</p>")
-        return "\n".join(groups) if groups else f"<p>{inner}</p>"
+        # Agrupar respetando el límite: acumular oraciones hasta llegar a max_chars
+        groups: list[str] = []
+        current: list[str] = []
+        current_len = 0
+        for sent in sentences:
+            sent = sent.strip()
+            if not sent:
+                continue
+            # Si agregar esta oración supera el límite, cerrar el grupo actual
+            extra = len(sent) + (1 if current else 0)  # +1 por el espacio
+            if current and current_len + extra > max_chars:
+                groups.append(" ".join(current))
+                current = [sent]
+                current_len = len(sent)
+            else:
+                current.append(sent)
+                current_len += extra
+        if current:
+            groups.append(" ".join(current))
+        return "\n".join(f"<p>{g}</p>" for g in groups if g) or f"<p>{inner}</p>"
 
     return re.sub(r'<p>(.*?)</p>', split_p, html, flags=re.DOTALL | re.IGNORECASE)
 
@@ -582,7 +596,7 @@ def process_rss_with_groq(
     else:
         word_count_rule = "Sin mínimo de palabras — el artículo puede ser corto. No rellenes ni inventes para alargar."
 
-    para_size_rule = "Cada <p> con 1 o 2 oraciones como máximo. Si la oración es larga, 1 sola alcanza. NUNCA más de 2 oraciones por <p>. Párrafos muy cortos, punto y aparte frecuente."
+    para_size_rule = "Máximo 183 caracteres por <p> (contando espacios). Si una sola oración supera ese límite, ese es el párrafo completo. NUNCA acumules más texto del necesario para llegar a 183 chars."
 
     prompt = f"""{base_prompt}
 
@@ -690,10 +704,9 @@ EXTENSIÓN:
 - No termines la nota de forma abrupta.
 
 LEGIBILIDAD:
-- Párrafos de 2 a 3 oraciones, agrupadas por idea. Ni uno solo con menos de 2 oraciones.
-- Cada párrafo desarrolla UN subtema. Cuando el subtema cambia, nuevo <p>.
+- Cada <p> tiene MÁXIMO 183 caracteres con espacios. Punto aparte y nuevo <p>.
+- Si una oración sola supera 183 chars, ese es el párrafo completo. No acumules más texto.
 - Oraciones claras y directas, de 15 a 25 palabras.
-- Evitá bloques densos de más de 3 oraciones en el mismo <p>.
 - No uses palabras difíciles si no son necesarias.
 - La lectura debe ser simple, fluida y entendible para cualquier lector.
 
@@ -711,7 +724,7 @@ ANTES DE ENTREGAR — Verificá internamente que:
 - No haya plagio.
 - Se haya usado toda la información relevante.
 - El título tenga gancho real y entre 80 y 110 caracteres.
-- Los párrafos sean cortos y estén correctamente envueltos en <p>...</p>.
+- Cada <p> tenga máximo 183 caracteres. Si alguno es más largo, divídilo antes de responder.
 - La nota no sea un resumen.
 - El texto esté listo para publicar en un medio digital argentino.
 - La ubicación geográfica (ciudad, provincia) esté nombrada explícitamente.
@@ -720,7 +733,7 @@ IMPORTANTE: Respondé ÚNICAMENTE con JSON válido. Sin markdown, sin texto extr
 Las comillas dentro del HTML van con barra invertida \" o como &quot;. Atributos HTML con comillas simples.
 {{
   "title": "Título periodístico atractivo entre 80 y 110 caracteres. Con gancho. Sin punto al final.",
-  "content": "<p>Primer párrafo con hecho principal.</p><p>Segundo párrafo.</p><p>Tercer párrafo.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule}",
+  "content": "<p>Primer párrafo máx 183 chars.</p><p>Segundo párrafo máx 183 chars.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule} CADA <p> MÁXIMO 183 CARACTERES.",
   "category": "Exactamente una de estas: {cat_list}",
   "summary": "UNA sola oración completa que termina en punto. Máximo 25 palabras. El hecho principal: quién, qué y dónde. Sin segunda oración.",
   "keyphrase": "frase clave 2-4 palabras",
@@ -920,10 +933,9 @@ EXTENSIÓN:
 - No termines la nota de forma abrupta.
 
 LEGIBILIDAD:
-- Párrafos de 2 a 3 oraciones, agrupadas por idea. Ni uno solo con menos de 2 oraciones.
-- Cada párrafo desarrolla UN subtema. Cuando el subtema cambia, nuevo <p>.
+- Cada <p> tiene MÁXIMO 183 caracteres con espacios. Punto aparte y nuevo <p>.
+- Si una oración sola supera 183 chars, ese es el párrafo completo. No acumules más texto.
 - Oraciones claras y directas, de 15 a 25 palabras.
-- Evitá bloques densos de más de 3 oraciones en el mismo <p>.
 - No uses palabras difíciles si no son necesarias.
 - La lectura debe ser simple, fluida y entendible para cualquier lector.
 
@@ -941,7 +953,7 @@ ANTES DE ENTREGAR — Verificá internamente que:
 - No haya plagio.
 - Se haya usado toda la información relevante.
 - El título tenga gancho real y entre 80 y 110 caracteres.
-- Los párrafos sean cortos y estén correctamente envueltos en <p>...</p>.
+- Cada <p> tenga máximo 183 caracteres. Si alguno es más largo, divídilo antes de responder.
 - La nota no sea un resumen.
 - El texto esté listo para publicar en un medio digital argentino.
 - La ubicación geográfica (ciudad, provincia) esté nombrada explícitamente.
@@ -950,7 +962,7 @@ IMPORTANTE: Respondé ÚNICAMENTE con JSON válido. Sin markdown, sin texto extr
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título periodístico atractivo entre 80 y 110 caracteres. Con gancho. Sin punto al final.",
-  "content": "<p>Primer párrafo con hecho principal.</p><p>Segundo párrafo.</p><p>Tercer párrafo.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule}",
+  "content": "<p>Primer párrafo máx 183 chars.</p><p>Segundo párrafo máx 183 chars.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule} CADA <p> MÁXIMO 183 CARACTERES.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
   "summary": "UNA sola oración completa que termina en punto. Máximo 25 palabras. El hecho principal: quién, qué y dónde. Sin segunda oración.",
   "keyphrase": "frase clave de 2 a 4 palabras",
