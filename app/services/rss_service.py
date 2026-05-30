@@ -134,7 +134,9 @@ def _extract_og_image(soup: BeautifulSoup) -> str | None:
     return None
 
 
-_IMG_SKIP = ("logo", "icon", "avatar", "pixel", "tracking", "spinner", "btn", "arrow", "spacer", "badge", "placeholder")
+_IMG_SKIP = ("logo", "icon", "avatar", "pixel", "tracking", "spinner", "btn", "arrow", "spacer", "badge", "placeholder", "recurso", "brand", "marca")
+# Extensiones que indican logo/vector — nunca fotos editoriales
+_IMG_SKIP_EXT = (".svg", ".gif")
 _LAZY_ATTRS = ("data-src", "data-lazy-src", "data-original", "data-lazy", "data-lazyload", "data-full-url", "data-td-src-property")
 
 # Filtros para imágenes promocionales (banners sociales, newsletters, etc.)
@@ -169,7 +171,10 @@ def _extract_inline_images(container, og_image: str | None) -> list[str]:
 
         if src in seen:
             continue
-        if any(x in src.lower() for x in _IMG_SKIP):
+        src_lower = src.lower().split("?")[0]
+        if any(x in src_lower for x in _IMG_SKIP):
+            continue
+        if any(src_lower.endswith(ext) for ext in _IMG_SKIP_EXT):
             continue
 
         # Saltar imágenes promocionales por alt/title
@@ -340,7 +345,10 @@ def _extract_first_figure_image(container) -> str | None:
                     break
         if not src or not src.startswith("http"):
             continue
-        if any(x in src.lower() for x in _IMG_SKIP):
+        src_lower = src.lower().split("?")[0]
+        if any(x in src_lower for x in _IMG_SKIP):
+            continue
+        if any(src_lower.endswith(ext) for ext in _IMG_SKIP_EXT):
             continue
         alt = (img.get("alt") or "").strip()
         if _PROMO_ALT_RE.search(alt):
