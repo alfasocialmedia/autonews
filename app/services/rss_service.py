@@ -401,7 +401,27 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
 
     # ── Candidato 2: scraping HTML ───────────────────────────────────────────
     def _extract_paras(el) -> list[str]:
-        return [p.get_text(strip=True) for p in el.find_all("p") if p.get_text(strip=True)]
+        """Extrae texto de párrafos, listas, subtítulos y citas del contenedor."""
+        seen: set[str] = set()
+        results: list[str] = []
+        # Tags de contenido editorial (en orden de aparición en el DOM)
+        for tag in el.find_all(["p", "li", "h2", "h3", "h4", "blockquote"]):
+            # Ignorar <li> vacíos o dentro de nav/menu
+            if tag.name == "li":
+                nav = tag.find_parent(["nav", "ul[class*='menu']", "ol[class*='menu']"])
+                if nav:
+                    continue
+                parent_cls = " ".join(tag.parent.get("class", []) if tag.parent else [])
+                if any(x in parent_cls.lower() for x in ("menu", "nav", "breadcrumb", "widget", "sidebar", "footer")):
+                    continue
+            t = tag.get_text(strip=True)
+            if not t or len(t) < 15:
+                continue
+            if t in seen:
+                continue
+            seen.add(t)
+            results.append(t)
+        return results
 
     def _build_html_candidate(src_soup) -> str:
         """Extrae texto del artículo de una soup. Devuelve string vacío si falla."""
@@ -724,8 +744,15 @@ def _try_wp_rest_api(base_url: str, category_url: str, max_items: int = 10) -> l
                                        "div.sharedaddy", "div.jp-relatedposts",
                                        "div.yarpp-related", "div.related-posts"]):
                 noise.decompose()
-            paras = [p.get_text(strip=True) for p in content_soup.find_all("p") if p.get_text(strip=True)]
-            body = "\n\n".join(paras) if paras else content_soup.get_text(separator="\n", strip=True)
+            # Extraer texto de p, li, h2/h3/h4 y blockquote para no perder listas ni subtítulos
+            seen_t: set[str] = set()
+            parts: list[str] = []
+            for tag in content_soup.find_all(["p", "li", "h2", "h3", "h4", "blockquote"]):
+                t = tag.get_text(strip=True)
+                if t and len(t) >= 15 and t not in seen_t:
+                    seen_t.add(t)
+                    parts.append(t)
+            body = "\n\n".join(parts) if parts else content_soup.get_text(separator="\n", strip=True)
         else:
             body = BeautifulSoup(excerpt_html, "html.parser").get_text(strip=True)
 
