@@ -117,6 +117,19 @@ body {
   z-index: 100;
 }
 
+/* Reloj Argentina */
+.ar-clock {
+  font-variant-numeric: tabular-nums;
+}
+.ar-clock-time {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: .03em;
+}
+.ar-clock-badge {
+  font-size: .6rem;
+}
+
 .page-content {
   padding: 1.5rem;
   flex: 1;

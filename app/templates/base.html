@@ -85,7 +85,13 @@
     <button class="btn btn-sm btn-outline-secondary d-lg-none" id="sidebarToggle">
       <i class="bi bi-list fs-5"></i>
     </button>
-    <div class="ms-auto d-flex align-items-center gap-2">
+    <div class="ms-auto d-flex align-items-center gap-3">
+      <div class="d-flex align-items-center gap-1 text-muted small ar-clock">
+        <i class="bi bi-clock me-1"></i>
+        <span id="ar-date" class="fw-semibold text-body"></span>
+        <span id="ar-time" class="ar-clock-time text-body"></span>
+        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1 ar-clock-badge">AR</span>
+      </div>
       <span class="badge bg-success-subtle text-success border border-success-subtle">
         <i class="bi bi-circle-fill me-1" style="font-size:.5rem"></i>Worker activo
       </span>
@@ -120,6 +126,28 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/static/js/main.js"></script>
+<script>
+(function () {
+  const DAYS = ['dom','lun','mar','mié','jue','vie','sáb'];
+  const MONTHS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const elDate = document.getElementById('ar-date');
+  const elTime = document.getElementById('ar-time');
+  function tick() {
+    const now = new Date(new Date().toLocaleString('en-US', {timeZone: 'America/Argentina/Buenos_Aires'}));
+    const d = DAYS[now.getDay()];
+    const day = now.getDate();
+    const mon = MONTHS[now.getMonth()];
+    const yr = now.getFullYear();
+    const hh = String(now.getHours()).padStart(2,'0');
+    const mm = String(now.getMinutes()).padStart(2,'0');
+    const ss = String(now.getSeconds()).padStart(2,'0');
+    if (elDate) elDate.textContent = `${d} ${day} ${mon} ${yr}`;
+    if (elTime) elTime.textContent = `${hh}:${mm}:${ss}`;
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
