@@ -392,62 +392,77 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
             log.warning("scrape: JSON-LD garbled: %s", url)
 
     # ── Candidato 2: scraping HTML ───────────────────────────────────────────
-    # Eliminar ruido de la soup (scripts, ads, reproductores, nav, etc.)
-    for tag in soup(_NOISE_TAGS):
-        tag.decompose()
-    for sel in _NOISE_SELECTORS:
-        try:
-            for el in soup.select(sel):
-                el.decompose()
-        except Exception:
-            pass
-    for a in soup.find_all("a"):
-        if len((a.get_text() or "").strip()) < 4:
-            a.decompose()
-
-    article = _find_article_body(soup)
-    container = article if article else soup
-
     def _extract_paras(el) -> list[str]:
         return [p.get_text(strip=True) for p in el.find_all("p") if p.get_text(strip=True)]
 
-    paras = _extract_paras(container)
-    if paras:
-        html_candidate = "\n\n".join(paras)[:12000]
-    else:
-        text = container.get_text(separator="\n", strip=True)
-        lines2 = [l.strip() for l in text.splitlines() if l.strip()]
-        html_candidate = "\n".join(lines2)[:12000]
+    def _build_html_candidate(src_soup) -> str:
+        """Extrae texto del artículo de una soup. Devuelve string vacío si falla."""
+        article = _find_article_body(src_soup)
+        container = article if article else src_soup
 
-    # Si el candidato HTML es corto, intentar combinar múltiples contenedores del mismo tipo.
-    # Algunos sitios (C5N, etc.) parten el artículo en varios elementos article-body.
-    if len(html_candidate) < 3000:
-        _MULTI_BODY = re.compile(
-            r"article[-_]body|entry[-_]content|post[-_]content|article[-_]content|"
-            r"story[-_]body|article__body|td-post[-_]content|tdb-single-content|"
-            r"note[-_]content|content[-_]article",
-            re.I,
-        )
-        all_bodies = soup.find_all(class_=_MULTI_BODY)
-        if len(all_bodies) > 1:
-            combined: list[str] = []
-            seen_p: set[str] = set()
-            for body_el in all_bodies:
-                for p_text in _extract_paras(body_el):
-                    if p_text not in seen_p:
-                        seen_p.add(p_text)
-                        combined.append(p_text)
-            combined_text = "\n\n".join(combined)[:12000]
-            if len(combined_text) > len(html_candidate):
-                html_candidate = combined_text
-                log.info("HTML multi-body: %d contenedores → %d chars", len(all_bodies), len(html_candidate))
+        paras = _extract_paras(container)
+        if paras:
+            cand = "\n\n".join(paras)[:12000]
+        else:
+            text = container.get_text(separator="\n", strip=True)
+            lines2 = [l.strip() for l in text.splitlines() if l.strip()]
+            cand = "\n".join(lines2)[:12000]
+
+        # Si sigue corto, intentar combinar múltiples contenedores article-body
+        # (sitios como C5N parten el artículo en varios elementos)
+        if len(cand) < 3000:
+            _MULTI_BODY = re.compile(
+                r"article[-_]body|entry[-_]content|post[-_]content|article[-_]content|"
+                r"story[-_]body|article__body|td-post[-_]content|tdb-single-content|"
+                r"note[-_]content|content[-_]article|\bentry\b",
+                re.I,
+            )
+            all_bodies = src_soup.find_all(class_=_MULTI_BODY)
+            if len(all_bodies) > 1:
+                combined: list[str] = []
+                seen_p: set[str] = set()
+                for body_el in all_bodies:
+                    for p_text in _extract_paras(body_el):
+                        if p_text not in seen_p:
+                            seen_p.add(p_text)
+                            combined.append(p_text)
+                combined_text = "\n\n".join(combined)[:12000]
+                if len(combined_text) > len(cand):
+                    cand = combined_text
+                    log.info("HTML multi-body: %d contenedores → %d chars", len(all_bodies), len(cand))
+        return cand
+
+    # Intentar extraer el artículo ANTES del noise removal.
+    # Algunos temas (ej: tmnf de Canal 12 Misiones) tienen clases como
+    # "tmnf-sidebar-ac" en wrappers de página que el selector [class*=sidebar]
+    # eliminaría completo, borrando también el contenido del artículo.
+    html_candidate = _build_html_candidate(soup)
+    log.info("HTML pre-noise: %d chars", len(html_candidate))
+
+    # Aplicar noise removal y re-intentar solo si el primer intento fue pobre
+    if len(html_candidate) < 1000:
+        noise_soup = BeautifulSoup(content, "html.parser")
+        for tag in noise_soup(_NOISE_TAGS):
+            tag.decompose()
+        for sel in _NOISE_SELECTORS:
+            try:
+                for el in noise_soup.select(sel):
+                    el.decompose()
+            except Exception:
+                pass
+        for a in noise_soup.find_all("a"):
+            if len((a.get_text() or "").strip()) < 4:
+                a.decompose()
+        post_noise = _build_html_candidate(noise_soup)
+        if len(post_noise) > len(html_candidate):
+            html_candidate = post_noise
+            log.info("HTML post-noise: %d chars", len(html_candidate))
 
     if _is_garbled(html_candidate):
         log.warning("scrape: HTML garbled: %s", url)
         html_candidate = ""
     elif html_candidate:
-        log.info("HTML candidate: %d chars, container=%s",
-                 len(html_candidate), container.name if article else "body")
+        log.info("HTML candidate: %d chars", len(html_candidate))
 
     # ── Elegir el candidato más completo ────────────────────────────────────
     # Usar el más largo: JSON-LD puede ser solo el extracto (corto),
