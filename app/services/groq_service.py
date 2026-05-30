@@ -435,6 +435,49 @@ def _chat_with_token_fallback(client, model: str, messages: list, max_tokens: in
         raise
 
 
+def _merge_short_paragraphs(html: str, min_chars: int = 160, max_chars: int = 183) -> str:
+    """Fusiona <p> consecutivos cortos hasta que cada párrafo tenga entre min_chars y max_chars caracteres."""
+    import re as _re
+    # Separar el HTML en tokens: <p>...</p> vs resto
+    tokens = _re.split(r'(<p>.*?</p>)', html, flags=_re.DOTALL | _re.IGNORECASE)
+    result: list[str] = []
+    buf: list[str] = []
+    buf_len = 0
+
+    def flush():
+        if buf:
+            result.append(f"<p>{' '.join(buf)}</p>")
+            buf.clear()
+
+    for tok in tokens:
+        m = _re.match(r'<p>(.*?)</p>', tok, flags=_re.DOTALL | _re.IGNORECASE)
+        if not m:
+            flush()
+            if tok:
+                result.append(tok)
+            continue
+        inner = m.group(1).strip()
+        # No tocar párrafos con HTML especial (subtítulos, listas, citas, etc.)
+        if _re.search(r'<(?:h[1-6]|ul|ol|li|blockquote|table|strong|em)', inner, _re.IGNORECASE) and len(inner) > 60:
+            flush()
+            result.append(tok)
+            continue
+        # Párrafo ya en rango o más largo: volcar buffer, agregar tal cual
+        if len(inner) >= min_chars:
+            flush()
+            result.append(tok)
+            continue
+        # Párrafo corto: intentar acumular
+        extra = len(inner) + (1 if buf else 0)
+        if buf and buf_len + extra > max_chars:
+            flush()
+        buf.append(inner)
+        buf_len = buf_len + extra if buf_len else len(inner)
+
+    flush()
+    return ''.join(result)
+
+
 def _split_long_paragraphs(html: str, max_chars: int = 183) -> str:
     """Divide <p> con más de max_chars caracteres en párrafos más cortos, cortando en oraciones.
     Cada <p> resultante tiene como máximo max_chars caracteres."""
@@ -596,7 +639,7 @@ def process_rss_with_groq(
     else:
         word_count_rule = "Sin mínimo de palabras — el artículo puede ser corto. No rellenes ni inventes para alargar."
 
-    para_size_rule = "Máximo 183 caracteres por <p> (contando espacios). Si una sola oración supera ese límite, ese es el párrafo completo. NUNCA acumules más texto del necesario para llegar a 183 chars."
+    para_size_rule = "Cada <p> DEBE tener entre 160 y 183 caracteres (contando espacios). Acumulá oraciones consecutivas dentro del mismo <p> hasta alcanzar ese rango. Solo abrís un nuevo <p> cuando agregar otra oración superaría los 183 chars. NUNCA dejes un <p> con menos de 160 chars si hay oraciones siguientes disponibles."
 
     prompt = f"""{base_prompt}
 
@@ -704,8 +747,8 @@ EXTENSIÓN:
 - No termines la nota de forma abrupta.
 
 LEGIBILIDAD:
-- Cada <p> tiene MÁXIMO 183 caracteres con espacios. Punto aparte y nuevo <p>.
-- Si una oración sola supera 183 chars, ese es el párrafo completo. No acumules más texto.
+- Cada <p> DEBE tener entre 160 y 183 caracteres con espacios. Acumulá oraciones en el mismo <p> hasta alcanzar ese rango. Solo abrís un nuevo <p> cuando agregar otra oración superaría los 183 chars.
+- Si una oración sola supera 183 chars, ese es el párrafo completo.
 - Oraciones claras y directas, de 15 a 25 palabras.
 - No uses palabras difíciles si no son necesarias.
 - La lectura debe ser simple, fluida y entendible para cualquier lector.
@@ -724,7 +767,7 @@ ANTES DE ENTREGAR — Verificá internamente que:
 - No haya plagio.
 - Se haya usado toda la información relevante.
 - El título tenga gancho real y entre 80 y 110 caracteres.
-- Cada <p> tenga máximo 183 caracteres. Si alguno es más largo, divídilo antes de responder.
+- Cada <p> tenga entre 160 y 183 caracteres. Si alguno es más largo, divídilo; si es más corto, fusionalo con el siguiente antes de responder.
 - La nota no sea un resumen.
 - El texto esté listo para publicar en un medio digital argentino.
 - La ubicación geográfica (ciudad, provincia) esté nombrada explícitamente.
@@ -733,7 +776,7 @@ IMPORTANTE: Respondé ÚNICAMENTE con JSON válido. Sin markdown, sin texto extr
 Las comillas dentro del HTML van con barra invertida \" o como &quot;. Atributos HTML con comillas simples.
 {{
   "title": "Título periodístico atractivo entre 80 y 110 caracteres. Con gancho. Sin punto al final.",
-  "content": "<p>Primer párrafo máx 183 chars.</p><p>Segundo párrafo máx 183 chars.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule} CADA <p> MÁXIMO 183 CARACTERES.",
+  "content": "<p>Primer párrafo 160-183 chars.</p><p>Segundo párrafo 160-183 chars.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule} CADA <p> ENTRE 160 Y 183 CARACTERES.",
   "category": "Exactamente una de estas: {cat_list}",
   "summary": "UNA sola oración completa que termina en punto. Máximo 25 palabras. El hecho principal: quién, qué y dónde. Sin segunda oración.",
   "keyphrase": "frase clave 2-4 palabras",
@@ -764,6 +807,7 @@ Las comillas dentro del HTML van con barra invertida \" o como &quot;. Atributos
             if not result["content"]:
                 log.warning("Content RSS vacío tras limpieza")
                 result["content"] = f"<p>{article_text[:1000]}</p>"
+            result["content"] = _merge_short_paragraphs(result["content"])
             result["content"] = _split_long_paragraphs(result["content"])
         if "summary" in result:
             result["summary"] = _normalize_summary(result["summary"], result.get("title", title))
@@ -933,8 +977,8 @@ EXTENSIÓN:
 - No termines la nota de forma abrupta.
 
 LEGIBILIDAD:
-- Cada <p> tiene MÁXIMO 183 caracteres con espacios. Punto aparte y nuevo <p>.
-- Si una oración sola supera 183 chars, ese es el párrafo completo. No acumules más texto.
+- Cada <p> DEBE tener entre 160 y 183 caracteres con espacios. Acumulá oraciones en el mismo <p> hasta alcanzar ese rango. Solo abrís un nuevo <p> cuando agregar otra oración superaría los 183 chars.
+- Si una oración sola supera 183 chars, ese es el párrafo completo.
 - Oraciones claras y directas, de 15 a 25 palabras.
 - No uses palabras difíciles si no son necesarias.
 - La lectura debe ser simple, fluida y entendible para cualquier lector.
@@ -953,7 +997,7 @@ ANTES DE ENTREGAR — Verificá internamente que:
 - No haya plagio.
 - Se haya usado toda la información relevante.
 - El título tenga gancho real y entre 80 y 110 caracteres.
-- Cada <p> tenga máximo 183 caracteres. Si alguno es más largo, divídilo antes de responder.
+- Cada <p> tenga entre 160 y 183 caracteres. Si alguno es más largo, divídilo; si es más corto, fusionalo con el siguiente antes de responder.
 - La nota no sea un resumen.
 - El texto esté listo para publicar en un medio digital argentino.
 - La ubicación geográfica (ciudad, provincia) esté nombrada explícitamente.
@@ -962,7 +1006,7 @@ IMPORTANTE: Respondé ÚNICAMENTE con JSON válido. Sin markdown, sin texto extr
 Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
 {{
   "title": "Título periodístico atractivo entre 80 y 110 caracteres. Con gancho. Sin punto al final.",
-  "content": "<p>Primer párrafo máx 183 chars.</p><p>Segundo párrafo máx 183 chars.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule} CADA <p> MÁXIMO 183 CARACTERES.",
+  "content": "<p>Primer párrafo 160-183 chars.</p><p>Segundo párrafo 160-183 chars.</p> — CONTINUAR ASÍ {para_range} párrafos. {word_count_rule} CADA <p> ENTRE 160 Y 183 CARACTERES.",
   "category": "Exactamente una de estas opciones, sin modificar el nombre: {cat_list}",
   "summary": "UNA sola oración completa que termina en punto. Máximo 25 palabras. El hecho principal: quién, qué y dónde. Sin segunda oración.",
   "keyphrase": "frase clave de 2 a 4 palabras",
@@ -993,6 +1037,7 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
             if not result["content"]:
                 log.warning("Content vacío tras limpieza, usando cuerpo original")
                 result["content"] = f"<p>{body[:1000]}</p>"
+            result["content"] = _merge_short_paragraphs(result["content"])
             result["content"] = _split_long_paragraphs(result["content"])
         if "summary" in result:
             result["summary"] = _normalize_summary(result["summary"], result.get("title", clean_subject))
