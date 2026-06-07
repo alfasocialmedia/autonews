@@ -48,17 +48,25 @@
         <form method="post" action="/perfil/password">
           <div class="mb-3">
             <label class="form-label fw-semibold">Contraseña actual</label>
-            <input type="password" name="current_password" class="form-control" required>
+            <div class="input-group">
+              <input type="password" name="current_password" class="form-control" title="Contraseña actual" placeholder="Contraseña actual" required>
+              <button type="button" class="btn btn-outline-secondary toggle-pwd" title="Mostrar/ocultar contraseña"><i class="bi bi-eye"></i></button>
+            </div>
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">Nueva contraseña</label>
-            <input type="password" name="new_password" class="form-control"
-                   minlength="8" required>
+            <div class="input-group">
+              <input type="password" name="new_password" class="form-control" title="Nueva contraseña" placeholder="Nueva contraseña" minlength="8" required>
+              <button type="button" class="btn btn-outline-secondary toggle-pwd" title="Mostrar/ocultar contraseña"><i class="bi bi-eye"></i></button>
+            </div>
             <div class="form-text">Mínimo 8 caracteres</div>
           </div>
           <div class="mb-3">
             <label class="form-label fw-semibold">Confirmar nueva contraseña</label>
-            <input type="password" name="confirm_password" class="form-control" required>
+            <div class="input-group">
+              <input type="password" name="confirm_password" class="form-control" title="Confirmar nueva contraseña" placeholder="Confirmar nueva contraseña" required>
+              <button type="button" class="btn btn-outline-secondary toggle-pwd" title="Mostrar/ocultar contraseña"><i class="bi bi-eye"></i></button>
+            </div>
           </div>
           <button type="submit" class="btn btn-primary">
             <i class="bi bi-save me-1"></i>Actualizar contraseña
@@ -68,4 +76,17 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.toggle-pwd').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const input = btn.previousElementSibling;
+    const isPassword = input.type === 'password';
+    input.type = isPassword ? 'text' : 'password';
+    btn.querySelector('i').className = isPassword ? 'bi bi-eye-slash' : 'bi bi-eye';
+  });
+});
+</script>
 {% endblock %}
