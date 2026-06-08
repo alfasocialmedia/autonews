@@ -939,6 +939,30 @@ def _process_wa_message(payload: dict):
             _publish_whatsapp_news(db, s, audio_transcript, [], None, sender_jid=msg["jid"])
             return
 
+        elif msg_type == "document":
+            result = get_media_base64(s.evolution_api_url, s.evolution_api_key, s.instance_name, raw_data) if raw_data else None
+            if not result and media_dict:
+                from app.services.whatsapp_service import download_media
+                dl = download_media(s.evolution_api_url, s.evolution_api_key, s.instance_name, media_dict)
+                if dl:
+                    raw_b, _fname, mime = dl
+                    result = (raw_b, mime)
+            if result:
+                doc_bytes, doc_mime = result
+                log.info("WA: documento descargado (%d bytes, %s)", len(doc_bytes), doc_mime)
+                from app.services.whatsapp_service import extract_document_text
+                doc_text, doc_title = extract_document_text(doc_bytes, doc_mime)
+                if doc_text:
+                    text = (text + "\n\n" + doc_text).strip() if text else doc_text
+                    if not wa_title_hint and doc_title:
+                        wa_title_hint = doc_title
+                    log.info("WA: texto extraído del documento (%d chars)", len(doc_text))
+                else:
+                    log.warning("WA: no se pudo extraer texto del documento (mime: %s)", doc_mime)
+            else:
+                log.warning("WA: no se pudo descargar el documento")
+            # No retorna: cae al buffer para esperar posible foto adjunta
+
         final_text = text
         if not final_text and not media_data:
             log.info("WA: mensaje sin contenido procesable (%s)", msg_type)

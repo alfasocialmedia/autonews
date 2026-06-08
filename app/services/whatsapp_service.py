@@ -625,6 +625,59 @@ def download_media(url: str, api_key: str, instance_name: str, message: dict) ->
         return None
 
 
+def extract_document_text(doc_bytes: bytes, mimetype: str) -> tuple[str, str]:
+    """
+    Extrae texto plano de documentos Word (.docx) o PDF.
+    Devuelve (texto_completo, titulo_hint).
+    El titulo_hint es el primer heading (docx) o primera línea significativa (pdf).
+    """
+    import io
+    mime_lower = mimetype.lower()
+
+    if "wordprocessingml" in mime_lower or "officedocument" in mime_lower or "msword" in mime_lower:
+        try:
+            from docx import Document
+            doc = Document(io.BytesIO(doc_bytes))
+            title_hint = ""
+            paragraphs = []
+            for p in doc.paragraphs:
+                t = p.text.strip()
+                if not t:
+                    continue
+                if not title_hint and p.style and "heading" in (p.style.name or "").lower():
+                    title_hint = t
+                paragraphs.append(t)
+            # Si no hay heading, la primera línea larga funciona como título
+            if not title_hint and paragraphs:
+                first = paragraphs[0]
+                if 10 < len(first) < 150:
+                    title_hint = first
+            return "\n\n".join(paragraphs), title_hint
+        except Exception as exc:
+            log.warning("extract_document_text (docx) error: %s", exc)
+            return "", ""
+
+    if "pdf" in mime_lower:
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(doc_bytes))
+            pages = []
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text and page_text.strip():
+                    pages.append(page_text.strip())
+            full_text = "\n\n".join(pages)
+            first_line = full_text.split("\n")[0].strip() if full_text else ""
+            title_hint = first_line if 10 < len(first_line) < 150 else ""
+            return full_text, title_hint
+        except Exception as exc:
+            log.warning("extract_document_text (pdf) error: %s", exc)
+            return "", ""
+
+    log.warning("extract_document_text: tipo no soportado (%s)", mimetype)
+    return "", ""
+
+
 # ── Parseo de mensajes entrantes ───────────────────────────────────────────────
 
 def parse_incoming(payload: dict) -> dict | None:
