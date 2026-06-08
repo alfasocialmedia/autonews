@@ -517,6 +517,12 @@ def _split_long_paragraphs(html: str, max_chars: int = 183) -> str:
     return re.sub(r'<p>(.*?)</p>', split_p, html, flags=re.DOTALL | re.IGNORECASE)
 
 
+def _add_paragraph_spacing(html: str) -> str:
+    """Agrega margin-bottom inline a cada <p> sin estilo para garantizar separación visual."""
+    import re as _re
+    return _re.sub(r'<p(?!\s)', '<p style="margin-bottom:1.4em"', html)
+
+
 def _text_to_html_paragraphs(text: str) -> str:
     """Convierte texto plano a párrafos HTML. Si ya tiene <p>, lo devuelve tal cual."""
     if "<p>" in text.lower():
@@ -835,6 +841,7 @@ Las comillas dentro del HTML van con barra invertida \" o como &quot;. Atributos
                 result["content"] = f"<p>{article_text[:1000]}</p>"
             result["content"] = _merge_short_paragraphs(result["content"])
             result["content"] = _split_long_paragraphs(result["content"])
+            result["content"] = _add_paragraph_spacing(result["content"])
         if "summary" in result:
             result["summary"] = _normalize_summary(result["summary"], result.get("title", title))
         return result
@@ -1088,6 +1095,7 @@ Comillas dobles estándar. Comillas SIMPLES dentro del HTML para atributos.
                 result["content"] = f"<p>{body[:1000]}</p>"
             result["content"] = _merge_short_paragraphs(result["content"])
             result["content"] = _split_long_paragraphs(result["content"])
+            result["content"] = _add_paragraph_spacing(result["content"])
         if "summary" in result:
             result["summary"] = _normalize_summary(result["summary"], result.get("title", clean_subject))
         return result
