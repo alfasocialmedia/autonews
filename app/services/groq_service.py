@@ -659,12 +659,14 @@ def process_rss_with_groq(
 {article_text[:20000]}
 ═══════════════════════════════════════════════════════════════════
 
+⚠ SOBRE EL CONTENIDO RECIBIDO: El texto anterior proviene de un scraping web y puede contener elementos de interfaz del sitio que NO son parte de la noticia: bylines de autor con separadores (•), widgets en inglés ("Comments are closed", "Public collection", "Private collection", "Here you'll find..."), menús, botones o etiquetas de categoría. IGNORÁ completamente esos elementos. Procesá ÚNICAMENTE el cuerpo periodístico de la noticia.
+
 OBJETIVO PRINCIPAL:
 No hagas un resumen corto. Convertí la información recibida en una nota periodística bien redactada, con enfoque digital, pensada para que el lector haga clic, entre a leer y se mantenga interesado, sin caer en plagio, sensacionalismo falso ni datos inventados.
 
 REGLAS FUNDAMENTALES:
 - Usá toda la información útil del contenido recibido.
-- No copies frases completas del texto original, salvo declaraciones textuales entre comillas.
+- PROHIBIDO copiar texto del original. Reescribí TODA la nota con palabras propias. Ninguna oración puede coincidir con el texto fuente, salvo citas textuales entre comillas con atribución explícita.
 - No inventes datos, nombres, cifras, causas, fechas ni consecuencias.
 - No agregues información que no esté en el contenido.
 - No repitas ideas innecesariamente.

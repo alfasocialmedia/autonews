@@ -83,7 +83,26 @@ _NOISE_LINE_RE = re.compile(
     r'|whatsapp|facebook|twitter|instagram|tiktok|youtube'
     r'|leer\s+m[aá]s|ver\s+m[aá]s|click\s+aqu[ií]'
     r'|tags?:|etiquetas?:'
-    r')\s*$',
+    r'|written\s+by\b'
+    r'|escuchar\s+nota'
+    r'|comments?\s+(are\s+)?closed'
+    r'|public\s+collection(\s+title)?'
+    r'|private\s+collection(\s+title)?'
+    r'|leave\s+a\s+(comment|reply)'
+    r'|share\s+(this|article)'
+    r')\s*[.!]?\s*$',
+    re.IGNORECASE,
+)
+
+# Ruido que se elimina sin importar la longitud de la línea
+_NOISE_ALWAYS_RE = re.compile(
+    r'^\s*('
+    r'here\s+you.?ll\s+find\s+all'
+    r'|comments?\s+are\s+closed'
+    r'|public\s+collection(\s+title)?'
+    r'|private\s+collection(\s+title)?'
+    r'|written\s+by\b'
+    r')\s*[.!]?\s*$',
     re.IGNORECASE,
 )
 
@@ -96,7 +115,14 @@ def _clean_scrape_noise(text: str) -> str:
         if not stripped:
             result.append("")
             continue
-        if len(stripped) < 45 and _NOISE_LINE_RE.match(stripped):
+        # Siempre filtrar estos patrones sin importar la longitud
+        if _NOISE_ALWAYS_RE.match(stripped):
+            continue
+        # Bylines con separador bullet (autor•fecha•categoría)
+        if stripped.count('•') >= 2 and len(stripped) < 200:
+            continue
+        # Líneas cortas que coinciden con ruido conocido
+        if len(stripped) < 60 and _NOISE_LINE_RE.match(stripped):
             continue
         result.append(line)
     return re.sub(r'\n{3,}', '\n\n', '\n'.join(result)).strip()

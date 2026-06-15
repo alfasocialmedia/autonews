@@ -36,11 +36,34 @@ _NOISE_SELECTORS = [
     "[class*='td-a-rec']", "[class*='tdi_']",
     # Reproductores externos y embeds no deseados en el texto
     "[class*='aniview']", "[class*='video-container']",
+    # Bylines, metadatos de autor y fecha
+    "[class*='byline']", "[class*='author-info']", "[class*='author-bio']",
+    "[class*='entry-meta']", "[class*='post-meta']", "[class*='article-meta']",
+    "[class*='post-author']", "[class*='author-box']", "[class*='author-date']",
+    "[class*='meta-info']", "[class*='article-info']",
+    # Sección de comentarios
+    "[class*='comment-respond']", "[class*='comments-area']", "[class*='comment-list']",
+    "[id='respond']", "[id='comments']",
+    # Plugins de colecciones y membresías (widgets de terceros)
+    "[class*='wc-memberships']", "[class*='user-memberships']",
 ]
 
 
 _MIN_IMAGE_WIDTH = 400  # px mínimos para aceptar una imagen del feed
 _GARBLED_THRESHOLD = 0.04  # >4 % de chars no imprimibles → contenido binario/PDF
+
+_UI_JUNK_RE = re.compile(
+    r'^('
+    r'written\s+by|comments?\s+(are\s+)?closed|'
+    r'public\s+collection(\s+title)?|private\s+collection(\s+title)?|'
+    r'here\s+you.?ll\s+find|'
+    r'escuchar\s+nota|listen\s+to\s+(this|the\s+)?article|'
+    r'share\s+(this|article)|leave\s+a\s+(comment|reply)|no\s+comments?|'
+    r'tags?:\s*$|filed\s+under|posted\s+(in|by)\b|'
+    r'click\s+to\s+(copy|share|comment)'
+    r')',
+    re.I,
+)
 
 
 def _is_garbled(text: str) -> bool:
@@ -414,10 +437,21 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
                 parent_cls = " ".join(tag.parent.get("class", []) if tag.parent else [])
                 if any(x in parent_cls.lower() for x in ("menu", "nav", "breadcrumb", "widget", "sidebar", "footer")):
                     continue
+            # Ignorar elementos dentro de byline/meta/comentarios para cualquier tag
+            p_cls = " ".join(tag.parent.get("class", []) if tag.parent else []).lower()
+            if any(x in p_cls for x in ("byline", "post-meta", "entry-meta", "author-info",
+                                         "author-bio", "author-box", "respond", "comment-form",
+                                         "comment-list", "wc-memberships", "article-meta")):
+                continue
             t = tag.get_text(strip=True)
             if not t or len(t) < 15:
                 continue
             if t in seen:
+                continue
+            # Filtrar strings de UI en inglés y bylines con separador •
+            if _UI_JUNK_RE.match(t):
+                continue
+            if t.count('•') >= 2 and len(t) < 200:
                 continue
             seen.add(t)
             results.append(t)
@@ -434,7 +468,9 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
     _NOISE_PARENT_TAGS = {"nav", "header", "footer", "aside"}
     _NOISE_PARENT_CLASSES = ("menu", "nav", "breadcrumb", "widget", "sidebar",
                              "footer", "related", "comment", "share", "social",
-                             "ad-", "-ad", "banner", "popup")
+                             "ad-", "-ad", "banner", "popup",
+                             "byline", "post-meta", "entry-meta", "author-info",
+                             "author-bio", "author-box", "respond", "wc-memberships")
 
     def _build_html_candidate(src_soup) -> str:
         """Extrae texto del artículo con 3 estrategias; devuelve la más larga."""
@@ -478,6 +514,10 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
                 continue
             t = p.get_text(strip=True)
             if t and len(t) >= 20 and t not in seen_b:
+                if _UI_JUNK_RE.match(t):
+                    continue
+                if t.count('•') >= 2 and len(t) < 200:
+                    continue
                 seen_b.add(t)
                 brute.append(t)
         if brute:
