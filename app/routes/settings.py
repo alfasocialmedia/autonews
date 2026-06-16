@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user
+from app.auth import get_current_user, user_has_module
 from app.crypto import decrypt_value, encrypt_value, mask_value
 from app.database import get_db
 from app.models import CategoryMapping, EdgeTTSSettings, ElevenLabsSettings, EmailAccount, GoogleDriveSettings, GroqSettings, InstagramSettings, WordPressSettings
@@ -40,6 +40,16 @@ def _require_auth(request: Request, db: Session):
     return user
 
 
+def _require_module(request: Request, db: Session, module: str):
+    """Devuelve el usuario si está logueado y tiene acceso al módulo, o None."""
+    user = get_current_user(request, db)
+    if not user:
+        return None
+    if not user_has_module(user, module):
+        return None
+    return user
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 #  CORREO / IMAP
 # ──────────────────────────────────────────────────────────────────────────────
@@ -47,9 +57,9 @@ def _require_auth(request: Request, db: Session):
 
 @router.get("/email", response_class=HTMLResponse)
 async def email_settings(request: Request, db: Session = Depends(get_db)):
-    user = _require_auth(request, db)
+    user = _require_module(request, db, "email")
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return RedirectResponse("/login" if not get_current_user(request, db) else "/", status_code=302)
 
     accounts = db.query(EmailAccount).all()
     wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.id).all()
@@ -181,9 +191,9 @@ async def delete_email(request: Request, acc_id: int, db: Session = Depends(get_
 
 @router.get("/wordpress", response_class=HTMLResponse)
 async def wordpress_settings(request: Request, db: Session = Depends(get_db)):
-    user = _require_auth(request, db)
+    user = _require_module(request, db, "wordpress")
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return RedirectResponse("/login" if not get_current_user(request, db) else "/", status_code=302)
     sites = db.query(WordPressSettings).all()
     return templates.TemplateResponse(
         "settings_wordpress.html",
@@ -342,9 +352,9 @@ async def delete_category_mapping(request: Request, mid: int, db: Session = Depe
 
 @router.get("/groq", response_class=HTMLResponse)
 async def groq_settings(request: Request, db: Session = Depends(get_db)):
-    user = _require_auth(request, db)
+    user = _require_module(request, db, "ia")
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return RedirectResponse("/login" if not get_current_user(request, db) else "/", status_code=302)
     groq = db.query(GroqSettings).first()
     return templates.TemplateResponse(
         "settings_groq.html",
@@ -425,9 +435,9 @@ async def test_groq_route(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/googledrive", response_class=HTMLResponse)
 async def googledrive_settings(request: Request, db: Session = Depends(get_db)):
-    user = _require_auth(request, db)
+    user = _require_module(request, db, "googledrive")
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return RedirectResponse("/login" if not get_current_user(request, db) else "/", status_code=302)
     cfg = db.query(GoogleDriveSettings).first()
     return templates.TemplateResponse(
         "settings_googledrive.html",
@@ -491,9 +501,9 @@ async def test_googledrive(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/elevenlabs", response_class=HTMLResponse)
 async def elevenlabs_settings(request: Request, db: Session = Depends(get_db)):
-    user = _require_auth(request, db)
+    user = _require_module(request, db, "tts")
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return RedirectResponse("/login" if not get_current_user(request, db) else "/", status_code=302)
     cfg = db.query(ElevenLabsSettings).first()
     return templates.TemplateResponse(
         "settings_elevenlabs.html",
@@ -598,9 +608,9 @@ async def test_voice_audio(request: Request, db: Session = Depends(get_db)):
 
 @router.get("/edge-tts", response_class=HTMLResponse)
 async def edge_tts_settings(request: Request, db: Session = Depends(get_db)):
-    user = _require_auth(request, db)
+    user = _require_module(request, db, "tts")
     if not user:
-        return RedirectResponse("/login", status_code=302)
+        return RedirectResponse("/login" if not get_current_user(request, db) else "/", status_code=302)
     from app.services.edge_tts_service import SPANISH_VOICES, DEFAULT_VOICE
     cfg = db.query(EdgeTTSSettings).first()
     return templates.TemplateResponse(

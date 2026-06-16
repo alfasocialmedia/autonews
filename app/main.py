@@ -307,6 +307,10 @@ def _migrate_columns():
             wa_cols2 = [c["name"] for c in inspector.get_columns("whatsapp_settings")]
             if "instagram_settings_id" not in wa_cols2:
                 conn.execute(text("ALTER TABLE whatsapp_settings ADD COLUMN instagram_settings_id INTEGER REFERENCES instagram_settings(id) ON DELETE SET NULL"))
+        if "users" in tables:
+            user_cols = [c["name"] for c in inspector.get_columns("users")]
+            if "permissions" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN permissions TEXT"))
         import pathlib
         pathlib.Path("app/static/uploads/logos").mkdir(parents=True, exist_ok=True)
 

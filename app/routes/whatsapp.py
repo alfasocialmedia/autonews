@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user
+from app.auth import get_current_user, user_has_module
 from app.database import get_db
 from app.models import WhatsAppChannel, WhatsAppGroup, WhatsAppSettings, WordPressSettings
 
@@ -148,7 +148,7 @@ def _html_to_plain(html_text: str, max_chars: int = 3000) -> str:
 
 def _require_admin(request: Request, db: Session):
     user = get_current_user(request, db)
-    if not user or user.role != "admin":
+    if not user or not user_has_module(user, "whatsapp"):
         return None
     return user
 

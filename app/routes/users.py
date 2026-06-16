@@ -1,9 +1,11 @@
+import json
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.auth import create_user, get_current_user, hash_password
+from app.auth import ALL_MODULES, create_user, get_current_user, hash_password
 from app.database import get_db
 from app.models import User
 
@@ -20,14 +22,29 @@ def _require_admin(request: Request, db: Session):
     return user, None
 
 
+def _parse_permissions(form_data: list[str]) -> str:
+    """Convierte la lista de slugs seleccionados en JSON."""
+    valid_slugs = {slug for slug, _, _ in ALL_MODULES}
+    perms = [s for s in form_data if s in valid_slugs]
+    return json.dumps(perms)
+
+
 @router.get("/", response_class=HTMLResponse)
 async def users_list(request: Request, db: Session = Depends(get_db)):
     user, redirect = _require_admin(request, db)
     if redirect:
         return redirect
     users = db.query(User).order_by(User.id).all()
+    # Adjuntar la lista de perms ya parseada para el template
+    for u in users:
+        u._perms = json.loads(u.permissions or "[]") if u.role != "admin" else []
     return templates.TemplateResponse(
-        "users.html", {"request": request, "user": user, "users": users}
+        "users.html", {
+            "request": request,
+            "user": user,
+            "users": users,
+            "all_modules": ALL_MODULES,
+        }
     )
 
 
@@ -38,6 +55,7 @@ async def user_create(
     email: str = Form(""),
     password: str = Form(...),
     role: str = Form("editor"),
+    permissions: list[str] = Form([]),
     db: Session = Depends(get_db),
 ):
     user, redirect = _require_admin(request, db)
@@ -49,15 +67,20 @@ async def user_create(
 
     exists = db.query(User).filter(User.username == username).first()
     users = db.query(User).order_by(User.id).all()
+    for u in users:
+        u._perms = json.loads(u.permissions or "[]") if u.role != "admin" else []
     if exists:
         return templates.TemplateResponse(
             "users.html",
             {"request": request, "user": user, "users": users,
+             "all_modules": ALL_MODULES,
              "error": f"El usuario '{username}' ya existe."},
             status_code=400,
         )
     new_user = create_user(db, username, password, email or None)
     new_user.role = role
+    if role == "editor":
+        new_user.permissions = _parse_permissions(permissions)
     db.commit()
     return RedirectResponse("/usuarios/?ok=creado", status_code=303)
 
@@ -70,6 +93,7 @@ async def user_edit(
     email: str = Form(""),
     password: str = Form(""),
     role: str = Form("editor"),
+    permissions: list[str] = Form([]),
     db: Session = Depends(get_db),
 ):
     current, redirect = _require_admin(request, db)
@@ -86,9 +110,12 @@ async def user_edit(
     duplicate = db.query(User).filter(User.username == username, User.id != user_id).first()
     if duplicate:
         users = db.query(User).order_by(User.id).all()
+        for u in users:
+            u._perms = json.loads(u.permissions or "[]") if u.role != "admin" else []
         return templates.TemplateResponse(
             "users.html",
             {"request": request, "user": current, "users": users,
+             "all_modules": ALL_MODULES,
              "error": f"El nombre '{username}' ya está en uso."},
             status_code=400,
         )
@@ -96,6 +123,10 @@ async def user_edit(
     target.username = username
     target.email = email or None
     target.role = role
+    if role == "editor":
+        target.permissions = _parse_permissions(permissions)
+    else:
+        target.permissions = None  # admin no necesita permisos explícitos
     if password:
         target.hashed_password = hash_password(password)
     db.commit()
@@ -118,9 +149,12 @@ async def user_delete(
 
     if current.id == user_id:
         users = db.query(User).order_by(User.id).all()
+        for u in users:
+            u._perms = json.loads(u.permissions or "[]") if u.role != "admin" else []
         return templates.TemplateResponse(
             "users.html",
             {"request": request, "user": current, "users": users,
+             "all_modules": ALL_MODULES,
              "error": "No podés eliminar tu propio usuario."},
             status_code=400,
         )

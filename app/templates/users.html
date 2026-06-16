@@ -1,6 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Usuarios — AutoNews{% endblock %}
 
+{% block head %}
+<style>
+.modules-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .35rem .75rem; }
+.module-check { display: flex; align-items: center; gap: .4rem; font-size: .85rem; }
+.perms-badges { display: flex; flex-wrap: wrap; gap: .25rem; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header d-flex align-items-center justify-content-between">
   <div>
@@ -33,7 +41,7 @@
           <th>Usuario</th>
           <th>Email</th>
           <th>Rol</th>
-          <th>Estado</th>
+          <th>Módulos habilitados</th>
           <th>Último acceso</th>
           <th></th>
         </tr>
@@ -45,6 +53,7 @@
           <td class="fw-semibold">
             {{ u.username }}
             {% if u.id == user.id %}<span class="badge bg-primary-subtle text-primary ms-1">Yo</span>{% endif %}
+            {% if not u.is_active %}<span class="badge bg-secondary ms-1">Inactivo</span>{% endif %}
           </td>
           <td class="text-muted small">{{ u.email or '—' }}</td>
           <td>
@@ -55,13 +64,26 @@
             {% endif %}
           </td>
           <td>
-            {% if u.is_active %}<span class="badge bg-success">Activo</span>
-            {% else %}<span class="badge bg-secondary">Inactivo</span>{% endif %}
+            {% if u.role == 'admin' %}
+              <span class="text-muted small"><i class="bi bi-check-all text-success me-1"></i>Acceso completo</span>
+            {% elif u._perms %}
+              <div class="perms-badges">
+                {% for slug, label, icon in all_modules %}
+                  {% if slug in u._perms %}
+                  <span class="badge bg-info-subtle text-info border border-info-subtle" style="font-size:.7rem">
+                    <i class="bi {{ icon }} me-1"></i>{{ label }}
+                  </span>
+                  {% endif %}
+                {% endfor %}
+              </div>
+            {% else %}
+              <span class="text-muted small"><i class="bi bi-dash-circle me-1"></i>Sin módulos asignados</span>
+            {% endif %}
           </td>
           <td class="text-muted small">{{ u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else '—' }}</td>
           <td class="text-end">
             <button class="btn btn-sm btn-outline-secondary"
-                    onclick="abrirEditar({{ u.id }}, '{{ u.username }}', '{{ u.email or '' }}', '{{ u.role or 'editor' }}')">
+                    onclick="abrirEditar({{ u.id }}, '{{ u.username }}', '{{ u.email or '' }}', '{{ u.role or 'editor' }}', {{ u._perms | tojson }})">
               <i class="bi bi-pencil"></i>
             </button>
             {% if u.id != user.id %}
@@ -78,9 +100,22 @@
   </div>
 </div>
 
+<!-- ── Macro módulos reutilizable ── -->
+{% macro module_checkboxes(prefix, selected_perms) %}
+<div class="modules-grid mt-1" id="{{ prefix }}-modules">
+  {% for slug, label, icon in all_modules %}
+  <label class="module-check">
+    <input type="checkbox" name="permissions" value="{{ slug }}" class="form-check-input"
+           {% if slug in selected_perms %}checked{% endif %}>
+    <i class="bi {{ icon }}"></i> {{ label }}
+  </label>
+  {% endfor %}
+</div>
+{% endmacro %}
+
 <!-- Modal Crear -->
 <div class="modal fade" id="modalCrear" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content">
       <form method="post" action="/usuarios/crear">
         <div class="modal-header border-0">
@@ -88,25 +123,31 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Usuario <span class="text-danger">*</span></label>
-            <input type="text" name="username" class="form-control" required>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Usuario <span class="text-danger">*</span></label>
+              <input type="text" name="username" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Email</label>
+              <input type="email" name="email" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Contraseña <span class="text-danger">*</span></label>
+              <input type="password" name="password" class="form-control" minlength="8" required>
+              <div class="form-text">Mínimo 8 caracteres</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Rol <span class="text-danger">*</span></label>
+              <select name="role" class="form-select" id="crearRole" onchange="toggleModules('crear')">
+                <option value="editor" selected>Editor — acceso por módulos</option>
+                <option value="admin">Admin — acceso completo</option>
+              </select>
+            </div>
           </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Email</label>
-            <input type="email" name="email" class="form-control">
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Contraseña <span class="text-danger">*</span></label>
-            <input type="password" name="password" class="form-control" minlength="8" required>
-            <div class="form-text">Mínimo 8 caracteres</div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Rol <span class="text-danger">*</span></label>
-            <select name="role" class="form-select">
-              <option value="editor" selected>Editor — solo bandeja y posts</option>
-              <option value="admin">Admin — acceso completo</option>
-            </select>
+          <div id="crear-modules-wrap" class="mt-3">
+            <label class="form-label fw-semibold">Módulos habilitados</label>
+            {{ module_checkboxes('crear', []) }}
           </div>
         </div>
         <div class="modal-footer border-0">
@@ -120,7 +161,7 @@
 
 <!-- Modal Editar -->
 <div class="modal fade" id="modalEditar" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content">
       <form method="post" id="formEditar">
         <div class="modal-header border-0">
@@ -128,25 +169,31 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Usuario <span class="text-danger">*</span></label>
-            <input type="text" name="username" id="editUsername" class="form-control" required>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Usuario <span class="text-danger">*</span></label>
+              <input type="text" name="username" id="editUsername" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Email</label>
+              <input type="email" name="email" id="editEmail" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Nueva contraseña</label>
+              <input type="password" name="password" class="form-control" minlength="8">
+              <div class="form-text">Dejá en blanco para no cambiarla</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Rol</label>
+              <select name="role" id="editRole" class="form-select" onchange="toggleModules('editar')">
+                <option value="editor">Editor — acceso por módulos</option>
+                <option value="admin">Admin — acceso completo</option>
+              </select>
+            </div>
           </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Email</label>
-            <input type="email" name="email" id="editEmail" class="form-control">
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Nueva contraseña</label>
-            <input type="password" name="password" class="form-control" minlength="8">
-            <div class="form-text">Dejá en blanco para no cambiarla</div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Rol</label>
-            <select name="role" id="editRole" class="form-select">
-              <option value="editor">Editor — solo bandeja y posts</option>
-              <option value="admin">Admin — acceso completo</option>
-            </select>
+          <div id="editar-modules-wrap" class="mt-3">
+            <label class="form-label fw-semibold">Módulos habilitados</label>
+            {{ module_checkboxes('editar', []) }}
           </div>
         </div>
         <div class="modal-footer border-0">
@@ -182,17 +229,35 @@
 
 {% block scripts %}
 <script>
-function abrirEditar(id, username, email, role) {
+function toggleModules(prefix) {
+  const role = document.getElementById(prefix === 'crear' ? 'crearRole' : 'editRole').value;
+  const wrap = document.getElementById(prefix + '-modules-wrap');
+  wrap.style.display = role === 'editor' ? '' : 'none';
+}
+
+function abrirEditar(id, username, email, role, perms) {
   document.getElementById('editUsername').value = username;
   document.getElementById('editEmail').value = email;
   document.getElementById('editRole').value = role;
   document.getElementById('formEditar').action = '/usuarios/' + id + '/editar';
+
+  // Marcar los checkboxes del modal editar según los permisos actuales
+  const checks = document.querySelectorAll('#editar-modules input[type=checkbox]');
+  checks.forEach(cb => { cb.checked = perms.includes(cb.value); });
+
+  toggleModules('editar');
   new bootstrap.Modal(document.getElementById('modalEditar')).show();
 }
+
 function confirmarEliminar(id, username) {
   document.getElementById('eliminarNombre').textContent = username;
   document.getElementById('formEliminar').action = '/usuarios/' + id + '/eliminar';
   new bootstrap.Modal(document.getElementById('modalEliminar')).show();
 }
+
+// Estado inicial al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+  toggleModules('crear');
+});
 </script>
 {% endblock %}

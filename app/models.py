@@ -16,8 +16,27 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
     role = Column(String(20), default="editor")  # admin | editor
+    # JSON array de slugs de módulos habilitados para editores, ej: ["rss","whatsapp"]
+    # NULL o vacío = sin acceso a nada; ignorado para admins (tienen todo)
+    permissions = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)
+
+    @property
+    def perms_list(self) -> list:
+        """Lista de módulos habilitados. Admin devuelve ['*'] (todo)."""
+        if self.role == "admin":
+            return ["*"]
+        try:
+            import json as _j
+            return _j.loads(self.permissions or "[]")
+        except Exception:
+            return []
+
+    def can_access(self, module: str) -> bool:
+        if self.role == "admin":
+            return True
+        return module in self.perms_list
 
 
 class EmailAccount(Base):

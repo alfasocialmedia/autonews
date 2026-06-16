@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user
+from app.auth import get_current_user, user_has_module
 from app.database import get_db
 from app.models import Log, Post, ProcessedEmail
 
@@ -86,6 +86,8 @@ async def logs_page(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
     if not user:
         return RedirectResponse("/login", status_code=302)
+    if not user_has_module(user, "logs"):
+        return RedirectResponse("/", status_code=302)
 
     logs = db.query(Log).order_by(Log.created_at.desc()).limit(200).all()
 

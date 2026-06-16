@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user
+from app.auth import get_current_user, user_has_module
 from app.crypto import decrypt_value, encrypt_value, mask_value
 from app.database import get_db
 from app.models import InstagramSettings
@@ -44,7 +44,7 @@ def _logo_dir() -> str:
 
 def _require_admin(request: Request, db: Session):
     user = get_current_user(request, db)
-    if not user or user.role != "admin":
+    if not user or not user_has_module(user, "instagram"):
         return None
     return user
 

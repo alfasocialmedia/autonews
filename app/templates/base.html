@@ -17,39 +17,72 @@
     <i class="bi bi-newspaper me-2"></i>AutoNews
   </div>
   <nav class="sidebar-nav flex-grow-1">
+    {% set p = user.perms_list if user else [] %}
+    {% set is_admin = user and user.role == 'admin' %}
+
     <a href="/" class="nav-link {% if request.url.path == '/' %}active{% endif %}">
       <i class="bi bi-speedometer2"></i> Dashboard
     </a>
+
+    {% if is_admin or 'bandeja' in p %}
     <a href="/posts/" class="nav-link {% if '/posts' in request.url.path %}active{% endif %}">
       <i class="bi bi-inbox-fill"></i> Bandeja
     </a>
+    {% endif %}
+
+    {% if is_admin or 'publicaciones' in p %}
     <a href="/publicaciones/" class="nav-link {% if '/publicaciones' in request.url.path %}active{% endif %}">
       <i class="bi bi-file-earmark-text-fill"></i> Publicaciones
     </a>
+    {% endif %}
 
-    {% if user and user.role == 'admin' %}
+    {% if is_admin or ('email' in p) or ('wordpress' in p) or ('ia' in p) or ('rss' in p) or ('googledrive' in p) or ('whatsapp' in p) or ('instagram' in p) or ('tts' in p) %}
     <div class="nav-section">Configuración</div>
+    {% endif %}
+
+    {% if is_admin or 'email' in p %}
     <a href="/settings/email" class="nav-link {% if '/settings/email' in request.url.path %}active{% endif %}">
       <i class="bi bi-envelope-at"></i> Correo IMAP
     </a>
+    {% endif %}
+
+    {% if is_admin or 'wordpress' in p %}
     <a href="/settings/wordpress" class="nav-link {% if '/settings/wordpress' in request.url.path %}active{% endif %}">
       <i class="bi bi-wordpress"></i> WordPress
     </a>
+    {% endif %}
+
+    {% if is_admin or 'ia' in p %}
     <a href="/settings/groq" class="nav-link {% if '/settings/groq' in request.url.path %}active{% endif %}">
       <i class="bi bi-cpu"></i> Groq IA
     </a>
+    {% endif %}
+
+    {% if is_admin or 'rss' in p %}
     <a href="/settings/rss" class="nav-link {% if '/settings/rss' in request.url.path %}active{% endif %}">
       <i class="bi bi-rss-fill"></i> Feeds RSS
     </a>
+    {% endif %}
+
+    {% if is_admin or 'googledrive' in p %}
     <a href="/settings/googledrive" class="nav-link {% if '/settings/googledrive' in request.url.path %}active{% endif %}">
       <i class="bi bi-google"></i> Google Drive
     </a>
+    {% endif %}
+
+    {% if is_admin or 'whatsapp' in p %}
     <a href="/settings/whatsapp" class="nav-link {% if '/settings/whatsapp' in request.url.path %}active{% endif %}">
       <i class="bi bi-whatsapp text-success"></i> WhatsApp
     </a>
+    {% endif %}
+
+    {% if is_admin or 'instagram' in p %}
     <a href="/settings/instagram" class="nav-link {% if '/settings/instagram' in request.url.path %}active{% endif %}">
       <i class="bi bi-instagram text-danger"></i> Instagram
     </a>
+    {% endif %}
+
+    {% if is_admin or 'tts' in p %}
     <a href="/settings/elevenlabs" class="nav-link {% if '/settings/elevenlabs' in request.url.path %}active{% endif %}">
       <i class="bi bi-mic-fill text-danger"></i> ElevenLabs TTS
     </a>
@@ -59,10 +92,14 @@
     {% endif %}
 
     <div class="nav-section">Sistema</div>
+
+    {% if is_admin or 'logs' in p %}
     <a href="/logs" class="nav-link {% if '/logs' in request.url.path %}active{% endif %}">
       <i class="bi bi-journal-text"></i> Logs
     </a>
-    {% if user and user.role == 'admin' %}
+    {% endif %}
+
+    {% if is_admin %}
     <a href="/usuarios/" class="nav-link {% if '/usuarios' in request.url.path %}active{% endif %}">
       <i class="bi bi-people"></i> Usuarios
     </a>

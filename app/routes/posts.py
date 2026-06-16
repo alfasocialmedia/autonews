@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user
+from app.auth import get_current_user, user_has_module
 from app.database import get_db
 from app.models import Post, ProcessedEmail
 
@@ -25,6 +25,8 @@ async def posts_list(
     user = get_current_user(request, db)
     if not user:
         return RedirectResponse("/login", status_code=302)
+    if not user_has_module(user, "bandeja"):
+        return RedirectResponse("/", status_code=302)
 
     per_page = 25
     offset = (page - 1) * per_page

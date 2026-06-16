@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 # Cache en memoria: token → {ai_result, image_url, inline_images, embeds, item}
 _preview_cache: dict[str, dict] = {}
 
-from app.auth import get_current_user
+from app.auth import get_current_user, user_has_module
 from app.database import get_db
 from app.models import InstagramSettings, ProcessedRssItem, RssFeed, WordPressSettings
 from app.services.rss_service import fetch_rss_items, scrape_category_page, test_rss_feed, test_web_source
@@ -25,8 +25,8 @@ templates = Jinja2Templates(directory="app/templates")
 @router.get("", response_class=HTMLResponse)
 async def rss_page(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "admin":
-        return RedirectResponse("/", status_code=302)
+    if not user or not user_has_module(user, "rss"):
+        return RedirectResponse("/login" if not user else "/", status_code=302)
 
     feeds = db.query(RssFeed).order_by(RssFeed.created_at.desc()).all()
     for feed in feeds:
@@ -67,8 +67,8 @@ async def add_feed(
     db: Session = Depends(get_db),
 ):
     user = get_current_user(request, db)
-    if not user or user.role != "admin":
-        return RedirectResponse("/", status_code=302)
+    if not user or not user_has_module(user, "rss"):
+        return RedirectResponse("/login" if not user else "/", status_code=302)
 
     ids = [int(x) for x in wp_site_ids if x.isdigit()]
     feed = RssFeed(
@@ -107,8 +107,8 @@ async def edit_feed(
     db: Session = Depends(get_db),
 ):
     user = get_current_user(request, db)
-    if not user or user.role != "admin":
-        return RedirectResponse("/", status_code=302)
+    if not user or not user_has_module(user, "rss"):
+        return RedirectResponse("/login" if not user else "/", status_code=302)
 
     feed = db.query(RssFeed).filter(RssFeed.id == feed_id).first()
     if feed:
@@ -149,8 +149,8 @@ async def toggle_feed(feed_id: int, request: Request, db: Session = Depends(get_
 @router.post("/{feed_id}/delete")
 async def delete_feed(feed_id: int, request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
-    if not user or user.role != "admin":
-        return RedirectResponse("/", status_code=302)
+    if not user or not user_has_module(user, "rss"):
+        return RedirectResponse("/login" if not user else "/", status_code=302)
 
     feed = db.query(RssFeed).filter(RssFeed.id == feed_id).first()
     if feed:

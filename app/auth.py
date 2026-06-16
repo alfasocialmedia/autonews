@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import json as _json
 from datetime import datetime, timezone, timedelta
 
 _TZ_AR = timezone(timedelta(hours=-3))
@@ -6,6 +9,34 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.models import User
+
+# Módulos disponibles en el sistema: (slug, label, icono Bootstrap)
+ALL_MODULES: list[tuple[str, str, str]] = [
+    ("bandeja",       "Bandeja de entrada",  "bi-inbox-fill"),
+    ("publicaciones", "Publicaciones",        "bi-file-earmark-text-fill"),
+    ("email",         "Correo IMAP",          "bi-envelope-at"),
+    ("wordpress",     "WordPress",            "bi-wordpress"),
+    ("ia",            "Groq / IA",            "bi-cpu"),
+    ("rss",           "Feeds RSS",            "bi-rss-fill"),
+    ("whatsapp",      "WhatsApp",             "bi-whatsapp"),
+    ("instagram",     "Instagram",            "bi-instagram"),
+    ("tts",           "Audio TTS",            "bi-mic-fill"),
+    ("googledrive",   "Google Drive",         "bi-google"),
+    ("logs",          "Logs del sistema",     "bi-journal-text"),
+]
+
+
+def user_has_module(user: User | None, module: str) -> bool:
+    """True si el usuario tiene acceso al módulo. Admin siempre True."""
+    if user is None:
+        return False
+    if user.role == "admin":
+        return True
+    try:
+        perms = _json.loads(user.permissions or "[]")
+        return module in perms
+    except Exception:
+        return False
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
