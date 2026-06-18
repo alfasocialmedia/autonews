@@ -443,7 +443,7 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
                                          "author-bio", "author-box", "respond", "comment-form",
                                          "comment-list", "wc-memberships", "article-meta")):
                 continue
-            t = tag.get_text(strip=True)
+            t = re.sub(r'[ \t]+', ' ', tag.get_text(separator=" ")).strip()
             if not t or len(t) < 15:
                 continue
             if t in seen:
@@ -512,7 +512,7 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
             parent_cls = " ".join((p.parent.get("class") or []) if p.parent else []).lower()
             if any(x in parent_cls for x in _NOISE_PARENT_CLASSES):
                 continue
-            t = p.get_text(strip=True)
+            t = re.sub(r'[ \t]+', ' ', p.get_text(separator=" ")).strip()
             if t and len(t) >= 20 and t not in seen_b:
                 if _UI_JUNK_RE.match(t):
                     continue
@@ -817,7 +817,7 @@ def _try_wp_rest_api(base_url: str, category_url: str, max_items: int = 10) -> l
             seen_t: set[str] = set()
             parts: list[str] = []
             for tag in content_soup.find_all(["p", "li", "h2", "h3", "h4", "blockquote"]):
-                t = tag.get_text(strip=True)
+                t = re.sub(r'[ \t]+', ' ', tag.get_text(separator=" ")).strip()
                 if t and len(t) >= 15 and t not in seen_t:
                     seen_t.add(t)
                     parts.append(t)
