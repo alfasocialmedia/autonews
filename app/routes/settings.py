@@ -206,9 +206,10 @@ async def add_wordpress(
     request: Request,
     name: str = Form("Principal"),
     site_url: str = Form(...),
-    api_user: str = Form(...),
-    app_password: str = Form(...),
+    api_user: str = Form(""),
+    app_password: str = Form(""),
     default_status: str = Form("draft"),
+    plugin_api_key: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user = _require_auth(request, db)
@@ -218,8 +219,9 @@ async def add_wordpress(
         name=name,
         site_url=site_url.rstrip("/"),
         api_user=api_user,
-        encrypted_app_password=encrypt_value(app_password),
+        encrypted_app_password=encrypt_value(app_password) if app_password.strip() else "",
         default_status=default_status,
+        plugin_api_key=plugin_api_key.strip() or None,
     )
     db.add(wp)
     db.commit()
@@ -232,9 +234,10 @@ async def edit_wordpress(
     wp_id: int,
     name: str = Form(...),
     site_url: str = Form(...),
-    api_user: str = Form(...),
+    api_user: str = Form(""),
     app_password: str = Form(""),
     default_status: str = Form("draft"),
+    plugin_api_key: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user = _require_auth(request, db)
@@ -249,6 +252,7 @@ async def edit_wordpress(
     if app_password.strip():
         wp.encrypted_app_password = encrypt_value(app_password)
     wp.default_status = default_status
+    wp.plugin_api_key = plugin_api_key.strip() or None
     db.commit()
     return RedirectResponse("/settings/wordpress?msg=Sitio+actualizado", status_code=302)
 
@@ -290,6 +294,21 @@ async def test_wp(request: Request, wp_id: int, db: Session = Depends(get_db)):
         return JSONResponse({"success": ok, "message": msg})
     except Exception as exc:
         return JSONResponse({"success": False, "message": str(exc)})
+
+
+@router.post("/wordpress/{wp_id}/test-plugin")
+async def test_wp_plugin(request: Request, wp_id: int, db: Session = Depends(get_db)):
+    if not _require_auth(request, db):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    wp = db.query(WordPressSettings).filter(WordPressSettings.id == wp_id).first()
+    if not wp:
+        return JSONResponse({"success": False, "message": "Sitio no encontrado"})
+    key = (wp.plugin_api_key or "").strip()
+    if not key:
+        return JSONResponse({"success": False, "message": "No hay token de plugin configurado para este sitio."})
+    from app.services.wordpress_service import test_plugin_connection
+    ok, msg = test_plugin_connection(wp.site_url, key)
+    return JSONResponse({"success": ok, "message": msg})
 
 
 @router.post("/wordpress/{wp_id}/categories/fetch")

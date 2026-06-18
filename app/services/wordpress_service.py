@@ -155,6 +155,75 @@ def get_or_create_category(
     return None
 
 
+def test_plugin_connection(site_url: str, plugin_api_key: str) -> tuple[bool, str]:
+    """Verifica la conexión con el plugin AutoNews Connector instalado en el sitio WP."""
+    url = site_url.rstrip("/") + "/wp-json/autonews/v1/status"
+    try:
+        with httpx.Client(timeout=15, verify=False) as client:
+            resp = client.get(url, headers={"Authorization": f"Bearer {plugin_api_key}"})
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("ok"):
+                return True, f"Plugin conectado — {data.get('site_name', site_url)} (WP {data.get('wp_version', '?')})"
+            return False, f"Respuesta inesperada: {resp.text[:200]}"
+        if resp.status_code == 401:
+            return False, "Token inválido — copiá el token desde el plugin en tu WordPress."
+        return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+def create_post_via_plugin(
+    site_url: str,
+    plugin_api_key: str,
+    title: str,
+    content: str,
+    status: str = "draft",
+    categories: list[str] | None = None,
+    tags: list[str] | None = None,
+    excerpt: str = "",
+    keyphrase: str = "",
+    featured_image_url: str | None = None,
+    featured_image_bytes: bytes | None = None,
+    featured_image_filename: str | None = None,
+    featured_image_mimetype: str | None = None,
+) -> dict:
+    """Publica via plugin AutoNews Connector. Devuelve {'id': ..., 'link': ...}.
+    El plugin resuelve categorías y etiquetas por nombre, sube la imagen y aplica SEO.
+    """
+    import base64 as _b64
+    import requests as _req
+
+    endpoint = site_url.rstrip("/") + "/wp-json/autonews/v1/publish"
+    headers = {
+        "Authorization": f"Bearer {plugin_api_key}",
+        "Content-Type": "application/json",
+    }
+    body: dict = {
+        "title": title,
+        "content": content,
+        "excerpt": excerpt,
+        "status": status,
+        "categories": [c for c in (categories or []) if c],
+        "tags": [t for t in (tags or []) if t],
+        "keyphrase": keyphrase,
+        "meta_description": excerpt,
+    }
+    if featured_image_url:
+        body["featured_image_url"] = featured_image_url
+    elif featured_image_bytes:
+        body["featured_image_base64"] = _b64.b64encode(featured_image_bytes).decode()
+        body["featured_image_filename"] = featured_image_filename or "portada.jpg"
+        body["featured_image_mimetype"] = featured_image_mimetype or "image/jpeg"
+
+    resp = _req.post(endpoint, json=body, headers=headers, timeout=90, verify=False)
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("success"):
+        raise ValueError(f"Plugin error: {data.get('error', 'unknown')}")
+    return {"id": data["post_id"], "link": data["post_url"]}
+
+
 def create_post(
     site_url: str,
     api_user: str,

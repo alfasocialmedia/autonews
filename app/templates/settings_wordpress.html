@@ -7,7 +7,7 @@
     <h2 class="page-title"><i class="bi bi-wordpress me-2"></i>Sitios WordPress</h2>
     <span class="text-muted small">El worker publicará en todos los sitios activos</span>
   </div>
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+  <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
     <i class="bi bi-plus-lg me-1"></i>Agregar sitio
   </button>
 </div>
@@ -16,12 +16,12 @@
 {% if messages.get('msg') %}
 <div class="alert alert-success alert-dismissible fade show d-flex align-items-center">
   <i class="bi bi-check-circle-fill me-2"></i>{{ messages.get('msg') | replace('+', ' ') }}
-  <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+  <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Cerrar"></button>
 </div>
 {% elif messages.get('err') %}
 <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center">
   <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ messages.get('err') | replace('+', ' ') }}
-  <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+  <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Cerrar"></button>
 </div>
 {% endif %}
 {% endwith %}
@@ -37,52 +37,83 @@
             <i class="bi bi-wordpress"></i>
           </div>
           <div>
-            <div class="fw-semibold">{{ wp.name }}</div>
-            <a href="{{ wp.site_url }}" target="_blank" class="text-muted small text-decoration-none">
+            <div class="fw-semibold">
+              {{ wp.name }}
+              {% if wp.plugin_api_key %}
+              <span class="badge bg-success ms-1" title="Conectado vía AutoNews Connector Plugin">
+                <i class="bi bi-puzzle-fill me-1"></i>Plugin
+              </span>
+              {% endif %}
+            </div>
+            <a href="{{ wp.site_url }}" target="_blank" rel="noopener noreferrer" class="text-muted small text-decoration-none">
               {{ wp.site_url }} <i class="bi bi-box-arrow-up-right ms-1"></i>
             </a>
           </div>
         </div>
         <div class="form-check form-switch mb-0">
           <input class="form-check-input toggle-wp" type="checkbox" role="switch"
+                 aria-label="Activar/desactivar {{ wp.name }}"
                  data-id="{{ wp.id }}" {% if wp.is_active %}checked{% endif %}>
         </div>
       </div>
       <div class="card-body">
         <dl class="row mb-0 small">
-          <dt class="col-5 text-muted">Usuario API</dt>
-          <dd class="col-7">{{ wp.api_user }}</dd>
-          <dt class="col-5 text-muted">Contraseña</dt>
-          <dd class="col-7 font-monospace">{{ mask(wp.encrypted_app_password) if mask else '••••••••' }}</dd>
-          <dt class="col-5 text-muted">Estado por defecto</dt>
-          <dd class="col-7"><span class="badge bg-secondary">{{ wp.default_status }}</span></dd>
-          <dt class="col-5 text-muted">Estado</dt>
-          <dd class="col-7">
-            {% if wp.is_active %}
-            <span class="badge bg-success">Activo</span>
-            {% else %}
-            <span class="badge bg-secondary">Inactivo</span>
-            {% endif %}
-          </dd>
-          <dt class="col-5 text-muted">Categorías</dt>
-          <dd class="col-7">
-            <span class="badge bg-info text-dark">{{ wp.category_mappings | length }} mapeos</span>
-          </dd>
+          <div class="col-5"><dt class="text-muted">Modo conexión</dt></div>
+          <div class="col-7">
+            <dd class="mb-0">
+              {% if wp.plugin_api_key %}
+              <span class="badge bg-success-subtle text-success border border-success-subtle">
+                <i class="bi bi-puzzle-fill me-1"></i>AutoNews Connector Plugin
+              </span>
+              {% else %}
+              <span class="badge bg-secondary-subtle text-secondary border">REST API estándar</span>
+              {% endif %}
+            </dd>
+          </div>
+          {% if wp.plugin_api_key %}
+          <div class="col-5"><dt class="text-muted">Token plugin</dt></div>
+          <div class="col-7"><dd class="mb-0 font-monospace text-muted">{{ wp.plugin_api_key[:8] }}••••••••</dd></div>
+          {% else %}
+          <div class="col-5"><dt class="text-muted">Usuario API</dt></div>
+          <div class="col-7"><dd class="mb-0">{{ wp.api_user }}</dd></div>
+          <div class="col-5"><dt class="text-muted">Contraseña</dt></div>
+          <div class="col-7"><dd class="mb-0 font-monospace">{{ mask(wp.encrypted_app_password) if mask else '••••••••' }}</dd></div>
+          {% endif %}
+          <div class="col-5"><dt class="text-muted">Estado por defecto</dt></div>
+          <div class="col-7"><dd class="mb-0"><span class="badge bg-secondary">{{ wp.default_status }}</span></dd></div>
+          <div class="col-5"><dt class="text-muted">Estado</dt></div>
+          <div class="col-7">
+            <dd class="mb-0">
+              {% if wp.is_active %}
+              <span class="badge bg-success">Activo</span>
+              {% else %}
+              <span class="badge bg-secondary">Inactivo</span>
+              {% endif %}
+            </dd>
+          </div>
+          <div class="col-5"><dt class="text-muted">Categorías</dt></div>
+          <div class="col-7"><dd class="mb-0"><span class="badge bg-info text-dark">{{ wp.category_mappings | length }} mapeos</span></dd></div>
         </dl>
       </div>
       <div class="card-footer bg-transparent border-0 d-flex gap-2 flex-wrap">
-        <button class="btn btn-sm btn-outline-info test-wp" data-id="{{ wp.id }}">
+        {% if wp.plugin_api_key %}
+        <button type="button" class="btn btn-sm btn-outline-success test-plugin" data-id="{{ wp.id }}">
+          <i class="bi bi-puzzle me-1"></i>Probar Plugin
+        </button>
+        {% else %}
+        <button type="button" class="btn btn-sm btn-outline-info test-wp" data-id="{{ wp.id }}">
           <i class="bi bi-plug me-1"></i>Probar
         </button>
-        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+        {% endif %}
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
                 data-bs-target="#editModal{{ wp.id }}">
           <i class="bi bi-pencil me-1"></i>Editar
         </button>
-        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal"
+        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal"
                 data-bs-target="#catsModal{{ wp.id }}">
           <i class="bi bi-tags me-1"></i>Categorías
         </button>
-        <button class="btn btn-sm btn-outline-danger ms-auto"
+        <button type="button" class="btn btn-sm btn-outline-danger ms-auto"
                 onclick="confirmDelete('/settings/wordpress/{{ wp.id }}/delete', 'el sitio {{ wp.name }}')">
           <i class="bi bi-trash me-1"></i>Eliminar
         </button>
@@ -91,44 +122,70 @@
   </div>
 
   <!-- Edit Modal -->
-  <div class="modal fade" id="editModal{{ wp.id }}" tabindex="-1">
-    <div class="modal-dialog">
+  <div class="modal fade" id="editModal{{ wp.id }}" tabindex="-1" aria-labelledby="editModalLabel{{ wp.id }}" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Editar sitio</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          <h5 class="modal-title" id="editModalLabel{{ wp.id }}"><i class="bi bi-pencil me-2"></i>Editar sitio</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <form method="post" action="/settings/wordpress/{{ wp.id }}/edit">
           <div class="modal-body">
             <div class="mb-3">
-              <label class="form-label fw-semibold">Nombre descriptivo</label>
-              <input type="text" name="name" class="form-control" value="{{ wp.name }}" required>
+              <label for="edit_name_{{ wp.id }}" class="form-label fw-semibold">Nombre descriptivo</label>
+              <input type="text" id="edit_name_{{ wp.id }}" name="name" class="form-control" value="{{ wp.name }}" required>
             </div>
             <div class="mb-3">
-              <label class="form-label fw-semibold">URL del sitio</label>
+              <label for="edit_url_{{ wp.id }}" class="form-label fw-semibold">URL del sitio</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-globe"></i></span>
-                <input type="url" name="site_url" class="form-control" value="{{ wp.site_url }}" required>
+                <input type="url" id="edit_url_{{ wp.id }}" name="site_url" class="form-control" value="{{ wp.site_url }}" required>
               </div>
             </div>
             <div class="mb-3">
-              <label class="form-label fw-semibold">Usuario de la API</label>
-              <input type="text" name="api_user" class="form-control" value="{{ wp.api_user }}" required>
-            </div>
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Application Password</label>
-              <input type="password" name="app_password" class="form-control"
-                     placeholder="Dejar vacío para no cambiar">
-              <div class="form-text">Solo rellena si quieres cambiar la contraseña actual.</div>
-            </div>
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Estado por defecto</label>
-              <select name="default_status" class="form-select">
+              <label for="edit_status_{{ wp.id }}" class="form-label fw-semibold">Estado por defecto</label>
+              <select id="edit_status_{{ wp.id }}" name="default_status" class="form-select" title="Estado por defecto del post">
                 <option value="draft" {% if wp.default_status == 'draft' %}selected{% endif %}>Borrador (draft)</option>
                 <option value="publish" {% if wp.default_status == 'publish' %}selected{% endif %}>Publicado</option>
                 <option value="pending" {% if wp.default_status == 'pending' %}selected{% endif %}>Pendiente de revisión</option>
               </select>
             </div>
+
+            <!-- Plugin section -->
+            <div class="card border-success-subtle bg-success-subtle mb-3">
+              <div class="card-body py-2 px-3">
+                <div class="fw-semibold text-success mb-1">
+                  <i class="bi bi-puzzle-fill me-1"></i>AutoNews Connector Plugin <span class="badge bg-success ms-1">Recomendado</span>
+                </div>
+                <div class="mb-2">
+                  <label for="edit_plugin_key_{{ wp.id }}" class="form-label small mb-1">Token del plugin</label>
+                  <input type="text" id="edit_plugin_key_{{ wp.id }}" name="plugin_api_key"
+                         class="form-control form-control-sm font-monospace"
+                         value="{{ wp.plugin_api_key or '' }}"
+                         placeholder="Pegar el token del plugin instalado en WordPress">
+                  <div class="form-text">Instalá el plugin en el WP del cliente y copiá el token desde <strong>Ajustes → AutoNews</strong>. Dejá vacío para usar la REST API estándar.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Standard REST API (optional when plugin is configured) -->
+            <details {% if not wp.plugin_api_key %}open{% endif %} class="details-cursor">
+              <summary class="fw-semibold text-muted small mb-2">
+                REST API estándar (Application Password) — opcional si usás el plugin
+              </summary>
+              <div class="mt-2">
+                <div class="mb-3">
+                  <label for="edit_api_user_{{ wp.id }}" class="form-label fw-semibold">Usuario de la API</label>
+                  <input type="text" id="edit_api_user_{{ wp.id }}" name="api_user" class="form-control" value="{{ wp.api_user }}">
+                </div>
+                <div class="mb-3">
+                  <label for="edit_app_pwd_{{ wp.id }}" class="form-label fw-semibold">Application Password</label>
+                  <input type="password" id="edit_app_pwd_{{ wp.id }}" name="app_password" class="form-control"
+                         placeholder="Dejar vacío para no cambiar">
+                  <div class="form-text">Solo rellená si querés cambiar la contraseña actual.</div>
+                </div>
+              </div>
+            </details>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -140,12 +197,12 @@
   </div>
 
   <!-- Categories Modal -->
-  <div class="modal fade" id="catsModal{{ wp.id }}" tabindex="-1">
+  <div class="modal fade" id="catsModal{{ wp.id }}" tabindex="-1" aria-labelledby="catsModalLabel{{ wp.id }}" aria-hidden="true">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-tags me-2"></i>Categorías — {{ wp.name }}</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          <h5 class="modal-title" id="catsModalLabel{{ wp.id }}"><i class="bi bi-tags me-2"></i>Categorías — {{ wp.name }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
           <p class="text-muted small mb-3">
@@ -158,13 +215,13 @@
             <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
               <div>
                 <span class="badge bg-secondary me-2">{{ m.keyword }}</span>
-                → <span class="text-success fw-semibold">{{ m.category_name }}</span>
+                &rarr; <span class="text-success fw-semibold">{{ m.category_name }}</span>
                 <span class="text-muted small">(ID: {{ m.category_id }})</span>
               </div>
               <form method="post" action="/settings/wordpress/categories/{{ m.id }}/delete"
                     onsubmit="return confirm('¿Eliminar este mapeo?')">
-                <button type="submit" class="btn btn-sm btn-outline-danger">
-                  <i class="bi bi-x"></i>
+                <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar mapeo {{ m.keyword }}">
+                  <i class="bi bi-x" aria-hidden="true"></i>
                 </button>
               </form>
             </li>
@@ -177,18 +234,22 @@
           <hr>
           <div class="d-flex justify-content-between align-items-center mb-2">
             <span class="fw-semibold small">Agregar nuevo mapeo</span>
-            <button class="btn btn-sm btn-outline-secondary fetch-cats-btn" data-wpid="{{ wp.id }}">
+            <button type="button" class="btn btn-sm btn-outline-secondary fetch-cats-btn" data-wpid="{{ wp.id }}">
               <i class="bi bi-cloud-download me-1"></i>Cargar categorías de WP
             </button>
           </div>
           <form method="post" action="/settings/wordpress/{{ wp.id }}/categories/add">
             <div class="row g-2">
               <div class="col-12">
-                <input type="text" name="keyword" class="form-control form-control-sm"
+                <label for="kw_{{ wp.id }}" class="visually-hidden">Palabra clave</label>
+                <input type="text" id="kw_{{ wp.id }}" name="keyword" class="form-control form-control-sm"
                        placeholder="Palabra clave (ej: tecnología)" required>
               </div>
               <div class="col-8">
-                <select name="category_name" class="form-select form-select-sm cat-select-{{ wp.id }}" required>
+                <label for="cat_sel_{{ wp.id }}" class="visually-hidden">Categoría</label>
+                <select id="cat_sel_{{ wp.id }}" name="category_name"
+                        class="form-select form-select-sm cat-select-{{ wp.id }}"
+                        title="Seleccionar categoría" required>
                   <option value="">— selecciona categoría —</option>
                 </select>
               </div>
@@ -213,7 +274,7 @@
     <i class="bi bi-wordpress display-4 text-muted d-block mb-3"></i>
     <h5>No hay sitios WordPress configurados</h5>
     <p class="text-muted">Agrega tu primer sitio para que el sistema empiece a publicar artículos.</p>
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
       <i class="bi bi-plus-lg me-1"></i>Agregar sitio
     </button>
   </div>
@@ -221,46 +282,72 @@
 {% endif %}
 
 <!-- Add Modal -->
-<div class="modal fade" id="addModal" tabindex="-1">
-  <div class="modal-dialog">
+<div class="modal fade" id="addModal" tabindex="-1" aria-labelledby="addModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Agregar sitio WordPress</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <h5 class="modal-title" id="addModalLabel"><i class="bi bi-plus-circle me-2"></i>Agregar sitio WordPress</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
       <form method="post" action="/settings/wordpress/add">
         <div class="modal-body">
           <div class="mb-3">
-            <label class="form-label fw-semibold">Nombre descriptivo</label>
-            <input type="text" name="name" class="form-control" placeholder="Ej: Blog principal" required>
+            <label for="add_name" class="form-label fw-semibold">Nombre descriptivo</label>
+            <input type="text" id="add_name" name="name" class="form-control" placeholder="Ej: Blog principal" required>
           </div>
           <div class="mb-3">
-            <label class="form-label fw-semibold">URL del sitio</label>
+            <label for="add_url" class="form-label fw-semibold">URL del sitio</label>
             <div class="input-group">
               <span class="input-group-text"><i class="bi bi-globe"></i></span>
-              <input type="url" name="site_url" class="form-control" placeholder="https://tusitio.com" required>
+              <input type="url" id="add_url" name="site_url" class="form-control" placeholder="https://tusitio.com" required>
             </div>
           </div>
           <div class="mb-3">
-            <label class="form-label fw-semibold">Usuario de la API</label>
-            <input type="text" name="api_user" class="form-control" placeholder="admin" required>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Application Password</label>
-            <input type="password" name="app_password" class="form-control"
-                   placeholder="xxxx xxxx xxxx xxxx xxxx xxxx" required>
-            <div class="form-text">
-              Genera una en: WordPress → Usuarios → Tu perfil → Application Passwords
-            </div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Estado por defecto</label>
-            <select name="default_status" class="form-select">
+            <label for="add_status" class="form-label fw-semibold">Estado por defecto</label>
+            <select id="add_status" name="default_status" class="form-select" title="Estado por defecto del post">
               <option value="draft">Borrador (draft)</option>
               <option value="publish">Publicado</option>
               <option value="pending">Pendiente de revisión</option>
             </select>
           </div>
+
+          <!-- Plugin -->
+          <div class="card border-success-subtle bg-success-subtle mb-3">
+            <div class="card-body py-2 px-3">
+              <div class="fw-semibold text-success mb-1">
+                <i class="bi bi-puzzle-fill me-1"></i>AutoNews Connector Plugin <span class="badge bg-success ms-1">Recomendado</span>
+              </div>
+              <label for="add_plugin_key" class="form-label small mb-1">Token del plugin</label>
+              <input type="text" id="add_plugin_key" name="plugin_api_key"
+                     class="form-control form-control-sm font-monospace"
+                     placeholder="Pegar el token del plugin instalado en WordPress">
+              <div class="form-text">
+                Instalá el plugin <strong>AutoNews Connector</strong> en el WordPress del cliente y copiá el token desde
+                <strong>Ajustes → AutoNews</strong>. Si usás el plugin, no necesitás completar el Application Password.
+              </div>
+            </div>
+          </div>
+
+          <!-- Standard REST API -->
+          <details class="details-cursor">
+            <summary class="fw-semibold text-muted small mb-2">
+              REST API estándar (Application Password) — opcional si usás el plugin
+            </summary>
+            <div class="mt-2">
+              <div class="mb-3">
+                <label for="add_api_user" class="form-label fw-semibold">Usuario de la API</label>
+                <input type="text" id="add_api_user" name="api_user" class="form-control" placeholder="admin">
+              </div>
+              <div class="mb-3">
+                <label for="add_app_pwd" class="form-label fw-semibold">Application Password</label>
+                <input type="password" id="add_app_pwd" name="app_password" class="form-control"
+                       placeholder="xxxx xxxx xxxx xxxx xxxx xxxx">
+                <div class="form-text">
+                  Genera una en: WordPress → Usuarios → Tu perfil → Application Passwords
+                </div>
+              </div>
+            </div>
+          </details>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -273,6 +360,9 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+  .details-cursor > summary { cursor: pointer; }
+</style>
 <script>
 // Toggle site active/inactive
 document.querySelectorAll('.toggle-wp').forEach(toggle => {
@@ -284,7 +374,7 @@ document.querySelectorAll('.toggle-wp').forEach(toggle => {
   });
 });
 
-// Test WP connection
+// Test WP connection (REST API estándar)
 document.querySelectorAll('.test-wp').forEach(btn => {
   btn.addEventListener('click', async function () {
     const id = this.dataset.id;
@@ -292,6 +382,21 @@ document.querySelectorAll('.test-wp').forEach(btn => {
     this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Probando...';
     this.disabled = true;
     const resp = await fetch(`/settings/wordpress/${id}/test`, { method: 'POST' });
+    const data = await resp.json();
+    showToast(data.message, data.success ? 'success' : 'danger');
+    this.innerHTML = orig;
+    this.disabled = false;
+  });
+});
+
+// Test plugin connection
+document.querySelectorAll('.test-plugin').forEach(btn => {
+  btn.addEventListener('click', async function () {
+    const id = this.dataset.id;
+    const orig = this.innerHTML;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Probando plugin...';
+    this.disabled = true;
+    const resp = await fetch(`/settings/wordpress/${id}/test-plugin`, { method: 'POST' });
     const data = await resp.json();
     showToast(data.message, data.success ? 'success' : 'danger');
     this.innerHTML = orig;

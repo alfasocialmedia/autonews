@@ -770,78 +770,111 @@ def _publish_ai_result(db, ai_result: dict, wp_sites, image_url: str | None = No
 
     for wp_cfg in wp_sites:
         try:
-            wp_pwd = decrypt_value(wp_cfg.encrypted_app_password)
+            plugin_key = getattr(wp_cfg, "plugin_api_key", None) or ""
 
-            # Categoría forzada por el feed tiene prioridad sobre la detectada por Groq
-            forced_id = ai_result.get("_forced_category_id")
-            if forced_id:
-                category_ids = [forced_id]
-            else:
-                category_ids = _resolve_categories(db, wp_cfg, ai_result.get("category", ""))
-
-            tag_ids = []
-            raw_tags = ai_result.get("tags", [])
-            if isinstance(raw_tags, list) and raw_tags:
-                try:
-                    tag_ids = get_or_create_tags(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, raw_tags)
-                except Exception:
-                    pass
-
-            featured_media_id = None
-            media_source_url = ""
-            if img_payload:
-                try:
-                    img_data, img_name, img_mime = img_payload
-                    media_result = upload_media(
-                        wp_cfg.site_url, wp_cfg.api_user, wp_pwd,
-                        img_data, img_name, img_mime,
-                    )
-                    if media_result:
-                        featured_media_id, media_source_url = media_result
-                except Exception as exc:
-                    log.warning("No se pudo subir imagen a %s: %s", wp_cfg.name, exc)
-
-            # Subir imágenes inline a WP y anteponer reproductor de audio
-            content = ai_result.get("content", "")
-            if inline_images:
-                wp_inline_imgs = _upload_inline_images(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, list(inline_images))
-                content = _inject_images_into_content(content, wp_inline_imgs)
-            if extra_image_payloads:
-                extra_wp_urls = []
-                for img_b, img_n, img_m in extra_image_payloads:
-                    try:
-                        res = upload_media(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, img_b, img_n, img_m)
-                        if res:
-                            _, wp_url = res
-                            extra_wp_urls.append(wp_url)
-                            log.info("  🖼 Imagen adicional subida a WP: %s", wp_url[:80])
-                    except Exception as _exc:
-                        log.warning("No se pudo subir imagen extra a %s: %s", wp_cfg.name, _exc)
-                if extra_wp_urls:
-                    content = _inject_images_into_content(content, extra_wp_urls)
-            if embeds:
-                embed_blocks = _embeds_to_wp_blocks(embeds)
-                if embed_blocks:
-                    content += "\n\n" + embed_blocks
-            if audio_bytes:
-                content = _prepend_audio(
-                    wp_cfg.site_url, wp_cfg.api_user, wp_pwd,
-                    audio_bytes, ai_result.get("title", ""), content,
+            if plugin_key:
+                # ── Ruta plugin AutoNews Connector ────────────────────────────
+                from app.services.wordpress_service import create_post_via_plugin
+                content = ai_result.get("content", "")
+                if inline_images:
+                    content = _inject_images_into_content(content, list(inline_images))
+                if embeds:
+                    _eb = _embeds_to_wp_blocks(embeds)
+                    if _eb:
+                        content += "\n\n" + _eb
+                _categories = [ai_result["category"]] if ai_result.get("category") else []
+                _tags = ai_result.get("tags", []) if isinstance(ai_result.get("tags"), list) else []
+                _feat_url = image_url
+                _feat_bytes = _feat_name = _feat_mime = None
+                if not _feat_url and img_payload:
+                    _feat_bytes, _feat_name, _feat_mime = img_payload
+                wp_post = create_post_via_plugin(
+                    wp_cfg.site_url, plugin_key,
+                    ai_result.get("title", ""), content, wp_cfg.default_status,
+                    _categories, _tags,
+                    excerpt=ai_result.get("summary", ""),
+                    keyphrase=ai_result.get("keyphrase", ""),
+                    featured_image_url=_feat_url,
+                    featured_image_bytes=_feat_bytes,
+                    featured_image_filename=_feat_name,
+                    featured_image_mimetype=_feat_mime,
                 )
+                log.info("Plugin → %s: publicado vía AutoNews Connector (id=%s)", wp_cfg.name, wp_post.get("id"))
 
-            wp_post = create_post(
-                wp_cfg.site_url,
-                wp_cfg.api_user,
-                wp_pwd,
-                ai_result.get("title", ""),
-                content,
-                wp_cfg.default_status,
-                category_ids,
-                featured_media_id,
-                excerpt=ai_result.get("summary", ""),
-                tag_ids=tag_ids,
-                keyphrase=ai_result.get("keyphrase", ""),
-            )
+            else:
+                # ── Ruta estándar REST API ────────────────────────────────────
+                wp_pwd = decrypt_value(wp_cfg.encrypted_app_password)
+
+                # Categoría forzada por el feed tiene prioridad sobre la detectada por Groq
+                forced_id = ai_result.get("_forced_category_id")
+                if forced_id:
+                    category_ids = [forced_id]
+                else:
+                    category_ids = _resolve_categories(db, wp_cfg, ai_result.get("category", ""))
+
+                tag_ids = []
+                raw_tags = ai_result.get("tags", [])
+                if isinstance(raw_tags, list) and raw_tags:
+                    try:
+                        tag_ids = get_or_create_tags(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, raw_tags)
+                    except Exception:
+                        pass
+
+                featured_media_id = None
+                media_source_url = ""
+                if img_payload:
+                    try:
+                        img_data, img_name, img_mime = img_payload
+                        media_result = upload_media(
+                            wp_cfg.site_url, wp_cfg.api_user, wp_pwd,
+                            img_data, img_name, img_mime,
+                        )
+                        if media_result:
+                            featured_media_id, media_source_url = media_result
+                    except Exception as exc:
+                        log.warning("No se pudo subir imagen a %s: %s", wp_cfg.name, exc)
+
+                # Subir imágenes inline a WP y anteponer reproductor de audio
+                content = ai_result.get("content", "")
+                if inline_images:
+                    wp_inline_imgs = _upload_inline_images(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, list(inline_images))
+                    content = _inject_images_into_content(content, wp_inline_imgs)
+                if extra_image_payloads:
+                    extra_wp_urls = []
+                    for img_b, img_n, img_m in extra_image_payloads:
+                        try:
+                            res = upload_media(wp_cfg.site_url, wp_cfg.api_user, wp_pwd, img_b, img_n, img_m)
+                            if res:
+                                _, wp_url = res
+                                extra_wp_urls.append(wp_url)
+                                log.info("  🖼 Imagen adicional subida a WP: %s", wp_url[:80])
+                        except Exception as _exc:
+                            log.warning("No se pudo subir imagen extra a %s: %s", wp_cfg.name, _exc)
+                    if extra_wp_urls:
+                        content = _inject_images_into_content(content, extra_wp_urls)
+                if embeds:
+                    embed_blocks = _embeds_to_wp_blocks(embeds)
+                    if embed_blocks:
+                        content += "\n\n" + embed_blocks
+                if audio_bytes:
+                    content = _prepend_audio(
+                        wp_cfg.site_url, wp_cfg.api_user, wp_pwd,
+                        audio_bytes, ai_result.get("title", ""), content,
+                    )
+
+                wp_post = create_post(
+                    wp_cfg.site_url,
+                    wp_cfg.api_user,
+                    wp_pwd,
+                    ai_result.get("title", ""),
+                    content,
+                    wp_cfg.default_status,
+                    category_ids,
+                    featured_media_id,
+                    excerpt=ai_result.get("summary", ""),
+                    tag_ids=tag_ids,
+                    keyphrase=ai_result.get("keyphrase", ""),
+                )
 
             db.add(
                 Post(

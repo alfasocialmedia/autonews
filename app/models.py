@@ -73,6 +73,9 @@ class WordPressSettings(Base):
     encrypted_app_password = Column(Text, nullable=False)
     default_status = Column(String(20), default="draft")
     is_active = Column(Boolean, default=True)
+    # Token generado por el plugin AutoNews Connector instalado en el WP del cliente.
+    # Cuando está presente se usa el endpoint /wp-json/autonews/v1/publish en lugar de la REST API estándar.
+    plugin_api_key = Column(String(300), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
