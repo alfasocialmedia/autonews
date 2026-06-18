@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoNews Connector — Guía de instalación</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --brand: #0d6efd;
+      --success: #198754;
+    }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #212529; background: #f8f9fa; }
+    .hero {
+      background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+      color: #fff;
+      padding: 3rem 0 2.5rem;
+    }
+    .hero .badge-plugin {
+      background: rgba(255,255,255,0.2);
+      color: #fff;
+      font-size: 0.8rem;
+      padding: 0.35em 0.75em;
+      border-radius: 2rem;
+      display: inline-block;
+      margin-bottom: 1rem;
+    }
+    .step-card {
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      transition: box-shadow .2s;
+    }
+    .step-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.1); }
+    .step-num {
+      width: 36px; height: 36px;
+      background: var(--brand);
+      color: #fff;
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 1rem;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-num.green { background: var(--success); }
+    .screen-box {
+      background: #f1f3f5;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      font-size: 0.85rem;
+    }
+    .screen-box .path {
+      font-family: monospace;
+      background: #e9ecef;
+      border-radius: 4px;
+      padding: 2px 6px;
+    }
+    .token-box {
+      background: #0d1117;
+      color: #58d68d;
+      font-family: monospace;
+      font-size: 0.9rem;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      word-break: break-all;
+    }
+    .tip-box {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      border-radius: 0 8px 8px 0;
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+    }
+    .ok-box {
+      background: #d1e7dd;
+      border-left: 4px solid #198754;
+      border-radius: 0 8px 8px 0;
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+    }
+    .section-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid #e9ecef;
+    }
+    .toc a { color: #495057; text-decoration: none; }
+    .toc a:hover { color: var(--brand); }
+    @media print {
+      .hero { background: #0d6efd !important; -webkit-print-color-adjust: exact; }
+      .step-card { box-shadow: none; border: 1px solid #dee2e6; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="container">
+    <div class="badge-plugin"><i class="bi bi-puzzle-fill me-1"></i>WordPress Plugin</div>
+    <h1 class="fw-bold mb-2">AutoNews Connector</h1>
+    <p class="lead mb-1" style="opacity:.9;">Guía de instalación y configuración</p>
+    <small style="opacity:.7;">Versión 1.0 &mdash; AutoNews Sistema de Noticias con IA</small>
+  </div>
+</div>
+
+<div class="container py-5">
+  <div class="row">
+
+    <!-- Sidebar TOC -->
+    <div class="col-lg-3 d-none d-lg-block">
+      <div class="sticky-top pt-2" style="top: 20px;">
+        <div class="card step-card p-3">
+          <p class="fw-semibold mb-2 small text-muted text-uppercase">Contenido</p>
+          <nav class="toc">
+            <ul class="list-unstyled small mb-0">
+              <li class="mb-1"><a href="#que-es"><i class="bi bi-info-circle me-1"></i>¿Qué es?</a></li>
+              <li class="mb-1"><a href="#requisitos"><i class="bi bi-check2-square me-1"></i>Requisitos</a></li>
+              <li class="mb-1"><a href="#instalacion"><i class="bi bi-download me-1"></i>Instalación</a></li>
+              <li class="mb-1"><a href="#configuracion"><i class="bi bi-gear me-1"></i>Configuración</a></li>
+              <li class="mb-1"><a href="#vincular"><i class="bi bi-link-45deg me-1"></i>Vincular con AutoNews</a></li>
+              <li class="mb-1"><a href="#verificar"><i class="bi bi-shield-check me-1"></i>Verificar conexión</a></li>
+              <li class="mb-1"><a href="#troubleshooting"><i class="bi bi-wrench me-1"></i>Solución de problemas</a></li>
+            </ul>
+          </nav>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main content -->
+    <div class="col-lg-9">
+
+      <!-- ¿Qué es? -->
+      <section id="que-es" class="mb-5">
+        <h2 class="section-title"><i class="bi bi-puzzle-fill me-2 text-primary"></i>¿Qué es AutoNews Connector?</h2>
+        <div class="card step-card p-4 mb-3">
+          <p class="mb-3">
+            <strong>AutoNews Connector</strong> es un plugin de WordPress que permite a tu sitio recibir y publicar artículos
+            generados por el sistema AutoNews de forma automática, segura y sin configuraciones complejas.
+          </p>
+          <div class="row g-3">
+            <div class="col-sm-6">
+              <div class="d-flex gap-2 align-items-start">
+                <i class="bi bi-lock-fill text-success fs-5 mt-1"></i>
+                <div>
+                  <div class="fw-semibold">Autenticación segura</div>
+                  <div class="text-muted small">Token único generado automáticamente. No requiere contraseñas de usuario.</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="d-flex gap-2 align-items-start">
+                <i class="bi bi-tags-fill text-primary fs-5 mt-1"></i>
+                <div>
+                  <div class="fw-semibold">Categorías automáticas</div>
+                  <div class="text-muted small">El plugin crea categorías y etiquetas si no existen en WordPress.</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="d-flex gap-2 align-items-start">
+                <i class="bi bi-image-fill text-warning fs-5 mt-1"></i>
+                <div>
+                  <div class="fw-semibold">Imagen destacada</div>
+                  <div class="text-muted small">Descarga y asigna la imagen destacada al post automáticamente.</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="d-flex gap-2 align-items-start">
+                <i class="bi bi-search text-danger fs-5 mt-1"></i>
+                <div>
+                  <div class="fw-semibold">SEO integrado</div>
+                  <div class="text-muted small">Compatible con Yoast SEO y RankMath. Configura keywords y meta descripciones.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Requisitos -->
+      <section id="requisitos" class="mb-5">
+        <h2 class="section-title"><i class="bi bi-check2-square me-2 text-primary"></i>Requisitos</h2>
+        <div class="card step-card p-4">
+          <ul class="list-unstyled mb-0">
+            <li class="d-flex align-items-center gap-2 mb-2">
+              <i class="bi bi-check-circle-fill text-success"></i>
+              WordPress <strong>5.8 o superior</strong>
+            </li>
+            <li class="d-flex align-items-center gap-2 mb-2">
+              <i class="bi bi-check-circle-fill text-success"></i>
+              PHP <strong>7.4 o superior</strong>
+            </li>
+            <li class="d-flex align-items-center gap-2 mb-2">
+              <i class="bi bi-check-circle-fill text-success"></i>
+              Acceso de administrador al panel de WordPress
+            </li>
+            <li class="d-flex align-items-center gap-2">
+              <i class="bi bi-check-circle-fill text-success"></i>
+              La API REST de WordPress habilitada (activa por defecto)
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Instalación -->
+      <section id="instalacion" class="mb-5">
+        <h2 class="section-title"><i class="bi bi-download me-2 text-primary"></i>Instalación</h2>
+
+        <!-- Paso 1 -->
+        <div class="card step-card p-4 mb-3">
+          <div class="d-flex gap-3 align-items-start">
+            <div class="step-num">1</div>
+            <div class="flex-grow-1">
+              <h5 class="mb-2">Obtener el archivo del plugin</h5>
+              <p class="text-muted mb-3">
+                El archivo ZIP del plugin es provisto por el equipo de AutoNews.
+                El archivo se llama <code>autonews-connector.zip</code>.
+              </p>
+              <div class="tip-box">
+                <i class="bi bi-info-circle me-1"></i>
+                Si no tenés el archivo ZIP, solicitalo a tu agencia o proveedor de AutoNews.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paso 2 -->
+        <div class="card step-card p-4 mb-3">
+          <div class="d-flex gap-3 align-items-start">
+            <div class="step-num">2</div>
+            <div class="flex-grow-1">
+              <h5 class="mb-2">Acceder al panel de WordPress</h5>
+              <p class="text-muted mb-2">Ingresá a tu sitio con una cuenta de administrador:</p>
+              <div class="screen-box">
+                <span class="path">https://tusitio.com/wp-admin</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paso 3 -->
+        <div class="card step-card p-4 mb-3">
+          <div class="d-flex gap-3 align-items-start">
+            <div class="step-num">3</div>
+            <div class="flex-grow-1">
+              <h5 class="mb-2">Ir a la sección de plugins</h5>
+              <p class="text-muted mb-2">En el menú lateral izquierdo, hacé clic en:</p>
+              <div class="screen-box">
+                <i class="bi bi-puzzle me-1"></i> <strong>Plugins</strong>
+                &rarr; <strong>Añadir nuevo</strong>
+                &rarr; <span class="path">Subir plugin</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paso 4 -->
+        <div class="card step-card p-4 mb-3">
+          <div class="d-flex gap-3 align-items-start">
+            <div class="step-num">4</div>
+            <div class="flex-grow-1">
+              <h5 class="mb-2">Subir el archivo ZIP</h5>
+              <p class="text-muted mb-2">
+                Hacé clic en <strong>Elegir archivo</strong>, seleccioná el archivo
+                <code>autonews-connector.zip</code> y luego hacé clic en <strong>Instalar ahora</strong>.
+              </p>
+              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='100' viewBox='0 0 480 100'%3E%3Crect width='480' height='100' fill='%23f8f9fa' rx='8'/%3E%3Crect x='20' y='30' width='200' height='40' rx='6' fill='%23e9ecef' stroke='%23dee2e6'/%3E%3Ctext x='120' y='55' text-anchor='middle' font-family='sans-serif' font-size='13' fill='%23495057'%3Eautonews-connector.zip%3C/text%3E%3Crect x='240' y='30' width='140' height='40' rx='6' fill='%230d6efd'/%3E%3Ctext x='310' y='55' text-anchor='middle' font-family='sans-serif' font-size='13' fill='white'%3EInstalar ahora%3C/text%3E%3C/svg%3E"
+                   alt="Botón instalar plugin" class="img-fluid rounded mt-2" style="border:1px solid #dee2e6;">
+            </div>
+          </div>
+        </div>
+
+        <!-- Paso 5 -->
+        <div class="card step-card p-4 mb-3">
+          <div class="d-flex gap-3 align-items-start">
+            <div class="step-num">5</div>
+            <div class="flex-grow-1">
+              <h5 class="mb-2">Activar el plugin</h5>
+              <p class="text-muted mb-2">
+                Una vez instalado, WordPress mostrará un mensaje de éxito. Hacé clic en
+                <strong>Activar plugin</strong>.
+              </p>
+              <div class="ok-box">
+                <i class="bi bi-check-circle-fill me-1"></i>
+                El plugin instalado se llama <strong>"AutoNews Connector"</strong> y aparecerá en la lista de plugins activos.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Configuración -->
+      <section id="configuracion" class="mb-5">
+        <h2 class="section-title"><i class="bi bi-gear me-2 text-primary"></i>Configuración</h2>
+
+        <!-- Paso 6 -->
+        <div class="card step-card p-4 mb-3">
+          <div class="d-flex gap-3 align-items-start">
+            <div class="step-num green">6</div>
+            <div class="flex-grow-1">
+              <h5 class="mb-2">Abrir la página de configuración del plugin</h5>
+              <p class="text-muted mb-2">En el menú lateral de WordPress, hacé clic en:</p>
+              <div class="screen-box">
+                <i class="bi bi-gear me-1"></i> <strong>Ajustes</strong>
+                &rarr; <span class="path">AutoNews</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paso 7 -->
+        <div class="card step-card p-4 mb-3">
+          <div class="d-flex gap-3 align-items-start">
+            <div class="step-num green">7</div>
+            <div class="flex-grow-1">
+              <h5 class="mb-2">Copiar los datos de conexión</h5>
+              <p class="text-muted mb-3">
+                En la página de configuración verás un panel con los datos necesarios para conectar AutoNews
+                con este sitio. Encontrarás:
+              </p>
+              <ul class="mb-3">
+                <li class="mb-1"><strong>URL del sitio</strong> — la dirección de tu WordPress</li>
+                <li class="mb-1"><strong>Token de autenticación</strong> — clave única generada automáticamente</li>
+                <li class="mb-1"><strong>Datos de conexión JSON</strong> — para copiar y pegar directamente en AutoNews</li>
+              </ul>
+              <div class="mb-3">
+                <p class="small text-muted mb-1">Ejemplo de cómo se verá el token:</p>
+                <div class="token-box">autonews_tk_4f9a2b8c1e3d7f6a0b5c9d2e4f8a1b3c</div>
+              </div>
+              <div class="tip-box">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                <strong>Importante:</strong> Tratá el token como una contraseña. No lo compartas públicamente.
+                Si se compromete, podés regenerarlo desde esta misma página.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Vincular con AutoNews -->
+      <section id="vincular" class="mb-5">
+        <h2 class="section-title"><i class="bi bi-link-45deg me-2 text-primary"></i>Vincular con AutoNews</h2>
+
+        <!-- Paso 8 -->
+        <div class="card step-card p-4 mb-3">
+          <div class="d-flex gap-3 align-items-start">
+            <div class="step-num green">8</div>
+            <div class="flex-grow-1">
+              <h5 class="mb-2">Acceder al panel de AutoNews</h5>
+              <p class="text-muted mb-2">Ingresá al sistema AutoNews con tu usuario y contraseña.</p>
+              <div class="screen-box">
+                <i class="bi bi-gear me-1"></i> <strong>Configuración</strong>
+                &rarr; <span class="path">WordPress</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paso 9 -->
+        <div class="card step-card p-4 mb-3">
+          <div class="d-flex gap-3 align-items-start">
+            <div class="step-num green">9</div>
+            <div class="flex-grow-1">
+              <h5 class="mb-2">Agregar o editar el sitio WordPress</h5>
+              <p class="text-muted mb-3">
+                Hacé clic en <strong>Agregar sitio</strong> (si es la primera vez) o en el botón
+                <strong>Editar</strong> del sitio existente.
+              </p>
+              <p class="text-muted mb-2">Completá los campos:</p>
+              <ul class="mb-0">
+                <li class="mb-1"><strong>Nombre:</strong> nombre interno para identificar el sitio</li>
+                <li class="mb-1"><strong>URL del sitio:</strong> la dirección completa (ej: <code>https://tusitio.com</code>)</li>
+                <li class="mb-1">
+                  <strong>Token del plugin:</strong> pegá el token copiado desde
+                  <em>Ajustes → AutoNews</em> en WordPress
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paso 10 -->
+        <div class="card step-card p-4 mb-3">
+          <div class="d-flex gap-3 align-items-start">
+            <div class="step-num green">10</div>
+            <div class="flex-grow-1">
+              <h5 class="mb-2">Guardar la configuración</h5>
+              <p class="text-muted">
+                Hacé clic en <strong>Guardar</strong>. El sitio aparecerá en la lista con el badge
+                <span class="badge bg-success"><i class="bi bi-puzzle-fill me-1"></i>Plugin</span>
+                indicando que usa el conector.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Verificar -->
+      <section id="verificar" class="mb-5">
+        <h2 class="section-title"><i class="bi bi-shield-check me-2 text-primary"></i>Verificar la conexión</h2>
+
+        <div class="card step-card p-4 mb-3">
+          <div class="d-flex gap-3 align-items-start">
+            <div class="step-num green">11</div>
+            <div class="flex-grow-1">
+              <h5 class="mb-2">Usar el botón "Probar Plugin"</h5>
+              <p class="text-muted mb-3">
+                En la lista de sitios WordPress en AutoNews, cada sitio configurado con el plugin
+                tiene un botón <strong>Probar Plugin</strong>.
+              </p>
+              <p class="text-muted mb-2">Al hacer clic verás uno de estos mensajes:</p>
+              <div class="ok-box mb-2">
+                <i class="bi bi-check-circle-fill me-1 text-success"></i>
+                <strong>Éxito:</strong> "Plugin conectado — NombreSitio (WP 6.x)" &rarr; todo funcionando correctamente.
+              </div>
+              <div class="tip-box">
+                <i class="bi bi-x-circle-fill me-1 text-danger"></i>
+                <strong>Error "Token inválido":</strong> el token fue copiado incorrectamente. Repetí el paso 7.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Troubleshooting -->
+      <section id="troubleshooting" class="mb-5">
+        <h2 class="section-title"><i class="bi bi-wrench me-2 text-primary"></i>Solución de problemas</h2>
+
+        <div class="accordion" id="faqAccordion">
+
+          <div class="accordion-item border-0 card step-card mb-2">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed fw-semibold" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#faq1">
+                El botón "Probar Plugin" devuelve "No se pudo conectar"
+              </button>
+            </h3>
+            <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+              <div class="accordion-body text-muted">
+                <ul class="mb-0">
+                  <li class="mb-1">Verificá que la URL del sitio en AutoNews sea correcta y no tenga barra al final.</li>
+                  <li class="mb-1">Confirmá que el plugin esté <strong>activado</strong> en WordPress (Plugins → Plugins instalados).</li>
+                  <li class="mb-1">Verificá que la API REST de WordPress no esté bloqueada por un plugin de seguridad.</li>
+                  <li>Accedé a <code>https://tusitio.com/wp-json/autonews/v1/status</code> desde el navegador — debería devolver <code>{"ok":false,"error":"Unauthorized"}</code>. Si no carga, la API REST está bloqueada.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item border-0 card step-card mb-2">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed fw-semibold" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#faq2">
+                No aparece el menú "Ajustes → AutoNews" en WordPress
+              </button>
+            </h3>
+            <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+              <div class="accordion-body text-muted">
+                <ul class="mb-0">
+                  <li class="mb-1">Asegurate de estar ingresado con una cuenta de <strong>Administrador</strong> en WordPress.</li>
+                  <li>Desactivá y volvé a activar el plugin desde <strong>Plugins → Plugins instalados</strong>.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item border-0 card step-card mb-2">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed fw-semibold" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#faq3">
+                Los artículos se publican pero sin imagen destacada
+              </button>
+            </h3>
+            <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+              <div class="accordion-body text-muted">
+                <ul class="mb-0">
+                  <li class="mb-1">Verificá que WordPress tenga permisos de escritura en la carpeta <code>wp-content/uploads/</code>.</li>
+                  <li>Si la imagen viene de una URL externa, asegurate de que WordPress pueda hacer peticiones HTTP salientes (función <code>wp_remote_get</code> habilitada).</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item border-0 card step-card mb-2">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed fw-semibold" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#faq4">
+                ¿Cómo regenerar el token si fue comprometido?
+              </button>
+            </h3>
+            <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+              <div class="accordion-body text-muted">
+                <ol class="mb-0">
+                  <li class="mb-1">En WordPress: <strong>Ajustes → AutoNews → Regenerar token</strong>.</li>
+                  <li class="mb-1">Copiá el nuevo token.</li>
+                  <li>En AutoNews: <strong>Configuración → WordPress → Editar sitio</strong> y pegá el nuevo token.</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item border-0 card step-card mb-2">
+            <h3 class="accordion-header">
+              <button class="accordion-button collapsed fw-semibold" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#faq5">
+                ¿Qué pasa si desinstalo el plugin?
+              </button>
+            </h3>
+            <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+              <div class="accordion-body text-muted">
+                Los artículos ya publicados permanecerán en WordPress sin cambios.
+                AutoNews dejará de poder publicar nuevos artículos hasta que se reinstale el plugin
+                o se configure la conexión por REST API estándar.
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <div class="card step-card p-4 text-center text-muted">
+        <i class="bi bi-headset fs-3 mb-2 text-primary d-block"></i>
+        <p class="mb-1 fw-semibold">¿Necesitás ayuda?</p>
+        <p class="small mb-0">
+          Contactá al equipo de AutoNews para soporte técnico en la instalación y configuración del plugin.
+        </p>
+      </div>
+
+    </div><!-- /col -->
+  </div><!-- /row -->
+</div><!-- /container -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
