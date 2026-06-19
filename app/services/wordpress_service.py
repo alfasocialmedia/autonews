@@ -38,6 +38,26 @@ def test_wordpress_connection(site_url: str, api_user: str, app_password: str) -
         return False, str(exc)
 
 
+def _convert_to_webp(image_bytes: bytes, filename: str, mime_type: str) -> tuple[bytes, str, str]:
+    """Convierte imagen a WebP. Si falla, devuelve los datos originales sin cambios."""
+    _SKIP = {"image/gif", "image/svg+xml", "image/webp"}
+    if mime_type in _SKIP:
+        return image_bytes, filename, mime_type
+    try:
+        import io
+        from PIL import Image
+        img = Image.open(io.BytesIO(image_bytes))
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGBA" if img.mode in ("P", "LA") else "RGB")
+        buf = io.BytesIO()
+        img.save(buf, format="WEBP", quality=85, method=4)
+        stem = filename.rsplit(".", 1)[0] if "." in filename else filename
+        return buf.getvalue(), f"{stem}.webp", "image/webp"
+    except Exception as exc:
+        log.warning("WebP conversion failed for %s: %s — uploading original", filename, exc)
+        return image_bytes, filename, mime_type
+
+
 def upload_media(
     site_url: str,
     api_user: str,
@@ -47,6 +67,7 @@ def upload_media(
     mime_type: str,
 ) -> tuple[int, str] | None:
     """Sube una imagen a la biblioteca de medios de WordPress. Devuelve (id, source_url) o None."""
+    image_bytes, filename, mime_type = _convert_to_webp(image_bytes, filename, mime_type)
     url = site_url.rstrip("/") + "/wp-json/wp/v2/media"
     creds = base64.b64encode(f"{api_user}:{app_password}".encode()).decode()
     headers = {
