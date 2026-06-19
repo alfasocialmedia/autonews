@@ -307,6 +307,10 @@ def _migrate_columns():
             wa_cols2 = [c["name"] for c in inspector.get_columns("whatsapp_settings")]
             if "instagram_settings_id" not in wa_cols2:
                 conn.execute(text("ALTER TABLE whatsapp_settings ADD COLUMN instagram_settings_id INTEGER REFERENCES instagram_settings(id) ON DELETE SET NULL"))
+        if "wordpress_settings" in tables:
+            wp_cols = [c["name"] for c in inspector.get_columns("wordpress_settings")]
+            if "plugin_api_key" not in wp_cols:
+                conn.execute(text("ALTER TABLE wordpress_settings ADD COLUMN plugin_api_key VARCHAR(300)"))
         if "users" in tables:
             user_cols = [c["name"] for c in inspector.get_columns("users")]
             if "permissions" not in user_cols:
