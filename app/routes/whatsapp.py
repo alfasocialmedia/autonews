@@ -107,6 +107,20 @@ _NOISE_ALWAYS_RE = re.compile(
 )
 
 
+def _is_headline_line(s: str) -> bool:
+    """True si la línea parece un titular de otra nota (no una oración de cuerpo periodístico).
+    Heurística: longitud acotada, sin punto final, sin punto interno (no es prosa)."""
+    if len(s) < 40 or len(s) > 300:
+        return False
+    if s.endswith('.'):
+        return False
+    # Prosa tiene ". " interno (fin de oración) — los titulares rara vez
+    prose_breaks = s.count('. ')
+    if prose_breaks >= 2:
+        return False
+    return True
+
+
 def _clean_scrape_noise(text: str) -> str:
     lines = text.splitlines()
     result = []
@@ -125,7 +139,64 @@ def _clean_scrape_noise(text: str) -> str:
         if len(stripped) < 60 and _NOISE_LINE_RE.match(stripped):
             continue
         result.append(line)
-    return re.sub(r'\n{3,}', '\n\n', '\n'.join(result)).strip()
+
+    # Segunda pasada: eliminar bloques de titulares de otras notas.
+    # Patrón: 4+ líneas no-vacías consecutivas (separadas solo por líneas en blanco)
+    # que todas parecen titulares (sin punto final, sin prosa interna).
+    paragraphs: list[list[str]] = []  # lista de "bloques" (cada bloque es lista de líneas)
+    current: list[str] = []
+    for line in result:
+        if line.strip():
+            current.append(line)
+        else:
+            paragraphs.append(current)
+            paragraphs.append([""])  # blank separator
+            current = []
+    if current:
+        paragraphs.append(current)
+
+    # Detectar bloques tipo "4 titulares seguidos" y marcarlos para eliminación
+    # Agrupamos los bloques de contenido consecutivos (ignorando los blancos)
+    content_blocks = [b for b in paragraphs if b != [""]]
+    headline_flags: list[bool] = []
+    for block in content_blocks:
+        non_empty = [l.strip() for l in block if l.strip()]
+        # Un bloque de "una sola línea headline" es candidato
+        is_headline_block = (len(non_empty) == 1 and _is_headline_line(non_empty[0]))
+        headline_flags.append(is_headline_block)
+
+    # Identificar rangos de 4+ bloques headline consecutivos
+    to_remove: set[int] = set()
+    i = 0
+    while i < len(headline_flags):
+        if headline_flags[i]:
+            j = i
+            while j < len(headline_flags) and headline_flags[j]:
+                j += 1
+            if j - i >= 4:
+                for k in range(i, j):
+                    to_remove.add(k)
+            i = j
+        else:
+            i += 1
+
+    if not to_remove:
+        return re.sub(r'\n{3,}', '\n\n', '\n'.join(result)).strip()
+
+    # Reconstruir sin los bloques de titulares
+    filtered: list[str] = []
+    cb_idx = 0
+    for block in paragraphs:
+        if block == [""]:
+            filtered.append("")
+            continue
+        if cb_idx in to_remove:
+            cb_idx += 1
+            continue
+        filtered.extend(block)
+        cb_idx += 1
+
+    return re.sub(r'\n{3,}', '\n\n', '\n'.join(filtered)).strip()
 
 
 def _html_to_plain(html_text: str, max_chars: int = 3000) -> str:

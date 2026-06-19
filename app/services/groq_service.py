@@ -659,7 +659,7 @@ def process_rss_with_groq(
 {article_text[:20000]}
 ═══════════════════════════════════════════════════════════════════
 
-⚠ SOBRE EL CONTENIDO RECIBIDO: El texto anterior proviene de un scraping web y puede contener elementos de interfaz del sitio que NO son parte de la noticia: bylines de autor con separadores (•), widgets en inglés ("Comments are closed", "Public collection", "Private collection", "Here you'll find..."), menús, botones o etiquetas de categoría. IGNORÁ completamente esos elementos. Procesá ÚNICAMENTE el cuerpo periodístico de la noticia.
+⚠ SOBRE EL CONTENIDO RECIBIDO: El texto anterior proviene de un scraping web y puede contener elementos de interfaz del sitio que NO son parte de la noticia: bylines de autor con separadores (•), widgets en inglés ("Comments are closed", "Public collection", "Private collection", "Here you'll find..."), menús, botones, etiquetas de categoría, y bloques de titulares de otras noticias (secciones tipo "Más noticias", "También puede interesarte", "Notas relacionadas", "Últimas noticias" o listas de titulares sin contexto). IGNORÁ completamente esos elementos. Procesá ÚNICAMENTE el cuerpo periodístico de la noticia principal.
 
 OBJETIVO PRINCIPAL:
 No hagas un resumen corto. Convertí la información recibida en una nota periodística bien redactada, con enfoque digital, pensada para que el lector haga clic, entre a leer y se mantenga interesado, sin caer en plagio, sensacionalismo falso ni datos inventados.
@@ -746,7 +746,13 @@ Cada párrafo DEBE estar entre <p> y </p>. SIN EXCEPCIÓN.
       <p>La víctima era un hombre sin identificar.</p>
 {para_range} párrafos en total.
 SUBTÍTULOS: {heading_rule}
-PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>.
+LISTAS Y TABLAS (usar SOLO cuando el contenido original las justifica explícitamente):
+  • <ul> o <ol>: cuando la noticia enumera ítems concretos (requisitos, pasos, beneficiarios, fechas de cobro, medidas de un decreto, etc.). Máximo 8 ítems. Cada <li> en una línea.
+  • <table>: cuando hay datos comparativos o múltiples valores relacionados (montos por categoría, resultados electorales por municipio, etc.). Usá <thead> y <tbody>. Estilo inline mínimo: <table style="border-collapse:collapse;width:100%">, <th> y <td> con style="border:1px solid #ddd;padding:6px".
+  • Gráfico de barras simple con porcentajes: cuando el artículo presenta datos en porcentajes de una sola variable (encuestas, estadísticas). Usar <div> con estilo inline:
+      <div style="margin:1em 0"><strong>Etiqueta:</strong> <div style="background:#e53935;height:20px;width:XX%;display:inline-block"></div> XX%</div>
+  • NO inventar datos. Solo usar listas/tablas/gráficos si los datos están explícitamente en el contenido fuente.
+PROHIBIDO: más de 2 usos de <strong>, texto fuera de <p> (salvo listas/tablas permitidas arriba).
 
 ORIGINALIDAD:
 Reescribí completamente la noticia con palabras propias.
@@ -1000,7 +1006,12 @@ Cada párrafo DEBE estar entre <p> y </p>. SIN EXCEPCIÓN.
       <p>La víctima era un hombre sin identificar.</p>
 {para_range} párrafos en total.
 Si el contenido tiene secciones claramente diferenciadas, podés usar <h2> para separar. Máximo 2.
-PROHIBIDO: <ul>, <ol>, listas de cualquier tipo, más de 2 usos de <strong>, texto fuera de <p>.
+LISTAS Y TABLAS (usar SOLO cuando el contenido original las justifica explícitamente):
+  • <ul> o <ol>: cuando la noticia enumera ítems concretos (requisitos, pasos, beneficiarios, fechas de cobro, medidas, etc.). Máximo 8 ítems.
+  • <table>: cuando hay datos comparativos o múltiples valores relacionados. Usá <thead> y <tbody>. Estilo inline: <table style="border-collapse:collapse;width:100%">, <th> y <td> con style="border:1px solid #ddd;padding:6px".
+  • Gráfico de barras simple con porcentajes: <div style="margin:1em 0"><strong>Etiqueta:</strong> <div style="background:#e53935;height:20px;width:XX%;display:inline-block"></div> XX%</div>
+  • NO inventar datos. Solo si los datos están explícitamente en el contenido fuente.
+PROHIBIDO: más de 2 usos de <strong>, texto fuera de <p> (salvo listas/tablas permitidas arriba).
 
 ORIGINALIDAD:
 Reescribí completamente la noticia con palabras propias.

@@ -423,6 +423,23 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
             log.warning("scrape: JSON-LD garbled: %s", url)
 
     # ── Candidato 2: scraping HTML ───────────────────────────────────────────
+    _RELATED_ANCESTOR_TERMS = (
+        "related", "sidebar", "widget", "trending", "populares",
+        "recomendad", "mas-noticias", "más-noticias", "ver-mas", "ver-más",
+        "tambien", "también", "notas-relacion", "otras-noticias",
+        "more-news", "more-stories", "you-might", "también-puede",
+    )
+
+    def _in_related_section(tag) -> bool:
+        """True si el tag está dentro de una sección de noticias relacionadas/sidebar."""
+        for ancestor in tag.parents:
+            if not hasattr(ancestor, "get") or ancestor.name in (None, "[document]", "html", "body"):
+                break
+            combined = (" ".join(ancestor.get("class") or []) + " " + (ancestor.get("id") or "")).lower()
+            if any(x in combined for x in _RELATED_ANCESTOR_TERMS):
+                return True
+        return False
+
     def _extract_paras(el) -> list[str]:
         """Extrae texto de párrafos, listas, subtítulos y citas del contenedor."""
         seen: set[str] = set()
@@ -437,6 +454,9 @@ def scrape_full_article(url: str) -> tuple[str, str | None, list[str], list[str]
                 parent_cls = " ".join(tag.parent.get("class", []) if tag.parent else [])
                 if any(x in parent_cls.lower() for x in ("menu", "nav", "breadcrumb", "widget", "sidebar", "footer")):
                     continue
+            # Para h2/h3/h4: verificar si están dentro de sección de noticias relacionadas
+            if tag.name in ("h2", "h3", "h4") and _in_related_section(tag):
+                continue
             # Ignorar elementos dentro de byline/meta/comentarios para cualquier tag
             p_cls = " ".join(tag.parent.get("class", []) if tag.parent else []).lower()
             if any(x in p_cls for x in ("byline", "post-meta", "entry-meta", "author-info",
