@@ -60,7 +60,9 @@ _UI_JUNK_RE = re.compile(
     r'escuchar\s+nota|listen\s+to\s+(this|the\s+)?article|'
     r'share\s+(this|article)|leave\s+a\s+(comment|reply)|no\s+comments?|'
     r'tags?:\s*$|filed\s+under|posted\s+(in|by)\b|'
-    r'click\s+to\s+(copy|share|comment)'
+    r'click\s+to\s+(copy|share|comment)|'
+    r'pic\.twitter\.com/\S+|t\.co/\S+|'
+    r'https?://t\.co/\S*|https?://pic\.twitter\.com/\S*'
     r')',
     re.I,
 )

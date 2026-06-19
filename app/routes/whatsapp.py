@@ -102,6 +102,12 @@ _NOISE_ALWAYS_RE = re.compile(
     r'|public\s+collection(\s+title)?'
     r'|private\s+collection(\s+title)?'
     r'|written\s+by\b'
+    # URLs sueltas de redes sociales que se cuelan del scraping
+    r'|pic\.twitter\.com/\S+'
+    r'|t\.co/\S+'
+    r'|https?://t\.co/\S*'
+    r'|https?://pic\.twitter\.com/\S*'
+    r'|https?://\S+\.(twitter|x)\.com/\S*'
     r')\s*[.!]?\s*$',
     re.IGNORECASE,
 )
