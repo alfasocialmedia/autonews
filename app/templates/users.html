@@ -83,7 +83,12 @@
           <td class="text-muted small">{{ u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else '—' }}</td>
           <td class="text-end">
             <button class="btn btn-sm btn-outline-secondary"
-                    onclick="abrirEditar({{ u.id }}, '{{ u.username }}', '{{ u.email or '' }}', '{{ u.role or 'editor' }}', {{ u._perms | tojson }})">
+                    data-uid="{{ u.id }}"
+                    data-uname="{{ u.username }}"
+                    data-email="{{ u.email or '' }}"
+                    data-role="{{ u.role or 'editor' }}"
+                    data-perms='{{ u._perms | tojson }}'
+                    onclick="abrirEditar(this)">
               <i class="bi bi-pencil"></i>
             </button>
             {% if u.id != user.id %}
@@ -235,24 +240,29 @@ function toggleModules(prefix) {
   wrap.style.display = role === 'editor' ? '' : 'none';
 }
 
-function abrirEditar(id, username, email, role, perms) {
+function abrirEditar(btn) {
+  const id = btn.dataset.uid;
+  const username = btn.dataset.uname;
+  const email = btn.dataset.email;
+  const role = btn.dataset.role;
+  const perms = JSON.parse(btn.dataset.perms);
+
   document.getElementById('editUsername').value = username;
   document.getElementById('editEmail').value = email;
   document.getElementById('editRole').value = role;
   document.getElementById('formEditar').action = '/usuarios/' + id + '/editar';
 
-  // Marcar los checkboxes del modal editar según los permisos actuales
   const checks = document.querySelectorAll('#editar-modules input[type=checkbox]');
   checks.forEach(cb => { cb.checked = perms.includes(cb.value); });
 
   toggleModules('editar');
-  new bootstrap.Modal(document.getElementById('modalEditar')).show();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditar')).show();
 }
 
 function confirmarEliminar(id, username) {
   document.getElementById('eliminarNombre').textContent = username;
   document.getElementById('formEliminar').action = '/usuarios/' + id + '/eliminar';
-  new bootstrap.Modal(document.getElementById('modalEliminar')).show();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEliminar')).show();
 }
 
 // Estado inicial al cargar la página
