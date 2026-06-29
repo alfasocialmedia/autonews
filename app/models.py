@@ -43,6 +43,7 @@ class EmailAccount(Base):
     __tablename__ = "email_accounts"
 
     id = Column(Integer, primary_key=True, index=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     name = Column(String(100), nullable=False)
     email = Column(String(150), nullable=False)
     imap_server = Column(String(200), nullable=False)
@@ -67,6 +68,7 @@ class WordPressSettings(Base):
     __tablename__ = "wordpress_settings"
 
     id = Column(Integer, primary_key=True, index=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     name = Column(String(100), default="Principal")
     site_url = Column(String(300), nullable=False)
     api_user = Column(String(150), nullable=False)
@@ -179,6 +181,7 @@ class RssFeed(Base):
     __tablename__ = "rss_feeds"
 
     id = Column(Integer, primary_key=True, index=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     name = Column(String(100), nullable=False)
     url = Column(String(500), nullable=False)
     feed_type = Column(String(20), default="rss")   # "rss" | "web"
@@ -248,6 +251,7 @@ class WhatsAppSettings(Base):
     __tablename__ = "whatsapp_settings"
 
     id = Column(Integer, primary_key=True, index=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     name = Column(String(100), default="Principal")
     evolution_api_url = Column(String(300), default="http://localhost:8080")
     evolution_api_key = Column(String(300), default="")
@@ -315,6 +319,7 @@ class InstagramSettings(Base):
     __tablename__ = "instagram_settings"
 
     id = Column(Integer, primary_key=True, index=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     name = Column(String(100), default="Instagram")
     # Credenciales Graph API
     ig_user_id = Column(String(50), nullable=True)          # Instagram Business Account ID

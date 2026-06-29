@@ -54,6 +54,12 @@ async def publicaciones_list(
 
     q = db.query(Post).options(joinedload(Post.wordpress_settings)).order_by(desc(Post.created_at))
 
+    if user.role != "admin":
+        user_wp_ids = [r[0] for r in db.query(WordPressSettings.id).filter(
+            WordPressSettings.owner_user_id == user.id
+        ).all()]
+        q = q.filter(Post.wordpress_settings_id.in_(user_wp_ids))
+
     if fuente == "rss":
         q = q.filter(Post.processed_email_id.is_(None))
     elif fuente == "email":
@@ -77,8 +83,11 @@ async def publicaciones_list(
         if r[0]
     ]
 
-    # Todos los sitios WP (activos e inactivos) para el mapa de dominio → nombre
-    all_wp_sites = db.query(WordPressSettings).all()
+    # Todos los sitios WP del usuario para el mapa de dominio → nombre
+    wp_q = db.query(WordPressSettings)
+    if user.role != "admin":
+        wp_q = wp_q.filter(WordPressSettings.owner_user_id == user.id)
+    all_wp_sites = wp_q.all()
     domain_to_name: dict[str, str] = {}
     domain_to_id: dict[str, int] = {}
     for s in all_wp_sites:

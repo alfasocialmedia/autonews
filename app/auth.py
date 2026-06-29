@@ -77,3 +77,15 @@ def get_current_user(request, db: Session):
 def change_password(db: Session, user: User, new_password: str):
     user.hashed_password = hash_password(new_password)
     db.commit()
+
+
+def filter_by_owner(query, model, user: User):
+    """Filtra la query por dueño. Admin ve todo; editores solo ven lo suyo."""
+    if user.role != "admin":
+        query = query.filter(model.owner_user_id == user.id)
+    return query
+
+
+def is_owner(resource, user: User) -> bool:
+    """True si el usuario es admin o es el dueño del recurso."""
+    return user.role == "admin" or resource.owner_user_id == user.id

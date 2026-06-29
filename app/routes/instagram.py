@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user, user_has_module
+from app.auth import filter_by_owner, get_current_user, is_owner, user_has_module
 from app.crypto import decrypt_value, encrypt_value, mask_value
 from app.database import get_db
 from app.models import InstagramSettings
@@ -49,8 +49,11 @@ def _require_admin(request: Request, db: Session):
     return user
 
 
-def _get_account(db: Session, account_id: int) -> InstagramSettings | None:
-    return db.query(InstagramSettings).filter(InstagramSettings.id == account_id).first()
+def _get_account(db: Session, account_id: int, user=None) -> InstagramSettings | None:
+    q = db.query(InstagramSettings).filter(InstagramSettings.id == account_id)
+    if user and user.role != "admin":
+        q = q.filter(InstagramSettings.owner_user_id == user.id)
+    return q.first()
 
 
 # ─── Lista de cuentas ────────────────────────────────────────────────────────
@@ -60,7 +63,9 @@ async def instagram_list(request: Request, db: Session = Depends(get_db)):
     user = _require_admin(request, db)
     if not user:
         return RedirectResponse("/", status_code=302)
-    accounts = db.query(InstagramSettings).order_by(InstagramSettings.id).all()
+    accounts = filter_by_owner(
+        db.query(InstagramSettings).order_by(InstagramSettings.id), InstagramSettings, user
+    ).all()
     return templates.TemplateResponse(
         "settings_instagram_list.html",
         {"request": request, "user": user, "accounts": accounts},
@@ -141,7 +146,7 @@ async def instagram_create(
     if not user:
         return RedirectResponse("/", status_code=302)
 
-    cfg = InstagramSettings(name=name.strip() or "Instagram")
+    cfg = InstagramSettings(owner_user_id=user.id, name=name.strip() or "Instagram")
     db.add(cfg)
     db.flush()
 
@@ -173,7 +178,7 @@ async def instagram_edit_page(account_id: int, request: Request, db: Session = D
     user = _require_admin(request, db)
     if not user:
         return RedirectResponse("/", status_code=302)
-    cfg = _get_account(db, account_id)
+    cfg = _get_account(db, account_id, user)
     if not cfg:
         return RedirectResponse("/settings/instagram", status_code=302)
     return templates.TemplateResponse(
@@ -244,7 +249,7 @@ async def instagram_save(
     if not user:
         return RedirectResponse("/", status_code=302)
 
-    cfg = _get_account(db, account_id)
+    cfg = _get_account(db, account_id, user)
     if not cfg:
         return RedirectResponse("/settings/instagram", status_code=302)
 
@@ -395,7 +400,7 @@ def _apply_form_to_cfg(
 async def instagram_delete(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    cfg = _get_account(db, account_id)
+    cfg = _get_account(db, account_id, user)
     if cfg:
         db.delete(cfg)
         db.commit()
@@ -408,7 +413,7 @@ async def instagram_delete(account_id: int, request: Request, db: Session = Depe
 async def toggle_instagram(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    cfg = _get_account(db, account_id)
+    cfg = _get_account(db, account_id, user)
     if not cfg:
         return JSONResponse({"error": "no encontrado"}, status_code=404)
     cfg.is_active = not cfg.is_active
@@ -423,7 +428,7 @@ async def serve_logo(account_id: int, request: Request, db: Session = Depends(ge
     from fastapi.responses import FileResponse, Response as FR
     if not _require_admin(request, db):
         return FR(status_code=403)
-    cfg = _get_account(db, account_id)
+    cfg = _get_account(db, account_id, user)
     if not cfg or not cfg.logo_path:
         return FR(status_code=404)
     logo_path = pathlib.Path(cfg.logo_path)
@@ -512,7 +517,7 @@ async def preview_image(
         from fastapi.responses import Response
         return Response(status_code=403)
 
-    cfg = _get_account(db, account_id)
+    cfg = _get_account(db, account_id, user)
     from fastapi.responses import Response
     import urllib.request as _ur
     from app.services.image_template_service import build_instagram_image
@@ -606,7 +611,7 @@ async def preview_image(
 async def fetch_ig_id(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    cfg = _get_account(db, account_id)
+    cfg = _get_account(db, account_id, user)
     if not cfg or not cfg.encrypted_access_token:
         return JSONResponse({"ok": False, "error": "No hay token guardado"})
 
@@ -643,7 +648,7 @@ async def fetch_ig_id_by_business(account_id: int, request: Request, db: Session
     if not business_id:
         return JSONResponse({"ok": False, "error": "Falta el Business ID"})
 
-    cfg = _get_account(db, account_id)
+    cfg = _get_account(db, account_id, user)
     if not cfg or not cfg.encrypted_access_token:
         return JSONResponse({"ok": False, "error": "No hay token guardado"})
 
@@ -681,7 +686,7 @@ async def fetch_ig_id_by_business(account_id: int, request: Request, db: Session
 async def test_publish_instagram(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    cfg = _get_account(db, account_id)
+    cfg = _get_account(db, account_id, user)
     if not cfg or not cfg.ig_user_id or not cfg.encrypted_access_token:
         return JSONResponse({"ok": False, "error": "Configurá el ID de cuenta y el token antes de publicar"})
     if not cfg.is_active:
@@ -776,7 +781,7 @@ async def test_publish_instagram(account_id: int, request: Request, db: Session 
 async def test_instagram(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    cfg = _get_account(db, account_id)
+    cfg = _get_account(db, account_id, user)
     if not cfg or not cfg.ig_user_id or not cfg.encrypted_access_token:
         return JSONResponse({"ok": False, "error": "Completá todos los campos antes de probar"})
     token = decrypt_value(cfg.encrypted_access_token)
@@ -789,7 +794,7 @@ async def test_instagram(account_id: int, request: Request, db: Session = Depend
 async def do_refresh_token(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    cfg = _get_account(db, account_id)
+    cfg = _get_account(db, account_id, user)
     if not cfg or not cfg.encrypted_access_token or not cfg.app_id or not cfg.encrypted_app_secret:
         return JSONResponse({"ok": False, "error": "Faltan credenciales para renovar el token"})
     token = decrypt_value(cfg.encrypted_access_token)
@@ -815,7 +820,7 @@ def _oauth_callback_url(request: Request) -> str:
 async def oauth_start(account_id: int, request: Request, db: Session = Depends(get_db)):
     if not _require_admin(request, db):
         return RedirectResponse("/", status_code=302)
-    cfg = _get_account(db, account_id)
+    cfg = _get_account(db, account_id, user)
     if not cfg or not cfg.app_id or not cfg.encrypted_app_secret:
         return RedirectResponse(
             f"/settings/instagram/{account_id}?err=Primero+guarda+el+App+ID+y+App+Secret",
@@ -871,7 +876,7 @@ async def oauth_callback(
     if error or not code:
         return _popup_response(False, f"OAuth cancelado: {error or 'sin codigo'}", account_id)
 
-    cfg = _get_account(db, account_id) if account_id else None
+    cfg = _get_account(db, account_id, user) if account_id else None
     if not cfg or not cfg.app_id or not cfg.encrypted_app_secret:
         return _popup_response(False, "Configuracion incompleta: falta App ID o App Secret", account_id)
 

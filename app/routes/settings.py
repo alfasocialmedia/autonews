@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user, user_has_module
+from app.auth import filter_by_owner, get_current_user, is_owner, user_has_module
 from app.crypto import decrypt_value, encrypt_value, mask_value
 from app.database import get_db
 from app.models import CategoryMapping, EdgeTTSSettings, ElevenLabsSettings, EmailAccount, GoogleDriveSettings, GroqSettings, InstagramSettings, WordPressSettings
@@ -61,9 +61,14 @@ async def email_settings(request: Request, db: Session = Depends(get_db)):
     if not user:
         return RedirectResponse("/login" if not get_current_user(request, db) else "/", status_code=302)
 
-    accounts = db.query(EmailAccount).all()
-    wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.id).all()
-    ig_accounts = db.query(InstagramSettings).order_by(InstagramSettings.id).all()
+    accounts = filter_by_owner(db.query(EmailAccount), EmailAccount, user).all()
+    wp_sites = filter_by_owner(
+        db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.id),
+        WordPressSettings, user,
+    ).all()
+    ig_accounts = filter_by_owner(
+        db.query(InstagramSettings).order_by(InstagramSettings.id), InstagramSettings, user
+    ).all()
     for acc in accounts:
         acc._wp_site_ids = json.loads(acc.wp_site_ids) if acc.wp_site_ids else []
     return templates.TemplateResponse(
@@ -92,6 +97,7 @@ async def add_email(
 
     ids = [int(x) for x in wp_site_ids if x.isdigit()]
     acc = EmailAccount(
+        owner_user_id=user.id,
         name=name,
         email=email,
         imap_server=imap_server,
@@ -127,8 +133,8 @@ async def edit_email(
         return RedirectResponse("/login", status_code=302)
 
     acc = db.query(EmailAccount).filter(EmailAccount.id == acc_id).first()
-    if not acc:
-        return RedirectResponse("/settings/email?err=Cuenta+no+encontrada", status_code=302)
+    if not acc or not is_owner(acc, user):
+        return RedirectResponse("/settings/email?err=Cuenta+no+encontrada+o+sin+permiso", status_code=302)
 
     ids = [int(x) for x in wp_site_ids if x.isdigit()]
     acc.name = name
@@ -178,7 +184,7 @@ async def delete_email(request: Request, acc_id: int, db: Session = Depends(get_
     if not user:
         return RedirectResponse("/login", status_code=302)
     acc = db.query(EmailAccount).filter(EmailAccount.id == acc_id).first()
-    if acc:
+    if acc and is_owner(acc, user):
         db.delete(acc)
         db.commit()
     return RedirectResponse("/settings/email?msg=Cuenta+eliminada", status_code=302)
@@ -194,7 +200,7 @@ async def wordpress_settings(request: Request, db: Session = Depends(get_db)):
     user = _require_module(request, db, "wordpress")
     if not user:
         return RedirectResponse("/login" if not get_current_user(request, db) else "/", status_code=302)
-    sites = db.query(WordPressSettings).all()
+    sites = filter_by_owner(db.query(WordPressSettings), WordPressSettings, user).all()
     return templates.TemplateResponse(
         "settings_wordpress.html",
         {"request": request, "user": user, "sites": sites, "mask": mask_value},
@@ -216,6 +222,7 @@ async def add_wordpress(
     if not user:
         return RedirectResponse("/login", status_code=302)
     wp = WordPressSettings(
+        owner_user_id=user.id,
         name=name,
         site_url=site_url.rstrip("/"),
         api_user=api_user,
@@ -244,8 +251,8 @@ async def edit_wordpress(
     if not user:
         return RedirectResponse("/login", status_code=302)
     wp = db.query(WordPressSettings).filter(WordPressSettings.id == wp_id).first()
-    if not wp:
-        return RedirectResponse("/settings/wordpress?err=Sitio+no+encontrado", status_code=302)
+    if not wp or not is_owner(wp, user):
+        return RedirectResponse("/settings/wordpress?err=Sitio+no+encontrado+o+sin+permiso", status_code=302)
     wp.name = name
     wp.site_url = site_url.rstrip("/")
     wp.api_user = api_user
@@ -263,7 +270,7 @@ async def delete_wordpress(request: Request, wp_id: int, db: Session = Depends(g
     if not user:
         return RedirectResponse("/login", status_code=302)
     wp = db.query(WordPressSettings).filter(WordPressSettings.id == wp_id).first()
-    if wp:
+    if wp and is_owner(wp, user):
         db.delete(wp)
         db.commit()
     return RedirectResponse("/settings/wordpress?msg=Sitio+eliminado", status_code=302)

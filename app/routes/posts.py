@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, user_has_module
 from app.database import get_db
-from app.models import Post, ProcessedEmail
+from app.models import EmailAccount, Post, ProcessedEmail
 
 router = APIRouter(prefix="/posts")
 templates = Jinja2Templates(directory="app/templates")
@@ -32,6 +32,11 @@ async def posts_list(
     offset = (page - 1) * per_page
 
     query = db.query(ProcessedEmail).order_by(desc(ProcessedEmail.created_at))
+    if user.role != "admin":
+        user_acc_ids = [r[0] for r in db.query(EmailAccount.id).filter(
+            EmailAccount.owner_user_id == user.id
+        ).all()]
+        query = query.filter(ProcessedEmail.email_account_id.in_(user_acc_ids))
     if status:
         query = query.filter(ProcessedEmail.status == status)
     if search:

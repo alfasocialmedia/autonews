@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user, user_has_module
+from app.auth import filter_by_owner, get_current_user, is_owner, user_has_module
 from app.database import get_db
 from app.models import WhatsAppChannel, WhatsAppGroup, WhatsAppSettings, WordPressSettings
 
@@ -230,8 +230,11 @@ def _require_admin(request: Request, db: Session):
     return user
 
 
-def _get_account(db: Session, wa_id: int) -> WhatsAppSettings | None:
-    return db.query(WhatsAppSettings).filter(WhatsAppSettings.id == wa_id).first()
+def _get_account(db: Session, wa_id: int, user=None) -> WhatsAppSettings | None:
+    q = db.query(WhatsAppSettings).filter(WhatsAppSettings.id == wa_id)
+    if user and user.role != "admin":
+        q = q.filter(WhatsAppSettings.owner_user_id == user.id)
+    return q.first()
 
 
 # ── Página principal ───────────────────────────────────────────────────────────
@@ -242,9 +245,11 @@ async def whatsapp_settings(request: Request, db: Session = Depends(get_db)):
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    accounts = db.query(WhatsAppSettings).order_by(WhatsAppSettings.id).all()
+    accounts = filter_by_owner(
+        db.query(WhatsAppSettings).order_by(WhatsAppSettings.id), WhatsAppSettings, user
+    ).all()
     if not accounts:
-        default = WhatsAppSettings(name="Principal")
+        default = WhatsAppSettings(name="Principal", owner_user_id=user.id)
         db.add(default)
         db.commit()
         db.refresh(default)
@@ -258,9 +263,14 @@ async def whatsapp_settings(request: Request, db: Session = Depends(get_db)):
             WhatsAppChannel.whatsapp_settings_id == acc.id
         ).order_by(WhatsAppChannel.id).all()
 
-    wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.id).all()
     from app.models import InstagramSettings
-    ig_accounts = db.query(InstagramSettings).order_by(InstagramSettings.id).all()
+    wp_sites = filter_by_owner(
+        db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.id),
+        WordPressSettings, user,
+    ).all()
+    ig_accounts = filter_by_owner(
+        db.query(InstagramSettings).order_by(InstagramSettings.id), InstagramSettings, user
+    ).all()
     return templates.TemplateResponse(
         "settings_whatsapp.html",
         {
@@ -298,6 +308,7 @@ async def add_whatsapp_account(
         return RedirectResponse("/login", status_code=302)
 
     acc = WhatsAppSettings(
+        owner_user_id=user.id,
         name=name.strip() or "Nueva cuenta",
         evolution_api_url=evolution_api_url.rstrip("/"),
         evolution_api_key=evolution_api_key,
@@ -338,7 +349,7 @@ async def edit_whatsapp_account(
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    acc = _get_account(db, wa_id)
+    acc = _get_account(db, wa_id, user)
     if not acc:
         return RedirectResponse("/settings/whatsapp", status_code=302)
 
@@ -365,7 +376,7 @@ async def delete_whatsapp_account(wa_id: int, request: Request, db: Session = De
     if not user:
         return RedirectResponse("/login", status_code=302)
 
-    acc = _get_account(db, wa_id)
+    acc = _get_account(db, wa_id, user)
     if acc:
         db.delete(acc)
         db.commit()
@@ -378,7 +389,7 @@ async def toggle_whatsapp_account(wa_id: int, request: Request, db: Session = De
     if not user:
         return JSONResponse({"error": "No autorizado"}, status_code=403)
 
-    acc = _get_account(db, wa_id)
+    acc = _get_account(db, wa_id, user)
     if not acc:
         return JSONResponse({"error": "No encontrado"}, status_code=404)
     acc.enabled = not acc.enabled

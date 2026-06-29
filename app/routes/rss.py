@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 # Cache en memoria: token → {ai_result, image_url, inline_images, embeds, item}
 _preview_cache: dict[str, dict] = {}
 
-from app.auth import get_current_user, user_has_module
+from app.auth import filter_by_owner, get_current_user, is_owner, user_has_module
 from app.database import get_db
 from app.models import InstagramSettings, ProcessedRssItem, RssFeed, WordPressSettings
 from app.services.rss_service import fetch_rss_items, scrape_category_page, test_rss_feed, test_web_source
@@ -28,7 +28,9 @@ async def rss_page(request: Request, db: Session = Depends(get_db)):
     if not user or not user_has_module(user, "rss"):
         return RedirectResponse("/login" if not user else "/", status_code=302)
 
-    feeds = db.query(RssFeed).order_by(RssFeed.created_at.desc()).all()
+    feeds = filter_by_owner(
+        db.query(RssFeed).order_by(RssFeed.created_at.desc()), RssFeed, user
+    ).all()
     for feed in feeds:
         feed._published_count = db.query(ProcessedRssItem).filter(
             ProcessedRssItem.rss_feed_id == feed.id,
@@ -36,8 +38,13 @@ async def rss_page(request: Request, db: Session = Depends(get_db)):
         ).count()
         feed._wp_site_ids = json.loads(feed.wp_site_ids) if feed.wp_site_ids else []
 
-    wp_sites = db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.id).all()
-    ig_accounts = db.query(InstagramSettings).order_by(InstagramSettings.id).all()
+    wp_sites = filter_by_owner(
+        db.query(WordPressSettings).filter(WordPressSettings.is_active == True).order_by(WordPressSettings.id),
+        WordPressSettings, user,
+    ).all()
+    ig_accounts = filter_by_owner(
+        db.query(InstagramSettings).order_by(InstagramSettings.id), InstagramSettings, user
+    ).all()
 
     return templates.TemplateResponse(
         "settings_rss.html", {"request": request, "user": user, "feeds": feeds, "wp_sites": wp_sites, "ig_accounts": ig_accounts}
@@ -72,6 +79,7 @@ async def add_feed(
 
     ids = [int(x) for x in wp_site_ids if x.isdigit()]
     feed = RssFeed(
+        owner_user_id=user.id,
         name=name.strip(),
         url=url.strip(),
         feed_type=feed_type if feed_type in ("rss", "web") else "rss",
@@ -111,7 +119,9 @@ async def edit_feed(
         return RedirectResponse("/login" if not user else "/", status_code=302)
 
     feed = db.query(RssFeed).filter(RssFeed.id == feed_id).first()
-    if feed:
+    if not feed or not is_owner(feed, user):
+        return RedirectResponse("/settings/rss?err=No+encontrado+o+sin+permiso", status_code=302)
+    if True:
         ids = [int(x) for x in wp_site_ids if x.isdigit()]
         feed.name = name.strip()
         feed.url = url.strip()
@@ -153,7 +163,7 @@ async def delete_feed(feed_id: int, request: Request, db: Session = Depends(get_
         return RedirectResponse("/login" if not user else "/", status_code=302)
 
     feed = db.query(RssFeed).filter(RssFeed.id == feed_id).first()
-    if feed:
+    if feed and is_owner(feed, user):
         db.delete(feed)
         db.commit()
     return RedirectResponse("/settings/rss?msg=Feed+eliminado", status_code=302)

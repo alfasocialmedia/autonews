@@ -315,6 +315,26 @@ def _migrate_columns():
             user_cols = [c["name"] for c in inspector.get_columns("users")]
             if "permissions" not in user_cols:
                 conn.execute(text("ALTER TABLE users ADD COLUMN permissions TEXT"))
+
+        # owner_user_id: aislamiento de datos por usuario
+        _admin_id_sql = "(SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1)"
+        for tbl, fk_col in [
+            ("rss_feeds",         "owner_user_id"),
+            ("email_accounts",    "owner_user_id"),
+            ("whatsapp_settings", "owner_user_id"),
+            ("wordpress_settings","owner_user_id"),
+            ("instagram_settings","owner_user_id"),
+        ]:
+            if tbl in tables:
+                cols = [c["name"] for c in inspector.get_columns(tbl)]
+                if fk_col not in cols:
+                    conn.execute(text(
+                        f"ALTER TABLE {tbl} ADD COLUMN {fk_col} INTEGER REFERENCES users(id) ON DELETE SET NULL"
+                    ))
+                    conn.execute(text(
+                        f"UPDATE {tbl} SET {fk_col} = {_admin_id_sql} WHERE {fk_col} IS NULL"
+                    ))
+
         import pathlib
         pathlib.Path("app/static/uploads/logos").mkdir(parents=True, exist_ok=True)
 
