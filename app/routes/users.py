@@ -1,13 +1,16 @@
 import json
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth import ALL_MODULES, create_user, get_current_user, hash_password
 from app.database import get_db
-from app.models import User
+from app.models import (
+    EmailAccount, InstagramSettings, RssFeed, User,
+    WhatsAppSettings, WordPressSettings,
+)
 
 router = APIRouter(prefix="/usuarios")
 templates = Jinja2Templates(directory="app/templates")
@@ -135,6 +138,72 @@ async def user_edit(
         request.session["username"] = username
 
     return RedirectResponse("/usuarios/?ok=editado", status_code=303)
+
+
+_RESOURCE_MODELS = {
+    "whatsapp": WhatsAppSettings,
+    "rss": RssFeed,
+    "wordpress": WordPressSettings,
+    "instagram": InstagramSettings,
+    "email": EmailAccount,
+}
+
+
+@router.get("/{user_id}/recursos")
+async def user_recursos(user_id: int, request: Request, db: Session = Depends(get_db)):
+    current, redirect = _require_admin(request, db)
+    if redirect:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        return JSONResponse({"error": "not found"}, status_code=404)
+
+    def _fmt(items):
+        return [
+            {"id": r.id, "name": r.name or str(r.id), "assigned": r.owner_user_id == user_id}
+            for r in items
+        ]
+
+    return JSONResponse({
+        "user_id": user_id,
+        "username": target.username,
+        "whatsapp":  _fmt(db.query(WhatsAppSettings).order_by(WhatsAppSettings.id).all()),
+        "rss":       _fmt(db.query(RssFeed).order_by(RssFeed.id).all()),
+        "wordpress": _fmt(db.query(WordPressSettings).order_by(WordPressSettings.id).all()),
+        "instagram": _fmt(db.query(InstagramSettings).order_by(InstagramSettings.id).all()),
+        "email":     _fmt(db.query(EmailAccount).order_by(EmailAccount.id).all()),
+    })
+
+
+@router.post("/{user_id}/asignar-recursos")
+async def asignar_recursos(user_id: int, request: Request, db: Session = Depends(get_db)):
+    current, redirect = _require_admin(request, db)
+    if redirect:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        return JSONResponse({"error": "not found"}, status_code=404)
+
+    admin = db.query(User).filter(User.role == "admin").order_by(User.id).first()
+    admin_id = admin.id if admin else current.id
+
+    body = await request.json()
+
+    for key, model in _RESOURCE_MODELS.items():
+        selected_ids = set(body.get(key, []))
+        # Devolver al admin los que estaban asignados a este usuario y ya no están seleccionados
+        for r in db.query(model).filter(model.owner_user_id == user_id).all():
+            if r.id not in selected_ids:
+                r.owner_user_id = admin_id
+        # Asignar los seleccionados a este usuario
+        if selected_ids:
+            for r in db.query(model).filter(model.id.in_(selected_ids)).all():
+                r.owner_user_id = user_id
+
+    db.commit()
+    return JSONResponse({"ok": True})
 
 
 @router.post("/{user_id}/eliminar")

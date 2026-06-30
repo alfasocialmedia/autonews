@@ -248,7 +248,7 @@ async def whatsapp_settings(request: Request, db: Session = Depends(get_db)):
     accounts = filter_by_owner(
         db.query(WhatsAppSettings).order_by(WhatsAppSettings.id), WhatsAppSettings, user
     ).all()
-    if not accounts:
+    if not accounts and user.role == "admin":
         default = WhatsAppSettings(name="Principal", owner_user_id=user.id)
         db.add(default)
         db.commit()
