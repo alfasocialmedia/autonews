@@ -1,4 +1,5 @@
 import json
+import re
 from typing import List
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -50,6 +51,12 @@ def _require_module(request: Request, db: Session, module: str):
     return user
 
 
+def _parse_allowed_senders(raw: str) -> str | None:
+    """Convierte texto (uno por línea o separado por comas) en JSON de remitentes permitidos."""
+    entries = [e.strip().lower() for e in re.split(r"[\n,]+", raw or "") if e.strip()]
+    return json.dumps(entries) if entries else None
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 #  CORREO / IMAP
 # ──────────────────────────────────────────────────────────────────────────────
@@ -71,6 +78,8 @@ async def email_settings(request: Request, db: Session = Depends(get_db)):
     ).all()
     for acc in accounts:
         acc._wp_site_ids = json.loads(acc.wp_site_ids) if acc.wp_site_ids else []
+        senders = json.loads(acc.allowed_senders) if acc.allowed_senders else []
+        acc._allowed_senders_text = "\n".join(senders)
     return templates.TemplateResponse(
         "settings_email.html",
         {"request": request, "user": user, "accounts": accounts, "wp_sites": wp_sites, "ig_accounts": ig_accounts, "mask": mask_value},
@@ -89,6 +98,7 @@ async def add_email(
     wp_site_ids: List[str] = Form([]),
     publish_status: str = Form(""),
     instagram_settings_id: str = Form(""),
+    allowed_senders: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user = _require_auth(request, db)
@@ -107,6 +117,7 @@ async def add_email(
         wp_site_ids=json.dumps(ids) if ids else None,
         publish_status=publish_status if publish_status in ("publish", "draft") else None,
         instagram_settings_id=int(instagram_settings_id) if instagram_settings_id.strip().isdigit() else None,
+        allowed_senders=_parse_allowed_senders(allowed_senders),
     )
     db.add(acc)
     db.commit()
@@ -126,6 +137,7 @@ async def edit_email(
     wp_site_ids: List[str] = Form([]),
     publish_status: str = Form(""),
     instagram_settings_id: str = Form(""),
+    allowed_senders: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user = _require_auth(request, db)
@@ -145,6 +157,7 @@ async def edit_email(
     acc.wp_site_ids = json.dumps(ids) if ids else None
     acc.publish_status = publish_status if publish_status in ("publish", "draft") else None
     acc.instagram_settings_id = int(instagram_settings_id) if instagram_settings_id.strip().isdigit() else None
+    acc.allowed_senders = _parse_allowed_senders(allowed_senders)
     if password.strip():
         acc.encrypted_password = encrypt_value(password)
     db.commit()

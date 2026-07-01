@@ -62,6 +62,16 @@
             <span class="badge bg-secondary">Inactiva</span>
             {% endif %}
           </dd>
+          <dt class="col-5 text-muted">Remitentes permitidos</dt>
+          <dd class="col-7">
+            {% if acc._allowed_senders_text %}
+              <span class="badge bg-warning text-dark" title="{{ acc._allowed_senders_text | replace('\n', ', ') }}">
+                <i class="bi bi-shield-check me-1"></i>{{ acc._allowed_senders_text.split('\n') | length }} filtrado(s)
+              </span>
+            {% else %}
+              <span class="badge bg-light text-dark border">Cualquiera</span>
+            {% endif %}
+          </dd>
         </dl>
       </div>
       <div class="card-footer bg-transparent border-0 d-flex gap-2">
@@ -117,6 +127,14 @@
               <input type="password" name="password" class="form-control"
                      placeholder="Dejar vacío para no cambiar">
               <div class="form-text">Solo rellena si quieres cambiar la contraseña actual.</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-shield-check me-1 text-warning"></i>Remitentes permitidos
+              </label>
+              <textarea name="allowed_senders" class="form-control" rows="3"
+                        placeholder="fuente@ejemplo.com&#10;@dominio-confiable.com">{{ acc._allowed_senders_text }}</textarea>
+              <div class="form-text">Un correo o dominio (con @ adelante, ej: <code>@dominio.com</code>) por línea. Vacío = acepta correos de cualquier remitente.</div>
             </div>
             <div class="mb-3">
               <label class="form-label fw-semibold">
@@ -225,6 +243,14 @@
             <label class="form-label fw-semibold">Contraseña</label>
             <input type="password" name="password" class="form-control" placeholder="Contraseña de aplicación" required>
             <div class="form-text">Para Gmail usa una contraseña de aplicación (App Password).</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-shield-check me-1 text-warning"></i>Remitentes permitidos
+            </label>
+            <textarea name="allowed_senders" class="form-control" rows="3"
+                      placeholder="fuente@ejemplo.com&#10;@dominio-confiable.com"></textarea>
+            <div class="form-text">Un correo o dominio (con @ adelante, ej: <code>@dominio.com</code>) por línea. Vacío = acepta correos de cualquier remitente.</div>
           </div>
           <div class="mb-1">
             <label class="form-label fw-semibold">

@@ -146,6 +146,8 @@ def _migrate_columns():
                 conn.execute(text("ALTER TABLE email_accounts ADD COLUMN wp_site_ids TEXT"))
             if "publish_status" not in cols:
                 conn.execute(text("ALTER TABLE email_accounts ADD COLUMN publish_status VARCHAR(20)"))
+            if "allowed_senders" not in cols:
+                conn.execute(text("ALTER TABLE email_accounts ADD COLUMN allowed_senders TEXT"))
         if "whatsapp_settings" in tables:
             cols = [c["name"] for c in inspector.get_columns("whatsapp_settings")]
             if "name" not in cols:

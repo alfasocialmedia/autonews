@@ -31,7 +31,7 @@ from app.models import (
     RssFeed,
     WordPressSettings,
 )
-from app.services.email_service import fetch_unread_emails
+from app.services.email_service import fetch_unread_emails, is_sender_allowed
 from app.services.groq_service import process_email_with_groq, process_rss_with_groq
 from app.services.rss_service import fetch_rss_items, scrape_full_article, scrape_category_page, _is_garbled
 from app.services.wordpress_service import create_post, find_category_by_name, get_categories, get_or_create_category, get_or_create_tags, upload_audio, upload_media
@@ -195,6 +195,7 @@ def process_emails():
             try:
                 log.info(f"📬 Revisando: {account.email}")
                 acc_pwd = decrypt_value(account.encrypted_password)
+                allowed_senders = json.loads(account.allowed_senders) if account.allowed_senders else []
 
                 new_emails = fetch_unread_emails(
                     account.imap_server,
@@ -216,6 +217,23 @@ def process_emails():
                         .first()
                     )
                     if exists:
+                        continue
+
+                    if not is_sender_allowed(mail_data["sender"], allowed_senders):
+                        rejected = ProcessedEmail(
+                            email_account_id=account.id,
+                            message_id=mail_data["message_id"],
+                            sender=mail_data["sender"],
+                            subject=mail_data["subject"],
+                            body=mail_data["body"],
+                            received_at=mail_data["received_at"],
+                            status="rejected",
+                            error_message="Remitente no autorizado para esta cuenta",
+                        )
+                        db.add(rejected)
+                        db.commit()
+                        log.info(f"  🚫 Correo rechazado (remitente no autorizado): {mail_data['sender']}")
+                        _log_db(db, "WARN", f"Correo rechazado por remitente no autorizado: {mail_data['sender']} — {mail_data['subject'][:150]}")
                         continue
 
                     # Guardar correo recibido

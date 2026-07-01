@@ -51,6 +51,9 @@ class EmailAccount(Base):
     username = Column(String(150), nullable=False)
     encrypted_password = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
+    # JSON array de remitentes permitidos: ["news@fuente.com", "@dominio.com"]
+    # NULL o [] = acepta correos de cualquier remitente (sin filtro)
+    allowed_senders = Column(Text, nullable=True)
     # JSON array de IDs: "[1,3]" = solo esos sitios, NULL = todos los activos
     wp_site_ids = Column(Text, nullable=True)
     # NULL = usar el default_status de cada sitio WordPress
@@ -124,7 +127,7 @@ class ProcessedEmail(Base):
     subject = Column(String(500))
     body = Column(Text)
     received_at = Column(DateTime(timezone=True))
-    # received | processed | published | error
+    # received | processed | published | error | rejected
     status = Column(String(20), default="received", index=True)
     error_message = Column(Text, nullable=True)
     ai_response = Column(Text, nullable=True)

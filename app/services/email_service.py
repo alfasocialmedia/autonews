@@ -108,6 +108,40 @@ def _get_body(msg) -> str:
     return _clean_email_body(body)
 
 
+_ADDR_RE = re.compile(r"[\w.\-+]+@[\w.\-]+\.[a-zA-Z]{2,}")
+
+
+def extract_sender_address(sender_header: str) -> str:
+    """Extrae la dirección de email pura de un header 'From' (puede traer nombre)."""
+    m = _ADDR_RE.search(sender_header or "")
+    return m.group(0).lower() if m else ""
+
+
+def is_sender_allowed(sender_header: str, allowed_senders: list[str] | None) -> bool:
+    """Verifica si el remitente está en la lista blanca de la cuenta.
+
+    - Lista vacía o None = acepta cualquier remitente (sin filtro, comportamiento legacy).
+    - Entradas que empiezan con "@" filtran por dominio completo (ej: "@fuente.com").
+    - El resto se compara como dirección exacta (case-insensitive).
+    """
+    if not allowed_senders:
+        return True
+    address = extract_sender_address(sender_header)
+    if not address:
+        return False
+    domain = address.split("@", 1)[-1]
+    for entry in allowed_senders:
+        entry = (entry or "").strip().lower()
+        if not entry:
+            continue
+        if entry.startswith("@"):
+            if domain == entry[1:]:
+                return True
+        elif entry == address:
+            return True
+    return False
+
+
 def test_imap_connection(server: str, port: int, username: str, password: str) -> tuple[bool, str]:
     try:
         mail = imaplib.IMAP4_SSL(server, int(port))

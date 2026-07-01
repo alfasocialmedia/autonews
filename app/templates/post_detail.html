@@ -35,6 +35,8 @@
               <span class="badge bg-info text-dark">Procesado</span>
             {% elif email.status == 'error' %}
               <span class="badge bg-danger">Error</span>
+            {% elif email.status == 'rejected' %}
+              <span class="badge bg-warning text-dark">Rechazado (remitente no autorizado)</span>
             {% else %}
               <span class="badge bg-secondary">Recibido</span>
             {% endif %}

@@ -33,6 +33,7 @@
           <option value="processed" {% if status_filter=='processed' %}selected{% endif %}>Procesado</option>
           <option value="published" {% if status_filter=='published' %}selected{% endif %}>Publicado</option>
           <option value="error"     {% if status_filter=='error'     %}selected{% endif %}>Error</option>
+          <option value="rejected"  {% if status_filter=='rejected'  %}selected{% endif %}>Rechazado (remitente)</option>
         </select>
       </div>
       <div class="col-auto">
@@ -91,6 +92,10 @@
               {% elif e.status == 'error' %}
                 <span class="badge bg-danger" title="{{ e.error_message or '' }}">
                   <i class="bi bi-x-circle me-1"></i>Error
+                </span>
+              {% elif e.status == 'rejected' %}
+                <span class="badge bg-warning text-dark" title="Remitente no autorizado">
+                  <i class="bi bi-shield-x me-1"></i>Rechazado
                 </span>
               {% else %}
                 <span class="badge bg-secondary"><i class="bi bi-hourglass me-1"></i>Recibido</span>
